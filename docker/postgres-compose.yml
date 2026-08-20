@@ -1,0 +1,40 @@
+services:
+  smsfraud_db:
+    image: postgres:18
+    container_name: smsfraud_db
+    env_file: ../.env.dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sms_fraud
+      POSTGRES_USER: sms_app
+      POSTGRES_PASSWORD: sms_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - smsfraud_db_data:/var/lib/postgresql
+      - ./backend/db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    container_name: smsfraud_backend
+    env_file: ../.env.dev
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://smsfraud_db:5432/sms_fraud
+      SPRING_DATASOURCE_USERNAME: sms_app
+      SPRING_DATASOURCE_PASSWORD: sms_pass
+    depends_on:
+      smsfraud_db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+volumes:
+  smsfraud_db_data:
+    driver: local
