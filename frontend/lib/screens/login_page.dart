@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
-
+import '../main.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../services/auth_service.dart';
-import '../widgets/auth_widgets.dart';
+import '../widgets/custom_button.dart';
+import '../widgets/custom_text_field.dart';
+import '../widgets/fade_slide_transition.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, required this.onNavigate});
   final Navigate onNavigate;
+
+  const LoginPage({super.key, required this.onNavigate});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-  String? _errorMessage;
 
   @override
   void dispose() {
@@ -26,95 +29,257 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    setState(() => _errorMessage = null);
+  void _handleLogin() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+      });
 
-    if (_phoneController.text.isEmpty || _passwordController.text.isEmpty) {
-      setState(() => _errorMessage = 'Please fill in all fields');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    final result = await AuthService.login(
-      phoneNumber: _phoneController.text,
-      password: _passwordController.text,
-    );
-
-    setState(() => _isLoading = false);
-
-    if (!mounted) return;
-
-    if (result['success']) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message'])),
+      final result = await AuthService.login(
+        phoneNumber: _phoneController.text.trim(),
+        password: _passwordController.text,
       );
-      // TODO: Store token and navigate to dashboard
-      // SharedPreferences.getInstance().then((prefs) {
-      //   prefs.setString('auth_token', result['token']);
-      //   widget.onNavigate(AuthPage.dashboard);
-      // });
-    } else {
-      setState(() => _errorMessage = result['message']);
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Login successful!'),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } else {
+        String errorMessage = result['message'] ?? 'Login failed';
+        if (errorMessage.contains('YOUR_SERVER_URL_HERE') || errorMessage.contains('Unsupported scheme')) {
+          errorMessage = 'Please configure your backend server URL in lib/services/auth_service.dart';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 
   @override
-  Widget build(BuildContext context) => AuthScaffold(
-        showHeader: false,
-        child: Container(
-          decoration: const BoxDecoration(
-              border: Border(left: BorderSide(color: AppTheme.red, width: 4))),
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 38, vertical: 28),
-              child: Column(children: [
-                const Icon(Icons.shield_outlined,
-                    color: AppTheme.red, size: 42),
-                const SizedBox(height: 12),
-                const AuthTitle('Secure Signal'),
-                const AuthDescription('Sign in to monitor and manage alerts.'),
-                const SizedBox(height: 18),
-                AuthFieldWithController(
-                    controller: _phoneController,
-                    label: 'Phone Number',
-                    hint: 'e.g. +27 82 123 4567',
-                    icon: Icons.phone_outlined,
-                    keyboardType: TextInputType.phone),
-                const SizedBox(height: 11),
-                Row(children: [
-                  const FieldLabel('Password'),
-                  const Spacer(),
-                  AuthLink('Forgot Password?',
-                      onTap: () => widget.onNavigate(AuthPage.forgotPassword)),
-                ]),
-                const SizedBox(height: 5),
-                AuthFieldWithController(
-                    controller: _passwordController,
-                    hint: 'Enter your password',
-                    icon: Icons.lock_outline,
-                    obscureText: true),
-                const SizedBox(height: 21),
-                if (_errorMessage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: AppTheme.red, fontSize: 12),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                AppButton(
-                    label: _isLoading ? 'Logging in...' : 'Login  →',
-                    onPressed: _isLoading ? null : _handleLogin),
-                const SectionDivider(),
-                AuthPrompt(
-                    prefix: 'New to Secure Signal? ',
-                    link: 'Create an Account',
-                    onTap: () => widget.onNavigate(AuthPage.signUp)),
-              ]),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Background Gradient accent at the top
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: MediaQuery.of(context).size.height * 0.32,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: isDark
+                    ? AppTheme.heroBgGradientDark
+                    : AppTheme.heroBgGradientLight,
+              ),
             ),
           ),
-        ),
-      );
+          
+          // Floating Theme Toggle Button
+          Positioned(
+            top: 20,
+            right: 16,
+            child: IconButton(
+              icon: Icon(
+                isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                color: theme.colorScheme.primary,
+              ),
+              onPressed: () {
+                SecureSignalApp.of(context).toggleTheme();
+              },
+            ),
+          ),
+
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 10),
+                      
+                      // Logo Icon with entrance animation
+                      FadeSlideTransition(
+                        delay: const Duration(milliseconds: 100),
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(22),
+                            decoration: BoxDecoration(
+                              color: theme.primaryColor.withOpacity(0.08),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: theme.primaryColor.withOpacity(0.15),
+                                width: 2,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.shield_outlined,
+                              size: 64,
+                              color: theme.primaryColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Titles
+                      FadeSlideTransition(
+                        delay: const Duration(milliseconds: 200),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Secure Signal',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.headlineLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Secure your inbox and detect fraud SMS messages',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 36),
+
+                      // Login Card Containing Inputs
+                      FadeSlideTransition(
+                        delay: const Duration(milliseconds: 300),
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: theme.cardTheme.color,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                              width: 1,
+                            ),
+                            boxShadow: AppTheme.cardShadow(isDark),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Phone input field
+                              CustomTextField(
+                                controller: _phoneController,
+                                labelText: 'Phone Number',
+                                hintText: 'e.g. +1234567890',
+                                prefixIcon: Icons.phone_outlined,
+                                keyboardType: TextInputType.phone,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Please enter your phone number';
+                                  }
+                                  if (value.trim().length < 9) {
+                                    return 'Please enter a valid phone number';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Password input field
+                              CustomTextField(
+                                controller: _passwordController,
+                                labelText: 'Password',
+                                hintText: '••••••••',
+                                prefixIcon: Icons.lock_outline,
+                                obscureText: true,
+                                textInputAction: TextInputAction.done,
+                                onFieldSubmitted: (_) => _handleLogin(),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Please enter your password';
+                                  }
+                                  if (value.trim().length < 6) {
+                                    return 'Password must be at least 6 characters';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+
+                              // Forgot Password Button
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    widget.onNavigate(AuthPage.forgotPassword);
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text('Forgot Password?'),
+                                ),
+                              ),
+                              const SizedBox(height: 28),
+
+                              // Login Button
+                              CustomButton(
+                                text: 'Login',
+                                isLoading: _isLoading,
+                                onPressed: _handleLogin,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Create Account text
+                      FadeSlideTransition(
+                        delay: const Duration(milliseconds: 400),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "Don't have an account? ",
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                widget.onNavigate(AuthPage.signUp);
+                              },
+                              child: const Text('Create an account'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
