@@ -6,8 +6,14 @@ import '../services/auth_service.dart';
 import '../widgets/auth_widgets.dart';
 
 class VerificationPage extends StatefulWidget {
-  const VerificationPage({super.key, required this.onNavigate});
+  const VerificationPage(
+      {super.key,
+      required this.onNavigate,
+      required this.phoneNumber,
+      required this.onVerified});
   final Navigate onNavigate;
+  final String phoneNumber;
+  final ValueChanged<String> onVerified;
 
   @override
   State<VerificationPage> createState() => _VerificationPageState();
@@ -18,7 +24,6 @@ class _VerificationPageState extends State<VerificationPage> {
       List.generate(6, (_) => TextEditingController());
   bool _isLoading = false;
   String? _errorMessage;
-  final String _phoneNumber = ''; // You may want to pass this from previous page
 
   @override
   void dispose() {
@@ -40,7 +45,7 @@ class _VerificationPageState extends State<VerificationPage> {
     setState(() => _isLoading = true);
 
     final result = await AuthService.verifyResetCode(
-      phoneNumber: _phoneNumber,
+      phoneNumber: widget.phoneNumber,
       verificationCode: code,
     );
 
@@ -52,7 +57,7 @@ class _VerificationPageState extends State<VerificationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result['message'])),
       );
-      widget.onNavigate(AuthPage.resetPassword);
+      widget.onVerified(code);
     } else {
       setState(() => _errorMessage = result['message']);
     }
@@ -61,7 +66,7 @@ class _VerificationPageState extends State<VerificationPage> {
   Future<void> _handleResendCode() async {
     setState(() => _errorMessage = null);
 
-    if (_phoneNumber.isEmpty) {
+    if (widget.phoneNumber.isEmpty) {
       setState(
           () => _errorMessage = 'Phone number not available. Please go back.');
       return;
@@ -69,7 +74,7 @@ class _VerificationPageState extends State<VerificationPage> {
 
     setState(() => _isLoading = true);
 
-    final result = await AuthService.resendCode(phoneNumber: _phoneNumber);
+    final result = await AuthService.resendCode(phoneNumber: widget.phoneNumber);
 
     setState(() => _isLoading = false);
 

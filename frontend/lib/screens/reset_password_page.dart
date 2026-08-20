@@ -6,8 +6,14 @@ import '../services/auth_service.dart';
 import '../widgets/auth_widgets.dart';
 
 class ResetPasswordPage extends StatefulWidget {
-  const ResetPasswordPage({super.key, required this.onNavigate});
+  const ResetPasswordPage(
+      {super.key,
+      required this.onNavigate,
+      required this.phoneNumber,
+      required this.verificationCode});
   final Navigate onNavigate;
+  final String phoneNumber;
+  final String verificationCode;
 
   @override
   State<ResetPasswordPage> createState() => _ResetPasswordPageState();
@@ -18,8 +24,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
-  final String _phoneNumber = ''; // You may want to pass this from previous page
-  final String _verificationCode = ''; // You may want to pass this from previous page
 
   @override
   void dispose() {
@@ -51,8 +55,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     setState(() => _isLoading = true);
 
     final result = await AuthService.resetPassword(
-      phoneNumber: _phoneNumber,
-      verificationCode: _verificationCode,
+      phoneNumber: widget.phoneNumber,
+      verificationCode: widget.verificationCode,
       newPassword: _newPasswordController.text,
     );
 
