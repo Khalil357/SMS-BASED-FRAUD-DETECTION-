@@ -23,34 +23,47 @@ import javax.crypto.spec.PBEKeySpec;
 @CrossOrigin
 public class AuthController {
   private static final SecureRandom RANDOM = new SecureRandom();
-  private final Map<String, User> usersByPhone = new ConcurrentHashMap<>();
-  private final Map<String, String> phoneByEmail = new ConcurrentHashMap<>();
   private final Map<String, ResetCode> resetCodes = new ConcurrentHashMap<>();
+
+  private final com.example.smsfraud.repo.UserRepository userRepo;
+
+  public AuthController(com.example.smsfraud.repo.UserRepository userRepo) {
+    this.userRepo = userRepo;
+  }
 
   @PostMapping("/signup") ResponseEntity<?> signUp(@Valid @RequestBody SignUpRequest r) {
     String phone = phone(r.phoneNumber()); String email = r.email().trim().toLowerCase();
     if (!email.contains("@")) throw error(HttpStatus.BAD_REQUEST, "Enter a valid email address.");
-    if (usersByPhone.containsKey(phone)) throw error(HttpStatus.CONFLICT, "A user with this phone number already exists.");
-    if (phoneByEmail.putIfAbsent(email, phone) != null) throw error(HttpStatus.CONFLICT, "A user with this email address already exists.");
-    usersByPhone.put(phone, new User(email, hash(r.password())));
+    if (userRepo.existsByPhone(phone)) throw error(HttpStatus.CONFLICT, "A user with this phone number already exists.");
+    if (userRepo.existsByEmail(email)) throw error(HttpStatus.CONFLICT, "A user with this email address already exists.");
+    String hashed = hash(r.password());
+    // role id 2 = USER (per DB seed)
+    userRepo.insertUser(email, phone, r.fullName(), hashed, 2);
     return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "Account created successfully"));
   }
+
   @PostMapping("/login") Map<String, String> login(@Valid @RequestBody LoginRequest r) {
-    User user = usersByPhone.get(phone(r.phoneNumber()));
-    if (user == null || !matches(r.password(), user.passwordHash)) throw error(HttpStatus.UNAUTHORIZED, "Invalid phone number or password.");
+    String phoneNorm = phone(r.phoneNumber());
+    java.util.Optional<String> maybeHash = userRepo.findPasswordHashByPhone(phoneNorm);
+    if (maybeHash.isEmpty() || !matches(r.password(), maybeHash.get())) throw error(HttpStatus.UNAUTHORIZED, "Invalid phone number or password.");
     return Map.of("message", "Login successful", "token", token());
   }
+
   @PostMapping("/forgot-password") Map<String, String> forgot(@Valid @RequestBody PhoneRequest r) { issue(phone(r.phoneNumber())); return Map.of("message", "Reset code sent successfully"); }
   @PostMapping("/resend-code") Map<String, String> resend(@Valid @RequestBody PhoneRequest r) { issue(phone(r.phoneNumber())); return Map.of("message", "Code resent successfully"); }
   @PostMapping("/verify-code") Map<String, String> verify(@Valid @RequestBody VerifyCodeRequest r) { valid(phone(r.phoneNumber()), r.verificationCode()).verified = true; return Map.of("message", "Code verified successfully"); }
   @PostMapping("/reset-password") Map<String, String> reset(@Valid @RequestBody ResetRequest r) {
     String phone = phone(r.phoneNumber()); ResetCode code = valid(phone, r.verificationCode());
     if (!code.verified) throw error(HttpStatus.BAD_REQUEST, "Verify the reset code before changing your password.");
-    usersByPhone.get(phone).passwordHash = hash(r.newPassword()); resetCodes.remove(phone);
+    // Update password in DB
+    String hashed = hash(r.newPassword());
+    userRepo.updatePasswordByPhone(phone, hashed);
+    resetCodes.remove(phone);
     return Map.of("message", "Password reset successfully");
   }
   private void issue(String phone) {
-    if (!usersByPhone.containsKey(phone)) throw error(HttpStatus.NOT_FOUND, "No account was found for this phone number.");
+    // Now check DB for existence
+    if (!userRepo.findUserIdByPhone(phone).isPresent()) throw error(HttpStatus.NOT_FOUND, "No account was found for this phone number.");
     String code = "%06d".formatted(RANDOM.nextInt(1_000_000)); resetCodes.put(phone, new ResetCode(code, Instant.now().plus(10, ChronoUnit.MINUTES)));
     // Development transport: wire this to the team's SMS provider for production.
     System.out.println("Password-reset code for " + phone + ": " + code);
