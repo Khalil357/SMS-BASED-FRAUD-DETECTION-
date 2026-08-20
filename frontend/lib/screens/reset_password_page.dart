@@ -2,11 +2,73 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 import '../auth_flow.dart';
+import '../services/auth_service.dart';
 import '../widgets/auth_widgets.dart';
 
-class ResetPasswordPage extends StatelessWidget {
+class ResetPasswordPage extends StatefulWidget {
   const ResetPasswordPage({super.key, required this.onNavigate});
   final Navigate onNavigate;
+
+  @override
+  State<ResetPasswordPage> createState() => _ResetPasswordPageState();
+}
+
+class _ResetPasswordPageState extends State<ResetPasswordPage> {
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
+  String? _errorMessage;
+  final String _phoneNumber = ''; // You may want to pass this from previous page
+  final String _verificationCode = ''; // You may want to pass this from previous page
+
+  @override
+  void dispose() {
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleResetPassword() async {
+    setState(() => _errorMessage = null);
+
+    if (_newPasswordController.text.isEmpty ||
+        _confirmPasswordController.text.isEmpty) {
+      setState(() => _errorMessage = 'Please fill in all fields');
+      return;
+    }
+
+    if (_newPasswordController.text != _confirmPasswordController.text) {
+      setState(() => _errorMessage = 'Passwords do not match');
+      return;
+    }
+
+    if (_newPasswordController.text.length < 8) {
+      setState(
+          () => _errorMessage = 'Password must be at least 8 characters long');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final result = await AuthService.resetPassword(
+      phoneNumber: _phoneNumber,
+      verificationCode: _verificationCode,
+      newPassword: _newPasswordController.text,
+    );
+
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (result['success']) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['message'])),
+      );
+      widget.onNavigate(AuthPage.login);
+    } else {
+      setState(() => _errorMessage = result['message']);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => AuthScaffold(
@@ -32,20 +94,33 @@ class ResetPasswordPage extends StatelessWidget {
               'Create a new, strong password to\nsecure your account.'),
           const PasswordRequirements(),
           const SizedBox(height: 17),
-          const AuthField(
+          AuthFieldWithController(
+              controller: _newPasswordController,
               label: 'New Password',
               hint: 'Enter new password',
               obscureText: true),
           const SizedBox(height: 11),
-          const AuthField(
+          AuthFieldWithController(
+              controller: _confirmPasswordController,
               label: 'Confirm New Password',
               hint: 'Confirm new password',
               obscureText: true),
           const SizedBox(height: 22),
-          AppButton(label: '◉  Reset Password', onPressed: () {}),
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                _errorMessage!,
+                style: const TextStyle(color: AppTheme.red, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          AppButton(
+              label: _isLoading ? 'Resetting...' : '◉  Reset Password',
+              onPressed: _isLoading ? null : _handleResetPassword),
           const SizedBox(height: 24),
           AuthLink('Cancel',
-              onTap: () => onNavigate(AuthPage.login), muted: true),
+              onTap: () => widget.onNavigate(AuthPage.login), muted: true),
         ]))),
       );
 }

@@ -248,9 +248,9 @@ class _AuthFieldState extends State<AuthField> {
 }
 
 class AppButton extends StatelessWidget {
-  const AppButton({super.key, required this.label, required this.onPressed});
+  const AppButton({super.key, required this.label, this.onPressed});
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   @override
   Widget build(BuildContext context) => SizedBox(
       width: double.infinity,
@@ -258,7 +258,7 @@ class AppButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.red,
+            backgroundColor: onPressed == null ? Colors.grey : AppTheme.red,
             foregroundColor: Colors.white,
             elevation: 0,
             shape:
@@ -386,6 +386,118 @@ class OtpFields extends StatelessWidget {
               )));
 }
 
+class OtpFieldsWithControllers extends StatelessWidget {
+  const OtpFieldsWithControllers({super.key, required this.controllers});
+  final List<TextEditingController> controllers;
+  @override
+  Widget build(BuildContext context) => Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: List.generate(
+          6,
+          (index) => SizedBox(
+                width: 38,
+                height: 50,
+                child: TextField(
+                    controller: controllers[index],
+                    maxLength: 1,
+                    textAlign: TextAlign.center,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(fontSize: 20),
+                    onChanged: (value) {
+                      if (value.isNotEmpty && index < 5) {
+                        FocusScope.of(context).nextFocus();
+                      }
+                    },
+                    decoration: InputDecoration(
+                        counterText: '',
+                        contentPadding: EdgeInsets.zero,
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.zero))),
+              )));
+}
+
+class AuthFieldWithController extends StatefulWidget {
+  const AuthFieldWithController(
+      {super.key,
+      required this.controller,
+      this.label,
+      required this.hint,
+      this.icon,
+      this.obscureText = false,
+      this.isDropdown = false,
+      this.keyboardType,
+      this.onChanged});
+  final TextEditingController controller;
+  final String? label;
+  final String hint;
+  final IconData? icon;
+  final bool obscureText;
+  final bool isDropdown;
+  final TextInputType? keyboardType;
+  final ValueChanged<String>? onChanged;
+  @override
+  State<AuthFieldWithController> createState() =>
+      _AuthFieldWithControllerState();
+}
+
+class _AuthFieldWithControllerState extends State<AuthFieldWithController> {
+  bool _obscured = true;
+  @override
+  Widget build(BuildContext context) {
+    final border = OutlineInputBorder(
+        borderRadius: BorderRadius.circular(3),
+        borderSide: BorderSide(color: Theme.of(context).dividerColor));
+    final decoration = InputDecoration(
+      hintText: widget.hint,
+      hintStyle: TextStyle(
+          fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+      prefixIcon: widget.icon == null
+          ? null
+          : Icon(widget.icon,
+              color: Theme.of(context).colorScheme.onSurfaceVariant, size: 21),
+      suffixIcon: widget.obscureText
+          ? IconButton(
+              icon: Icon(
+                  _obscured
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20),
+              onPressed: () => setState(() => _obscured = !_obscured))
+          : widget.isDropdown
+              ? const Icon(Icons.keyboard_arrow_down)
+              : null,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      border: border,
+      enabledBorder: border,
+      focusedBorder:
+          border.copyWith(borderSide: const BorderSide(color: AppTheme.red)),
+    );
+    final field = widget.isDropdown
+        ? DropdownButtonFormField<String>(
+            decoration: decoration,
+            items: const [
+              DropdownMenuItem(value: '', child: Text('Select your gender')),
+              DropdownMenuItem(value: 'Female', child: Text('Female')),
+              DropdownMenuItem(value: 'Male', child: Text('Male'))
+            ],
+            onChanged: (_) {})
+        : TextFormField(
+            controller: widget.controller,
+            decoration: decoration,
+            obscureText: widget.obscureText && _obscured,
+            keyboardType: widget.keyboardType,
+            onChanged: widget.onChanged);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (widget.label != null)
+        Padding(
+            padding: const EdgeInsets.only(bottom: 5),
+            child: FieldLabel(widget.label!)),
+      field
+    ]);
+  }
+}
+
 class PasswordRequirements extends StatelessWidget {
   const PasswordRequirements({super.key});
   @override
@@ -412,4 +524,100 @@ class PasswordRequirements extends StatelessWidget {
               style: TextStyle(fontSize: 12, height: 1.45)),
         ]),
       );
+}
+
+class GenderDropdown extends StatefulWidget {
+  const GenderDropdown({super.key, required this.controller});
+  final TextEditingController controller;
+  @override
+  State<GenderDropdown> createState() => _GenderDropdownState();
+}
+
+class _GenderDropdownState extends State<GenderDropdown> {
+  @override
+  Widget build(BuildContext context) {
+    final border = OutlineInputBorder(
+        borderRadius: BorderRadius.circular(3),
+        borderSide: BorderSide(color: Theme.of(context).dividerColor));
+    final decoration = InputDecoration(
+      hintText: 'Select your gender',
+      hintStyle: TextStyle(
+          fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+      prefixIcon: Icon(Icons.group_outlined,
+          color: Theme.of(context).colorScheme.onSurfaceVariant, size: 21),
+      suffixIcon: const Icon(Icons.keyboard_arrow_down),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      border: border,
+      enabledBorder: border,
+      focusedBorder:
+          border.copyWith(borderSide: const BorderSide(color: AppTheme.red)),
+    );
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Padding(
+          padding: EdgeInsets.only(bottom: 5),
+          child: FieldLabel('Gender')),
+      DropdownButtonFormField<String>(
+          decoration: decoration,
+          items: const [
+            DropdownMenuItem(value: '', child: Text('Select your gender')),
+            DropdownMenuItem(value: 'Female', child: Text('Female')),
+            DropdownMenuItem(value: 'Male', child: Text('Male')),
+            DropdownMenuItem(value: 'Other', child: Text('Other'))
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              widget.controller.text = value;
+            }
+          },
+          value: widget.controller.text.isEmpty ? null : widget.controller.text)
+    ]);
+  }
+}
+
+class TermsCheckboxWithCallback extends StatefulWidget {
+  const TermsCheckboxWithCallback({super.key, required this.onChanged});
+  final ValueChanged<bool> onChanged;
+  @override
+  State<TermsCheckboxWithCallback> createState() =>
+      _TermsCheckboxWithCallbackState();
+}
+
+class _TermsCheckboxWithCallbackState extends State<TermsCheckboxWithCallback> {
+  bool selected = false;
+  @override
+  Widget build(BuildContext context) =>
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(
+            width: 20,
+            height: 20,
+            child: Checkbox(
+                value: selected,
+                activeColor: AppTheme.red,
+                onChanged: (value) {
+                  setState(() => selected = value ?? false);
+                  widget.onChanged(value ?? false);
+                })),
+        const SizedBox(width: 5),
+        Expanded(
+            child: RichText(
+                text: TextSpan(
+                    style: TextStyle(
+                        fontSize: 11,
+                        height: 1.45,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    children: const [
+              TextSpan(text: 'I agree to the '),
+              TextSpan(
+                  text: 'Terms of Service',
+                  style: TextStyle(
+                      color: AppTheme.red, fontWeight: FontWeight.w600)),
+              TextSpan(text: ' and '),
+              TextSpan(
+                  text: 'Privacy Policy.',
+                  style: TextStyle(
+                      color: AppTheme.red, fontWeight: FontWeight.w600)),
+            ]))),
+      ]);
 }
