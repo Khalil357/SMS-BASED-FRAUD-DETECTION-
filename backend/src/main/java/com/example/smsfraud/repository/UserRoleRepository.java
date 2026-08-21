@@ -1,13 +1,13 @@
 package com.example.smsfraud.repository;
 
-import com.example.smsfraud.entity.UserRoles;
+import com.example.smsfraud.entity.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
 @Repository
-public interface UserRolesRepository extends JpaRepository<UserRoles, Integer> {
+public interface UserRoleRepository extends JpaRepository<UserRole, Integer> {
 
-    Optional<UserRoles> findByRoleName(String roleName);
+    Optional<UserRole> findByRoleName(String roleName);
 }
