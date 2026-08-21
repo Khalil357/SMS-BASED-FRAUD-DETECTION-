@@ -2,10 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  // PLACEHOLDER: Replace with your backend server address
-  // Example: static const String baseUrl = 'http://192.168.x.x:8000';
-  // Or for production: static const String baseUrl = 'https://api.yourdomain.com';
-  static const String baseUrl = 'YOUR_SERVER_URL_HERE';
+  // Local backend (web/desktop on the same machine). For an Android emulator
+  // use 'http://10.0.2.2:8080'; for a physical device use your LAN IP.
+  static const String baseUrl = 'http://localhost:8080';
 
   // PLACEHOLDER: Add any API keys or authentication tokens if needed
   // static const String apiKey = 'YOUR_API_KEY_HERE';
