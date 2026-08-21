@@ -2,13 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  /// Android emulators reach a server on the development machine through
-  /// 10.0.2.2. Supply --dart-define=API_BASE_URL=<server-url> for a physical
-  /// device, iOS simulator, web, or production deployment.
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8080',
-  );
+  // Local backend (web/desktop on the same machine). For an Android emulator
+  // use 'http://10.0.2.2:8080'; for a physical device use your LAN IP.
+  static const String baseUrl = 'http://localhost:8080';
 
   // PLACEHOLDER: Add any API keys or authentication tokens if needed
   // static const String apiKey = 'YOUR_API_KEY_HERE';
@@ -29,9 +25,9 @@ class AuthService {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'fullName': fullName,
+          'full_name': fullName,
           'email': email,
-          'phoneNumber': phoneNumber,
+          'phone_number': phoneNumber,
           'gender': gender,
           'password': password,
         }),
@@ -73,7 +69,7 @@ class AuthService {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'phoneNumber': phoneNumber,
+          'phone_number': phoneNumber,
           'password': password,
         }),
       );
@@ -115,7 +111,7 @@ class AuthService {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'phoneNumber': phoneNumber,
+          'phone_number': phoneNumber,
         }),
       );
 
@@ -155,8 +151,8 @@ class AuthService {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'phoneNumber': phoneNumber,
-          'verificationCode': verificationCode,
+          'phone_number': phoneNumber,
+          'verification_code': verificationCode,
         }),
       );
 
@@ -195,7 +191,7 @@ class AuthService {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'phoneNumber': phoneNumber,
+          'phone_number': phoneNumber,
         }),
       );
 
@@ -236,9 +232,9 @@ class AuthService {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'phoneNumber': phoneNumber,
-          'verificationCode': verificationCode,
-          'newPassword': newPassword,
+          'phone_number': phoneNumber,
+          'verification_code': verificationCode,
+          'new_password': newPassword,
         }),
       );
 
