@@ -41,3 +41,5 @@ frontend/.packages
 
 frontend/android/.gradle/
 frontend/ios/Pods/
+
+.env.dev

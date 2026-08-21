@@ -52,6 +52,12 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
+    // Enforce backend password policy (min 8 characters)
+    if (_passwordController.text.length < 8) {
+      setState(() => _errorMessage = 'Password must be at least 8 characters');
+      return;
+    }
+
     if (!_termsAccepted) {
       setState(() => _errorMessage = 'Please accept the terms and conditions');
       return;
