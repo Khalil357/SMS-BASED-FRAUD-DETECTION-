@@ -1,4 +1,4 @@
-package com.yourorg.frauddetect.user;
+package com.example.smsfraud.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
