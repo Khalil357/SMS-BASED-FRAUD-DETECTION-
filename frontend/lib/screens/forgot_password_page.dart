@@ -7,7 +7,13 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/fade_slide_transition.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
+<<<<<<< HEAD
+=======
+  const ForgotPasswordPage(
+      {super.key, required this.onNavigate, required this.onResetRequested});
+>>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
   final Navigate onNavigate;
+  final ValueChanged<String> onResetRequested;
 
   const ForgotPasswordPage({super.key, required this.onNavigate});
 
@@ -26,10 +32,40 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     super.dispose();
   }
 
+<<<<<<< HEAD
   void _handleSendCode() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
+=======
+  Future<void> _handleSendCode() async {
+    setState(() {
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    if (_phoneController.text.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your phone number');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final result = await AuthService.requestPasswordReset(
+      phoneNumber: _phoneController.text,
+    );
+
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (result['success']) {
+      setState(() => _successMessage = result['message']);
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          widget.onResetRequested(_phoneController.text.trim());
+        }
+>>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
       });
 
       final result = await AuthService.requestPasswordReset(

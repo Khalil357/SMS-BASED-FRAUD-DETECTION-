@@ -7,6 +7,7 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/fade_slide_transition.dart';
 
 class ResetPasswordPage extends StatefulWidget {
+<<<<<<< HEAD
   final Navigate onNavigate;
   final String phoneNumber;
 
@@ -15,6 +16,16 @@ class ResetPasswordPage extends StatefulWidget {
     required this.onNavigate,
     required this.phoneNumber,
   });
+=======
+  const ResetPasswordPage(
+      {super.key,
+      required this.onNavigate,
+      required this.phoneNumber,
+      required this.verificationCode});
+  final Navigate onNavigate;
+  final String phoneNumber;
+  final String verificationCode;
+>>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
 
   @override
   State<ResetPasswordPage> createState() => _ResetPasswordPageState();
@@ -25,6 +36,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
+<<<<<<< HEAD
+=======
+  String? _errorMessage;
+>>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
 
   @override
   void dispose() {
@@ -39,11 +54,46 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
         _isLoading = true;
       });
 
+<<<<<<< HEAD
       // Using dummy code since the verification code was verified on the previous page
       final result = await AuthService.resetPassword(
         phoneNumber: widget.phoneNumber.isNotEmpty ? widget.phoneNumber : 'dummy_number',
         verificationCode: '123456', 
         newPassword: _passwordController.text,
+=======
+    if (_newPasswordController.text.isEmpty ||
+        _confirmPasswordController.text.isEmpty) {
+      setState(() => _errorMessage = 'Please fill in all fields');
+      return;
+    }
+
+    if (_newPasswordController.text != _confirmPasswordController.text) {
+      setState(() => _errorMessage = 'Passwords do not match');
+      return;
+    }
+
+    if (_newPasswordController.text.length < 8) {
+      setState(
+          () => _errorMessage = 'Password must be at least 8 characters long');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final result = await AuthService.resetPassword(
+      phoneNumber: widget.phoneNumber,
+      verificationCode: widget.verificationCode,
+      newPassword: _newPasswordController.text,
+    );
+
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (result['success']) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['message'])),
+>>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
       );
 
       setState(() {

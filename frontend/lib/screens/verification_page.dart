@@ -8,6 +8,7 @@ import '../widgets/otp_input_field.dart';
 import '../widgets/fade_slide_transition.dart';
 
 class VerificationPage extends StatefulWidget {
+<<<<<<< HEAD
   final Navigate onNavigate;
   final String phoneNumber;
   final bool isResetPasswordFlow;
@@ -18,6 +19,16 @@ class VerificationPage extends StatefulWidget {
     required this.phoneNumber,
     this.isResetPasswordFlow = false,
   });
+=======
+  const VerificationPage(
+      {super.key,
+      required this.onNavigate,
+      required this.phoneNumber,
+      required this.onVerified});
+  final Navigate onNavigate;
+  final String phoneNumber;
+  final ValueChanged<String> onVerified;
+>>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
 
   @override
   State<VerificationPage> createState() => _VerificationPageState();
@@ -28,12 +39,16 @@ class _VerificationPageState extends State<VerificationPage> {
   int _secondsRemaining = 60;
   Timer? _timer;
   bool _isLoading = false;
+<<<<<<< HEAD
 
   @override
   void initState() {
     super.initState();
     _startTimer();
   }
+=======
+  String? _errorMessage;
+>>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
 
   @override
   void dispose() {
@@ -61,6 +76,7 @@ class _VerificationPageState extends State<VerificationPage> {
         _isLoading = true;
       });
 
+<<<<<<< HEAD
       final result = await AuthService.resendCode(
         phoneNumber: widget.phoneNumber,
       );
@@ -108,6 +124,35 @@ class _VerificationPageState extends State<VerificationPage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
+=======
+    setState(() => _isLoading = true);
+
+    final result = await AuthService.verifyResetCode(
+      phoneNumber: widget.phoneNumber,
+      verificationCode: code,
+    );
+
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (result['success']) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['message'])),
+      );
+      widget.onVerified(code);
+    } else {
+      setState(() => _errorMessage = result['message']);
+    }
+  }
+
+  Future<void> _handleResendCode() async {
+    setState(() => _errorMessage = null);
+
+    if (widget.phoneNumber.isEmpty) {
+      setState(
+          () => _errorMessage = 'Phone number not available. Please go back.');
+>>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
       return;
     }
 
@@ -115,10 +160,14 @@ class _VerificationPageState extends State<VerificationPage> {
       _isLoading = true;
     });
 
+<<<<<<< HEAD
     final result = await AuthService.verifyResetCode(
       phoneNumber: widget.phoneNumber,
       verificationCode: _otpCode,
     );
+=======
+    final result = await AuthService.resendCode(phoneNumber: widget.phoneNumber);
+>>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
 
     setState(() {
       _isLoading = false;
