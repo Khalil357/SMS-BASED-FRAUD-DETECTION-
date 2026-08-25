@@ -5,8 +5,9 @@ import 'screens/login_page.dart';
 import 'screens/reset_password_page.dart';
 import 'screens/sign_up_page.dart';
 import 'screens/verification_page.dart';
+import 'screens/dashboard_page.dart';
 
-enum AuthPage { login, signUp, forgotPassword, verification, resetPassword }
+enum AuthPage { login, signUp, forgotPassword, verification, resetPassword, dashboard }
 
 typedef Navigate = void Function(AuthPage page);
 
@@ -40,6 +41,10 @@ class _AuthFlowState extends State<AuthFlow> {
 
   @override
   Widget build(BuildContext context) {
+    if (_page == AuthPage.dashboard) {
+      return DashboardPage(onNavigate: _goTo);
+    }
+
     final page = switch (_page) {
       AuthPage.login => LoginPage(onNavigate: _goTo),
       AuthPage.signUp => SignUpPage(onNavigate: _goTo),
@@ -53,6 +58,7 @@ class _AuthFlowState extends State<AuthFlow> {
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
           verificationCode: _resetVerificationCode ?? ''),
+      AuthPage.dashboard => throw StateError('Handled above'),
     };
     return Scaffold(body: SafeArea(child: page));
   }
