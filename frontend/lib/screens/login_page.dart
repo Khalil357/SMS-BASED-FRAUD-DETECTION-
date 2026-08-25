@@ -55,6 +55,7 @@ class _LoginPageState extends State<LoginPage> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
+        widget.onNavigate(AuthPage.dashboard);
       } else {
         String errorMessage = result['message'] ?? 'Login failed';
         if (errorMessage.contains('YOUR_SERVER_URL_HERE') || errorMessage.contains('Unsupported scheme')) {
@@ -122,12 +123,11 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       const SizedBox(height: 10),
                       
-                      // Logo Icon with entrance animation
-                      FadeSlideTransition(
+                       FadeSlideTransition(
                         delay: const Duration(milliseconds: 100),
                         child: Center(
                           child: Container(
-                            padding: const EdgeInsets.all(22),
+                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               color: theme.primaryColor.withOpacity(0.08),
                               shape: BoxShape.circle,
@@ -136,10 +136,11 @@ class _LoginPageState extends State<LoginPage> {
                                 width: 2,
                               ),
                             ),
-                            child: Icon(
-                              Icons.shield_outlined,
-                              size: 64,
-                              color: theme.primaryColor,
+                            child: Image.asset(
+                              'assets/images/sms_fraud_inapp_icon.png',
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.contain,
                             ),
                           ),
                         ),

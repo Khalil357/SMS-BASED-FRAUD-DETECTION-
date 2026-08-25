@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
-import 'auth_flow.dart';
+import 'screens/splash_screen.dart';
 
 void main() => runApp(const SecureSignalApp());
 
@@ -34,7 +34,7 @@ class SecureSignalAppState extends State<SecureSignalApp> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: _themeMode,
-      home: const AuthFlow(),
+      home: const SplashScreen(),
     );
   }
 }

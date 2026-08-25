@@ -5,10 +5,11 @@ import 'screens/login_page.dart';
 import 'screens/reset_password_page.dart';
 import 'screens/sign_up_page.dart';
 import 'screens/verification_page.dart';
+import 'screens/dashboard_page.dart';
 
-enum AuthPage { login, signUp, forgotPassword, verification, resetPassword }
+enum AuthPage { login, signUp, forgotPassword, verification, resetPassword, dashboard }
 
-typedef Navigate = void Function(AuthPage page, {String? phoneNumber, bool? isResetPasswordFlow});
+typedef Navigate = void Function(AuthPage page);
 
 class AuthFlow extends StatefulWidget {
   const AuthFlow({super.key});
@@ -18,23 +19,10 @@ class AuthFlow extends StatefulWidget {
 
 class _AuthFlowState extends State<AuthFlow> {
   AuthPage _page = AuthPage.login;
-<<<<<<< HEAD
-  String _phoneNumber = '';
-  bool _isResetPasswordFlow = false;
-
-  void _goTo(AuthPage page, {String? phoneNumber, bool? isResetPasswordFlow}) {
-    setState(() {
-      _page = page;
-      if (phoneNumber != null) _phoneNumber = phoneNumber;
-      if (isResetPasswordFlow != null) _isResetPasswordFlow = isResetPasswordFlow;
-    });
-  }
-=======
   String? _resetPhoneNumber;
   String? _resetVerificationCode;
 
   void _goTo(AuthPage page) => setState(() => _page = page);
->>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
 
   void _beginPasswordReset(String phoneNumber) {
     setState(() {
@@ -53,21 +41,13 @@ class _AuthFlowState extends State<AuthFlow> {
 
   @override
   Widget build(BuildContext context) {
+    if (_page == AuthPage.dashboard) {
+      return DashboardPage(onNavigate: _goTo);
+    }
+
     final page = switch (_page) {
       AuthPage.login => LoginPage(onNavigate: _goTo),
       AuthPage.signUp => SignUpPage(onNavigate: _goTo),
-<<<<<<< HEAD
-      AuthPage.forgotPassword => ForgotPasswordPage(onNavigate: _goTo),
-      AuthPage.verification => VerificationPage(
-          onNavigate: _goTo,
-          phoneNumber: _phoneNumber,
-          isResetPasswordFlow: _isResetPasswordFlow,
-        ),
-      AuthPage.resetPassword => ResetPasswordPage(
-          onNavigate: _goTo,
-          phoneNumber: _phoneNumber,
-        ),
-=======
       AuthPage.forgotPassword => ForgotPasswordPage(
           onNavigate: _goTo, onResetRequested: _beginPasswordReset),
       AuthPage.verification => VerificationPage(
@@ -78,7 +58,7 @@ class _AuthFlowState extends State<AuthFlow> {
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
           verificationCode: _resetVerificationCode ?? ''),
->>>>>>> a491ebabbb63969eb2eb01b7e027539fe98d7a81
+      AuthPage.dashboard => throw StateError('Handled above'),
     };
     return Scaffold(body: SafeArea(child: page));
   }
