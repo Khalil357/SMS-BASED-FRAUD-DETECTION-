@@ -8,9 +8,9 @@ import '../widgets/auth_widgets.dart';
 class ResetPasswordPage extends StatefulWidget {
   const ResetPasswordPage(
       {super.key,
-      required this.onNavigate,
-      required this.phoneNumber,
-      required this.verificationCode});
+        required this.onNavigate,
+        required this.phoneNumber,
+        required this.verificationCode});
   final Navigate onNavigate;
   final String phoneNumber;
   final String verificationCode;
@@ -48,7 +48,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
     if (_newPasswordController.text.length < 8) {
       setState(
-          () => _errorMessage = 'Password must be at least 8 characters long');
+              () => _errorMessage = 'Password must be at least 8 characters long');
       return;
     }
 
@@ -76,55 +76,55 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
   @override
   Widget build(BuildContext context) => AuthScaffold(
-        showHeader: false,
-        child: Center(
-            child: AuthCard(
-                child: Column(children: [
-          Container(
-            width: 57,
-            height: 57,
-            decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? const Color(0xff3a3030)
-                  : const Color(0xfffdeeee),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.lock_reset_outlined,
-                color: AppTheme.red, size: 34),
-          ),
-          const SizedBox(height: 14),
-          const AuthTitle('Reset Password'),
-          const AuthDescription(
-              'Create a new, strong password to\nsecure your account.'),
-          const PasswordRequirements(),
-          const SizedBox(height: 17),
-          AuthFieldWithController(
-              controller: _newPasswordController,
-              label: 'New Password',
-              hint: 'Enter new password',
-              obscureText: true),
-          const SizedBox(height: 11),
-          AuthFieldWithController(
-              controller: _confirmPasswordController,
-              label: 'Confirm New Password',
-              hint: 'Confirm new password',
-              obscureText: true),
-          const SizedBox(height: 22),
-          if (_errorMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                _errorMessage!,
-                style: const TextStyle(color: AppTheme.red, fontSize: 12),
-                textAlign: TextAlign.center,
+    showHeader: false,
+    child: Center(
+        child: AuthCard(
+            child: Column(children: [
+              Container(
+                width: 57,
+                height: 57,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xff3a3030)
+                      : const Color(0xfffdeeee),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.lock_reset_outlined,
+                    color: AppTheme.red, size: 34),
               ),
-            ),
-          AppButton(
-              label: _isLoading ? 'Resetting...' : '◉  Reset Password',
-              onPressed: _isLoading ? null : _handleResetPassword),
-          const SizedBox(height: 24),
-          AuthLink('Cancel',
-              onTap: () => widget.onNavigate(AuthPage.login), muted: true),
-        ]))),
-      );
+              const SizedBox(height: 14),
+              const AuthTitle('Reset Password'),
+              const AuthDescription(
+                  'Create a new, strong password to\nsecure your account.'),
+              const PasswordRequirements(),
+              const SizedBox(height: 17),
+              AuthFieldWithController(
+                  controller: _newPasswordController,
+                  label: 'New Password',
+                  hint: 'Enter new password',
+                  obscureText: true),
+              const SizedBox(height: 11),
+              AuthFieldWithController(
+                  controller: _confirmPasswordController,
+                  label: 'Confirm New Password',
+                  hint: 'Confirm new password',
+                  obscureText: true),
+              const SizedBox(height: 22),
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(color: AppTheme.red, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              AppButton(
+                  label: _isLoading ? 'Resetting...' : '◉  Reset Password',
+                  onPressed: _isLoading ? null : _handleResetPassword),
+              const SizedBox(height: 24),
+              AuthLink('Cancel',
+                  onTap: () => widget.onNavigate(AuthPage.login), muted: true),
+            ]))),
+  );
 }
