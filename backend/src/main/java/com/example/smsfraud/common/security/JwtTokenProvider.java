@@ -1,4 +1,4 @@
-package com.example.smsfraud.auth;
+package com.example.smsfraud.common.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -12,21 +12,22 @@ import java.util.Date;
 import java.util.UUID;
 
 /**
- * Minimal JWT helper using jjwt (HS256).
- * Issues and validates signed tokens containing the user id as the subject.
+ * HS256 JWT implementation of {@link TokenProvider} (jjwt). The token subject
+ * carries the user id.
  */
 @Component
-public class JwtUtil {
+public class JwtTokenProvider implements TokenProvider {
 
     private final SecretKey key;
     private final long expirationMs;
 
-    public JwtUtil(@Value("${app.jwt.secret}") String secret,
-                   @Value("${app.jwt.expiration:900000}") long expirationMs) {
+    public JwtTokenProvider(@Value("${app.jwt.secret}") String secret,
+                            @Value("${app.jwt.expiration:900000}") long expirationMs) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }
 
+    @Override
     public String generateToken(UUID userId) {
         return Jwts.builder()
                 .subject(userId.toString())
@@ -36,6 +37,7 @@ public class JwtUtil {
                 .compact();
     }
 
+    @Override
     public UUID validateToken(String token) {
         Claims claims = Jwts.parser()
                 .verifyWith(key)
