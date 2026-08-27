@@ -5,8 +5,8 @@ import { login } from "../services/authService";
 import { useTheme } from "../theme/ThemeContext";
 import { Phone, Lock, Sun, Moon } from "lucide-react";
 import smsFraudIcon from "../assets/images/sms_fraud_app_icon.png";
+import type { AuthPage } from "../types/auth";
 
-type AuthPage = "login" | "signUp" | "forgotPassword" | "dashboard";
 
 interface LoginPageProps {
   onNavigate: (page: AuthPage) => void;
