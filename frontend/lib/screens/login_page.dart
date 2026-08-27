@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../services/auth_service.dart';
+import '../services/token_storage.dart';
 import '../widgets/auth_widgets.dart';
 
 class LoginPage extends StatefulWidget {
@@ -45,17 +46,22 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!mounted) return;
 
-    if (result['success']) {
+    if (result['success'] == true) {
+      final token = result['token']?.toString();
+      if (token == null || token.isEmpty) {
+        setState(() => _errorMessage = 'Login succeeded but no token returned');
+        return;
+      }
+      await TokenStorage.save(token);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message'])),
+        SnackBar(
+            content:
+                Text(result['message']?.toString() ?? 'Login successful')),
       );
-      // TODO: Store token and navigate to dashboard
-      // SharedPreferences.getInstance().then((prefs) {
-      //   prefs.setString('auth_token', result['token']);
-      //   widget.onNavigate(AuthPage.dashboard);
-      // });
+      widget.onNavigate(AuthPage.home);
     } else {
-      setState(() => _errorMessage = result['message']);
+      setState(() => _errorMessage = result['message']?.toString());
     }
   }
 
