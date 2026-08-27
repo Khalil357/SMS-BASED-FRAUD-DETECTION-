@@ -92,18 +92,19 @@ const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
           </div>
 
           <div className="titles fade-slide" style={{ animationDelay: "200ms" }}>
-            <h1>Secure Signal</h1>
-            <p>Secure your inbox and detect fraud SMS messages</p>
+            <h1 style={{}}>Argus</h1>
+            
           </div>
 
           <div className="login-card fade-slide" style={{ animationDelay: "300ms" }}>
+            <center><h2 className="admin-portal-name">Admin portal</h2></center>
             <label className="field">
               <span className="field-label">Phone Number</span>
               <div className="field-input">
                 <Phone size={18} className="field-icon" />
                 <input
                   type="tel"
-                  placeholder="e.g. +1234567890"
+                  placeholder="e.g. +2557567890"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                 />
@@ -117,7 +118,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                 <Lock size={18} className="field-icon" />
                 <input
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="•••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -138,12 +139,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
             </button>
           </div>
 
-          <div className="create-account fade-slide" style={{ animationDelay: "400ms" }}>
-            <span>Don&apos;t have an account? </span>
-            <button type="button" onClick={() => onNavigate("signUp")}>
-              Create an account
-            </button>
-          </div>
+          
         </form>
       </div>
 

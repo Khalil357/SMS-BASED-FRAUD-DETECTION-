@@ -9,6 +9,10 @@
   overflow-x: hidden;
 }
 
+.admin-portal-name{
+  padding-bottom: 10%;
+}
+
 .field-icon {
   color: var(--subtle);
   flex-shrink: 0;
