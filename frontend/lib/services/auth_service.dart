@@ -6,6 +6,10 @@ class AuthService {
   // use 'http://10.0.2.2:8080'; for a physical device use your LAN IP.
   static const String baseUrl = 'http://localhost:8080';
 
+  // Session variables
+  static Map<String, dynamic>? currentUser;
+  static String? token;
+
   // PLACEHOLDER: Add any API keys or authentication tokens if needed
   // static const String apiKey = 'YOUR_API_KEY_HERE';
 
@@ -76,6 +80,8 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        currentUser = data['data'] as Map<String, dynamic>?;
+        token = data['token'] as String?;
         return {
           'success': true,
           'message': 'Login successful',
