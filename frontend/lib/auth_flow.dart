@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 import 'screens/forgot_password_page.dart';
+import 'screens/home_page.dart';
 import 'screens/login_page.dart';
 import 'screens/reset_password_page.dart';
 import 'screens/sign_up_page.dart';
 import 'screens/verification_page.dart';
-import 'screens/dashboard_page.dart';
+import 'services/token_storage.dart';
 
-enum AuthPage { login, signUp, forgotPassword, verification, resetPassword, dashboard }
+enum AuthPage { login, signUp, forgotPassword, verification, resetPassword, home }
 
 typedef Navigate = void Function(AuthPage page);
 
@@ -21,6 +22,22 @@ class _AuthFlowState extends State<AuthFlow> {
   AuthPage _page = AuthPage.login;
   String? _resetPhoneNumber;
   String? _resetVerificationCode;
+  bool _bootstrapping = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final token = await TokenStorage.read();
+    if (!mounted) return;
+    setState(() {
+      _page = token != null ? AuthPage.home : AuthPage.login;
+      _bootstrapping = false;
+    });
+  }
 
   void _goTo(AuthPage page) => setState(() => _page = page);
 
@@ -39,10 +56,16 @@ class _AuthFlowState extends State<AuthFlow> {
     });
   }
 
+  void _logout() {
+    setState(() => _page = AuthPage.login);
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_page == AuthPage.dashboard) {
-      return DashboardPage(onNavigate: _goTo);
+    if (_bootstrapping) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     final page = switch (_page) {
@@ -58,7 +81,7 @@ class _AuthFlowState extends State<AuthFlow> {
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
           verificationCode: _resetVerificationCode ?? ''),
-      AuthPage.dashboard => throw StateError('Handled above'),
+      AuthPage.home => HomePage(onLogout: _logout),
     };
     return Scaffold(body: SafeArea(child: page));
   }
