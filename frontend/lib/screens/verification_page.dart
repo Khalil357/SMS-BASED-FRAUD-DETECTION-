@@ -8,9 +8,9 @@ import '../widgets/auth_widgets.dart';
 class VerificationPage extends StatefulWidget {
   const VerificationPage(
       {super.key,
-      required this.onNavigate,
-      required this.phoneNumber,
-      required this.onVerified});
+        required this.onNavigate,
+        required this.phoneNumber,
+        required this.onVerified});
   final Navigate onNavigate;
   final String phoneNumber;
   final ValueChanged<String> onVerified;
@@ -21,7 +21,7 @@ class VerificationPage extends StatefulWidget {
 
 class _VerificationPageState extends State<VerificationPage> {
   final List<TextEditingController> _otpControllers =
-      List.generate(6, (_) => TextEditingController());
+  List.generate(6, (_) => TextEditingController());
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -68,7 +68,7 @@ class _VerificationPageState extends State<VerificationPage> {
 
     if (widget.phoneNumber.isEmpty) {
       setState(
-          () => _errorMessage = 'Phone number not available. Please go back.');
+              () => _errorMessage = 'Phone number not available. Please go back.');
       return;
     }
 
@@ -91,37 +91,37 @@ class _VerificationPageState extends State<VerificationPage> {
 
   @override
   Widget build(BuildContext context) => AuthScaffold(
-        child: Center(
-            child: AuthCard(
-                topAccent: true,
-                child: Column(children: [
-                  const Icon(Icons.mark_email_read_outlined,
-                      color: AppTheme.red, size: 42),
-                  const SizedBox(height: 11),
-                  const AuthTitle('Verify Your Code'),
-                  const AuthDescription(
-                      "We've sent a 6-digit verification code\nto\n",
-                      trailing: 'j.doe@example.com'),
-                  const SizedBox(height: 17),
-                  OtpFieldsWithControllers(controllers: _otpControllers),
-                  const SizedBox(height: 27),
-                  if (_errorMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(color: AppTheme.red, fontSize: 12),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  AppButton(
-                      label: _isLoading ? 'Verifying...' : 'Verify',
-                      onPressed: _isLoading ? null : _handleVerify),
-                  const SizedBox(height: 19),
-                  AuthPrompt(
-                      prefix: "Didn't receive the code? ",
-                      link: 'Resend Code',
-                      onTap: _handleResendCode),
-                ]))),
-      );
+    child: Center(
+        child: AuthCard(
+            topAccent: true,
+            child: Column(children: [
+              const Icon(Icons.mark_email_read_outlined,
+                  color: AppTheme.red, size: 42),
+              const SizedBox(height: 11),
+              const AuthTitle('Verify Your Code'),
+              const AuthDescription(
+                  "We've sent a 6-digit verification code\nto\n",
+                  trailing: 'j.doe@example.com'),
+              const SizedBox(height: 17),
+              OtpFieldsWithControllers(controllers: _otpControllers),
+              const SizedBox(height: 27),
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(color: AppTheme.red, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              AppButton(
+                  label: _isLoading ? 'Verifying...' : 'Verify',
+                  onPressed: _isLoading ? null : _handleVerify),
+              const SizedBox(height: 19),
+              AuthPrompt(
+                  prefix: "Didn't receive the code? ",
+                  link: 'Resend Code',
+                  onTap: _handleResendCode),
+            ]))),
+  );
 }
