@@ -1,0 +1,14 @@
+services:
+  redis:
+    image: 'redis:latest'
+    ports:
+      - '6379'
+
+  postgres:
+    image: 'postgres:latest'
+    environment:
+      - 'POSTGRES_DB=sms_fraud'
+      - 'POSTGRES_PASSWORD=sms_pass'
+      - 'POSTGRES_USER=sms_app'
+    ports:
+      - '5432:5432'
