@@ -31,7 +31,7 @@ class AuthService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/signup'),
+        Uri.parse('$baseUrl/api/auth/register'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -146,7 +146,7 @@ class AuthService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/forgot-password'),
+        Uri.parse('$baseUrl/api/auth/password-resets'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -192,7 +192,7 @@ class AuthService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/verify-code'),
+        Uri.parse('$baseUrl/api/auth/password-resets/verify'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -238,7 +238,7 @@ class AuthService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/resend-code'),
+        Uri.parse('$baseUrl/api/auth/password-resets/resend'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -285,7 +285,7 @@ class AuthService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/reset-password'),
+        Uri.parse('$baseUrl/api/auth/password-resets/confirm'),
         headers: {
           'Content-Type': 'application/json',
         },
