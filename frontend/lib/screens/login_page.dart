@@ -3,6 +3,7 @@ import '../main.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../services/auth_service.dart';
+import '../services/token_storage.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/fade_slide_transition.dart';
@@ -46,20 +47,36 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
 
-      if (result['success']) {
+      if (result['success'] == true) {
+        final token = result['token']?.toString();
+        if (token == null || token.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Login succeeded but no token returned'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+          return;
+        }
+        await TokenStorage.save(token);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['message'] ?? 'Login successful!'),
+            content: Text(result['message']?.toString() ?? 'Login successful!'),
             backgroundColor: Colors.green.shade600,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
-        widget.onNavigate(AuthPage.dashboard);
+        widget.onNavigate(AuthPage.home);
       } else {
-        String errorMessage = result['message'] ?? 'Login failed';
-        if (errorMessage.contains('YOUR_SERVER_URL_HERE') || errorMessage.contains('Unsupported scheme')) {
-          errorMessage = 'Please configure your backend server URL in lib/services/auth_service.dart';
+        String errorMessage = result['message']?.toString() ?? 'Login failed';
+        if (errorMessage.contains('YOUR_SERVER_URL_HERE') ||
+            errorMessage.contains('Unsupported scheme')) {
+          errorMessage =
+              'Please configure your backend server URL in lib/services/auth_service.dart';
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
