@@ -242,7 +242,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         <header className="topbar">
           <div>
             <h1>Dashboard</h1>
-            <p>Welcome back </p>
+            <p>Welcome back</p>
           </div>
 
           <div className="topbar-right">

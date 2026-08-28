@@ -1,7 +1,7 @@
 const BASE_URL = 'http://localhost:8080';
 
 interface LoginParams {
-  phoneNumber: string;
+  email: string;
   password: string;
 }
 
@@ -10,12 +10,12 @@ interface LoginResult {
   message?: string;
 }
 
-export async function login({ phoneNumber, password }: LoginParams): Promise<LoginResult> {
+export async function login({ email, password }: LoginParams): Promise<LoginResult> {
   try {
     const response = await fetch(`${BASE_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phoneNumber, password }),
+      body: JSON.stringify({ email, password }),
     });
 
     const data = await response.json();
@@ -24,10 +24,19 @@ export async function login({ phoneNumber, password }: LoginParams): Promise<Log
       return { success: false, message: data.message ?? "Login failed" };
     }
 
-    return { success: true, message: data.message ?? "Login successful!" };
+    return { success: true, message: data.message ?? "Verification code sent" };
   } catch (err) {
     return { success: false, message: "Unable to reach the server" };
   }
+}
+
+interface VerifyLoginOtpParams {
+  email: string;
+  verificationCode: string;
+}
+
+interface EmailOnlyParams {
+  email: string;
 }
 
 interface PhoneOnlyParams {
@@ -65,6 +74,17 @@ async function postJson(path: string, body: unknown): Promise<ApiResult> {
   } catch {
     return { success: false, message: "Unable to reach the server" };
   }
+}
+
+export async function verifyLoginOtp({
+  email,
+  verificationCode,
+}: VerifyLoginOtpParams): Promise<ApiResult> {
+  return postJson("/api/auth/verify-login-otp", { email, verificationCode });
+}
+
+export async function resendLoginOtp({ email }: EmailOnlyParams): Promise<ApiResult> {
+  return postJson("/api/auth/resend-login-otp", { email });
 }
 
 export async function requestPasswordReset({ phoneNumber }: PhoneOnlyParams): Promise<ApiResult> {

@@ -7,13 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import { ThemeProvider } from "./theme/ThemeContext";
 import type { AuthPage } from "./types/auth";
 
-const DEV_PAGES: AuthPage[] = [
-  "login",
-  "forgotPassword",
-  "verification",
-  "resetPassword",
-  "dashboard",
-];
+const DEV_PAGES: AuthPage[] = ["login", "verification", "dashboard"];
 
 function DevPageSwitcher({
   currentPage,
@@ -61,13 +55,25 @@ function DevPageSwitcher({
 
 function App() {
   const [page, setPage] = useState<AuthPage>("login");
+
+  // Login -> OTP verification flow
+  const [loginEmail, setLoginEmail] = useState("");
+
+  // Separate forgot-password flow (kept in the codebase, not in the dev switcher)
   const [resetPhone, setResetPhone] = useState("");
   const [resetCode, setResetCode] = useState("");
 
   const renderPage = () => {
     switch (page) {
       case "login":
-        return <LoginPage onNavigate={setPage} />;
+        return (
+          <LoginPage
+            onLoginSuccess={(email) => {
+              setLoginEmail(email);
+              setPage("verification");
+            }}
+          />
+        );
 
       case "forgotPassword":
         return (
@@ -83,11 +89,8 @@ function App() {
       case "verification":
         return (
           <VerificationPage
-            phoneNumber={resetPhone || "+255 000 000 000"}
-            onVerified={(code) => {
-              setResetCode(code);
-              setPage("resetPassword");
-            }}
+            email={loginEmail || "your email"}
+            onVerified={() => setPage("dashboard")}
           />
         );
 
@@ -104,7 +107,14 @@ function App() {
         return <DashboardPage onNavigate={setPage} />;
 
       default:
-        return <LoginPage onNavigate={setPage} />;
+        return (
+          <LoginPage
+            onLoginSuccess={(email) => {
+              setLoginEmail(email);
+              setPage("verification");
+            }}
+          />
+        );
     }
   };
 

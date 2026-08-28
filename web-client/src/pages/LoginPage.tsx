@@ -3,24 +3,22 @@ import type { FormEvent } from "react";
 import "./LoginPage.css";
 import { login } from "../services/authService";
 import { useTheme } from "../theme/ThemeContext";
-import { Phone, Lock, Sun, Moon } from "lucide-react";
+import { Mail, Lock, Sun, Moon } from "lucide-react";
 import smsFraudIcon from "../assets/images/sms_fraud_app_icon.png";
-import type { AuthPage } from "../types/auth";
-
 
 interface LoginPageProps {
-  onNavigate: (page: AuthPage) => void;
+  onLoginSuccess: (email: string) => void;
 }
 
 interface FormErrors {
-  phone?: string;
+  email?: string;
   password?: string;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { isDark, toggleTheme } = useTheme();
 
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -29,10 +27,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
 
-    if (!phone.trim()) {
-      newErrors.phone = "Please enter your phone number";
-    } else if (phone.trim().length < 9) {
-      newErrors.phone = "Please enter a valid phone number";
+    if (!email.trim()) {
+      newErrors.email = "Please enter your email address";
+    } else if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      newErrors.email = "Please enter a valid email address";
     }
 
     if (!password.trim()) {
@@ -53,11 +51,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
     setToast(null);
 
     try {
-      const result = await login({ phoneNumber: phone.trim(), password });
+      const result = await login({ email: email.trim(), password });
 
       if (result.success) {
-        setToast({ message: result.message ?? "Login successful!", type: "success" });
-        onNavigate("dashboard");
+        setToast({ message: result.message ?? "Verification code sent!", type: "success" });
+        onLoginSuccess(email.trim());
       } else {
         let message = result.message ?? "Login failed";
         if (message.includes("http://localhost:8080") || message.includes("Unsupported scheme")) {
@@ -88,28 +86,27 @@ const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
       <div className="login-content">
         <form className="login-form" onSubmit={handleLogin} noValidate>
           <div className="icon-circle fade-slide" style={{ animationDelay: "100ms" }}>
-           <img src={smsFraudIcon} alt="Secure Signal" />
+            <img src={smsFraudIcon} alt="Argus" />
           </div>
 
           <div className="titles fade-slide" style={{ animationDelay: "200ms" }}>
-            <h1 style={{}}>Argus</h1>
-            
+            <h1 style={{ color: "#D32f2f" }}>Argus</h1>
           </div>
 
           <div className="login-card fade-slide" style={{ animationDelay: "300ms" }}>
-            <center><h2 className="admin-portal-name">Admin portal</h2></center>
+            <center><h2 className="admin-portal-name">Admin Portal</h2></center>
             <label className="field">
-              <span className="field-label">Phone Number</span>
+              <span className="field-label">Email Address</span>
               <div className="field-input">
-                <Phone size={18} className="field-icon" />
+                <Mail size={18} className="field-icon" />
                 <input
-                  type="tel"
-                  placeholder="e.g. +2557567890"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  type="email"
+                  placeholder="admin@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-              {errors.phone && <span className="field-error">{errors.phone}</span>}
+              {errors.email && <span className="field-error">{errors.email}</span>}
             </label>
 
             <label className="field">
@@ -126,20 +123,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
               {errors.password && <span className="field-error">{errors.password}</span>}
             </label>
 
-            <button
-              type="button"
-              className="forgot-password"
-              onClick={() => onNavigate("forgotPassword")}
-            >
-              Forgot Password?
-            </button>
-
             <button type="submit" className="login-button" disabled={isLoading}>
               {isLoading ? <span className="spinner" /> : "Login"}
             </button>
           </div>
-
-          
         </form>
       </div>
 

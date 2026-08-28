@@ -11,14 +11,14 @@ import {
   FormMessage,
 } from "../components/auth/AuthElements";
 import OtpFields from "../components/auth/OtpFields";
-import { verifyResetCode, resendCode } from "../services/authService";
+import { verifyLoginOtp, resendLoginOtp } from "../services/authService";
 
 interface VerificationPageProps {
-  phoneNumber: string;
-  onVerified: (code: string) => void;
+  email: string;
+  onVerified: () => void;
 }
 
-const VerificationPage: React.FC<VerificationPageProps> = ({ phoneNumber, onVerified }) => {
+const VerificationPage: React.FC<VerificationPageProps> = ({ email, onVerified }) => {
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -35,11 +35,11 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ phoneNumber, onVeri
     }
 
     setIsLoading(true);
-    const result = await verifyResetCode({ phoneNumber, verificationCode: code });
+    const result = await verifyLoginOtp({ email, verificationCode: code });
     setIsLoading(false);
 
     if (result.success) {
-      onVerified(code);
+      onVerified();
     } else {
       setErrorMessage(result.message ?? "Verification failed");
     }
@@ -49,13 +49,13 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ phoneNumber, onVeri
     setErrorMessage(null);
     setInfoMessage(null);
 
-    if (!phoneNumber) {
-      setErrorMessage("Phone number not available. Please go back.");
+    if (!email) {
+      setErrorMessage("Email not available. Please go back and log in again.");
       return;
     }
 
     setIsLoading(true);
-    const result = await resendCode({ phoneNumber });
+    const result = await resendLoginOtp({ email });
     setIsLoading(false);
 
     if (result.success) {
@@ -71,7 +71,7 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ phoneNumber, onVeri
         <AuthIcon icon={MailCheck} size={38} />
         <AuthTitle>Verify Your Code</AuthTitle>
         <AuthDescription>
-          We&apos;ve sent a 6-digit verification code to your phone.
+          We&apos;ve sent a 6-digit verification code to {email || "your email"}.
         </AuthDescription>
 
         <form onSubmit={handleVerify} noValidate>
