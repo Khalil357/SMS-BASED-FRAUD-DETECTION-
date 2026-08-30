@@ -5,7 +5,7 @@ import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
 import com.example.smsfraud.auth.dto.ResetPasswordRequest;
-import com.example.smsfraud.auth.dto.SignupRequest;
+import com.example.smsfraud.auth.dto.RegisterRequest;
 import com.example.smsfraud.auth.dto.SignupResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 import com.example.smsfraud.common.dto.ApiResponse;
@@ -33,7 +33,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<SignupResponse>> register(@Valid @RequestBody SignupRequest req) {
+    public ResponseEntity<ApiResponse<SignupResponse>> register(@Valid @RequestBody RegisterRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Account created successfully", authService.register(req)));
     }
