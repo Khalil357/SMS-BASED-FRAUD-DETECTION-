@@ -6,7 +6,7 @@ import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
 import com.example.smsfraud.auth.dto.ResetPasswordRequest;
 import com.example.smsfraud.auth.dto.RegisterRequest;
-import com.example.smsfraud.auth.dto.SignupResponse;
+import com.example.smsfraud.auth.dto.RegisterResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 import com.example.smsfraud.common.exception.BadRequestException;
 import com.example.smsfraud.common.exception.ConflictException;
@@ -59,7 +59,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public SignupResponse register(RegisterRequest req) {
+    public RegisterResponse register(RegisterRequest req) {
         if (userRepository.existsByEmail(req.email())) {
             throw new ConflictException("Email already registered");
         }
@@ -84,7 +84,7 @@ public class AuthServiceImpl implements AuthService {
         emailService.sendVerificationCode(user.getEmail(), otp);
         smsService.sendSms(user.getPhone(), "Your Secure Signal verification code is " + otp + ".");
 
-        return new SignupResponse(user.getUserId(), otp);
+        return new RegisterResponse(user.getUserId(), otp);
     }
 
     @Override
