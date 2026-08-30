@@ -3,10 +3,12 @@ package com.example.smsfraud.auth.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
-public record SignupRequest(
-        @NotBlank String fullName,
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record RegisterRequest(
+        @JsonProperty("full_name") @NotBlank String fullName,
         @NotBlank @Email String email,
-        @NotBlank String phoneNumber,
+        @JsonProperty("phone_number") @NotBlank String phoneNumber,
         String gender,
         @NotBlank String password) {
 }
