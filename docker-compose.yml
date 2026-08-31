@@ -1,0 +1,29 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: sms_fraud
+      POSTGRES_USER: sms_app
+      POSTGRES_PASSWORD: sms_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./backend/db:/docker-entrypoint-initdb.d:ro
+  backend:
+    image: openjdk:17
+    working_dir: /workspace
+    volumes:
+      - ./backend:/workspace
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/sms_fraud
+      SPRING_DATASOURCE_USERNAME: sms_app
+      SPRING_DATASOURCE_PASSWORD: sms_pass
+    depends_on:
+      - db
+    command: mvn -q -DskipTests spring-boot:run
+
+volumes:
+  db_data:
+    driver: local
