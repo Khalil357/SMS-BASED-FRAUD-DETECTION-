@@ -108,7 +108,7 @@ class _LoginPageState extends State<LoginPage> {
                       delay: const Duration(milliseconds: 100),
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.all(22),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: theme.primaryColor.withOpacity(0.08),
                             shape: BoxShape.circle,
@@ -117,10 +117,11 @@ class _LoginPageState extends State<LoginPage> {
                               width: 2,
                             ),
                           ),
-                          child: Icon(
-                            Icons.shield_outlined,
-                            size: 64,
-                            color: theme.primaryColor,
+                          child: Image.asset(
+                            'assets/images/sms_fraud_inapp_icon.png',
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
