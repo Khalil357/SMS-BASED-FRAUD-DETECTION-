@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 class AuthService {
   // Local backend (web/desktop on the same machine). For an Android emulator
   // use 'http://10.0.2.2:8080'; for a physical device use your LAN IP.
-  static const String baseUrl = 'http://localhost:8080';
+  static const String baseUrl = 'http://192.168.100.143:8080';
 
   // Session variables
   static Map<String, dynamic>? currentUser;
