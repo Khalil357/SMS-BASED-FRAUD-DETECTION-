@@ -16,7 +16,7 @@ import com.example.smsfraud.common.exception.UnauthorizedException;
 import com.example.smsfraud.common.security.TokenProvider;
 import com.example.smsfraud.email.EmailService;
 import com.example.smsfraud.otp.OtpService;
-import com.example.smsfraud.sms.SmsService;
+import com.example.smsfraud.sms.SmsSenderService;
 import com.example.smsfraud.user.User;
 import com.example.smsfraud.user.UserRole;
 import com.example.smsfraud.user.UserRepository;
@@ -39,7 +39,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final EmailService emailService;
-    private final SmsService smsService;
+    private final SmsSenderService smsService;
     private final TokenProvider tokenProvider;
 
     public AuthServiceImpl(UserRepository userRepository,
@@ -47,7 +47,7 @@ public class AuthServiceImpl implements AuthService {
                            PasswordEncoder passwordEncoder,
                            OtpService otpService,
                            EmailService emailService,
-                           SmsService smsService,
+                           SmsSenderService smsService,
                            TokenProvider tokenProvider) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;

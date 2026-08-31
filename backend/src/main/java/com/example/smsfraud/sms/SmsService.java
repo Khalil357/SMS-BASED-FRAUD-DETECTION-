@@ -1,10 +1,11 @@
 package com.example.smsfraud.sms;
 
+import com.example.smsfraud.sms.dto.CreateSmsRequest;
+import com.example.smsfraud.sms.dto.SmsResponse;
+
+import java.util.UUID;
+
 public interface SmsService {
-    /**
-     * Sends an SMS message to a specific phone number.
-     * @param toPhoneNumber the recipient's phone number (E.164 format)
-     * @param message the SMS content
-     */
-    void sendSms(String toPhoneNumber, String message);
+
+    SmsResponse ingest(UUID authenticatedUserId, CreateSmsRequest request);
 }

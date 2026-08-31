@@ -10,7 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
-public class TwilioSmsServiceImpl implements SmsService {
+public class TwilioSmsServiceImpl implements SmsSenderService {
 
     private static final Logger log = LoggerFactory.getLogger(TwilioSmsServiceImpl.class);
 
