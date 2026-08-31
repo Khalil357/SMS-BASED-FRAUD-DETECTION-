@@ -11,6 +11,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Accepts classified SMS batches from the Flutter client. The existing security
+ * configuration protects this route because only {@code /api/auth/**} is public.
+ * Processing is asynchronous from the client's perspective, hence HTTP 202.
+ */
 @RestController
 @RequestMapping("/api/v1/sms")
 public class SmsIngestionController {

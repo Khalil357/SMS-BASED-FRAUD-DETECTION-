@@ -6,6 +6,11 @@ import com.example.smsfraud.sms.ingestion.dto.SmsIngestionRequest;
 import com.example.smsfraud.sms.ingestion.dto.SmsIngestionResponse;
 import org.springframework.stereotype.Service;
 
+/**
+ * Orchestrates validated SMS batches and delegates each item to the configured
+ * training-data sink. Keeping this class independent from JPA prevents the
+ * ingestion endpoint from accidentally persisting raw messages to PostgreSQL.
+ */
 @Service
 public class SmsIngestionService {
 
@@ -16,6 +21,7 @@ public class SmsIngestionService {
     }
 
     public SmsIngestionResponse ingest(SmsIngestionRequest request) {
+        // Validation occurs at the controller boundary; this layer owns dispatch order.
         for (ClassifiedSmsItem item : request.items()) {
             trainingDataSink.accept(item);
         }
