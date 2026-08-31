@@ -10,8 +10,13 @@ import '../widgets/fade_slide_transition.dart';
 
 class SignUpPage extends StatefulWidget {
   final Navigate onNavigate;
+  final ValueChanged<String> onSignUpSuccess;
 
-  const SignUpPage({super.key, required this.onNavigate});
+  const SignUpPage({
+    super.key,
+    required this.onNavigate,
+    required this.onSignUpSuccess,
+  });
 
   @override
   State<SignUpPage> createState() => _SignUpPageState();
@@ -84,7 +89,7 @@ class _SignUpPageState extends State<SignUpPage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
-      widget.onNavigate(AuthPage.login);
+      widget.onSignUpSuccess(_phoneController.text.trim());
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -135,7 +140,7 @@ class _SignUpPageState extends State<SignUpPage> {
                       delay: const Duration(milliseconds: 50),
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.all(18),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: theme.primaryColor.withOpacity(0.08),
                             shape: BoxShape.circle,
@@ -144,10 +149,11 @@ class _SignUpPageState extends State<SignUpPage> {
                               width: 2,
                             ),
                           ),
-                          child: Icon(
-                            Icons.shield_outlined,
-                            size: 54,
-                            color: theme.primaryColor,
+                          child: Image.asset(
+                            'assets/images/sms_fraud_inapp_icon.png',
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),

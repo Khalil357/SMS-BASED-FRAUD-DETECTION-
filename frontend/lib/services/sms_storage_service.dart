@@ -14,6 +14,9 @@ class SmsStorageService {
 
   static Future<SharedPreferences> _getPrefs() async {
     _prefs ??= await SharedPreferences.getInstance();
+    try {
+      await _prefs!.reload();
+    } catch (_) {}
     return _prefs!;
   }
 
