@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'screens/forgot_password_page.dart';
 import 'screens/login_page.dart';
 import 'screens/reset_password_page.dart';
-import 'screens/sign_up_page.dart';
+import 'screens/create_account_page.dart';
 import 'screens/verification_page.dart';
 import 'screens/dashboard_page.dart';
 
@@ -21,6 +21,7 @@ class _AuthFlowState extends State<AuthFlow> {
   AuthPage _page = AuthPage.login;
   String? _resetPhoneNumber;
   String? _resetVerificationCode;
+  bool _isResetPasswordFlow = true;
 
   void _goTo(AuthPage page) => setState(() => _page = page);
 
@@ -28,6 +29,16 @@ class _AuthFlowState extends State<AuthFlow> {
     setState(() {
       _resetPhoneNumber = phoneNumber;
       _resetVerificationCode = null;
+      _isResetPasswordFlow = true;
+      _page = AuthPage.verification;
+    });
+  }
+
+  void _beginSignUpVerification(String phoneNumber) {
+    setState(() {
+      _resetPhoneNumber = phoneNumber;
+      _resetVerificationCode = null;
+      _isResetPasswordFlow = false;
       _page = AuthPage.verification;
     });
   }
@@ -47,13 +58,24 @@ class _AuthFlowState extends State<AuthFlow> {
 
     final page = switch (_page) {
       AuthPage.login => LoginPage(onNavigate: _goTo),
-      AuthPage.signUp => SignUpPage(onNavigate: _goTo),
+      AuthPage.signUp => SignUpPage(
+          onNavigate: _goTo,
+          onSignUpSuccess: _beginSignUpVerification,
+        ),
       AuthPage.forgotPassword => ForgotPasswordPage(
           onNavigate: _goTo, onResetRequested: _beginPasswordReset),
       AuthPage.verification => VerificationPage(
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
-          onVerified: _verifyPasswordReset),
+          isResetPasswordFlow: _isResetPasswordFlow,
+          onVerified: (code) {
+            if (_isResetPasswordFlow) {
+              _verifyPasswordReset(code);
+            } else {
+              _goTo(AuthPage.login);
+            }
+          },
+        ),
       AuthPage.resetPassword => ResetPasswordPage(
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
