@@ -1,6 +1,5 @@
-package com.example.smsfraud.repository;
+package com.example.smsfraud.user;
 
-import com.example.smsfraud.entity.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

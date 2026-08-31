@@ -1,24 +1,26 @@
 package com.example.smsfraud.auth;
 
-import com.example.smsfraud.auth.dto.ForgotPasswordRequest;
 import com.example.smsfraud.auth.dto.LoginRequest;
+import com.example.smsfraud.auth.dto.LoginResponse;
+import com.example.smsfraud.auth.dto.OtpRequest;
+import com.example.smsfraud.auth.dto.OtpResponse;
 import com.example.smsfraud.auth.dto.ResetPasswordRequest;
 import com.example.smsfraud.auth.dto.SignupRequest;
+import com.example.smsfraud.auth.dto.SignupResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
+import com.example.smsfraud.common.dto.ApiResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
- * Exposes the exact endpoints the Flutter frontend calls
- * (see frontend/lib/services/auth_service.dart).
+ * Exposes the auth endpoints the Flutter frontend calls (see
+ * frontend/lib/services/auth_service.dart). Resource-based URLs; all responses
+ * use the {@link ApiResponse} envelope.
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -30,52 +32,36 @@ public class AuthController {
         this.authService = authService;
     }
 
-    @PostMapping("/signup")
-    public ResponseEntity<Map<String, Object>> signup(@Valid @RequestBody SignupRequest req) {
-        return respond(201, "Account created successfully", authService.register(req));
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<SignupResponse>> register(@Valid @RequestBody SignupRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Account created successfully", authService.register(req)));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest req) {
-        return respond(200, "Login successful", authService.login(req));
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Login successful", authService.login(req)));
     }
 
-    @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, Object>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
-        return respond(200, "Reset code sent successfully", authService.forgotPassword(req));
+    @PostMapping("/password-resets")
+    public ResponseEntity<ApiResponse<OtpResponse>> requestPasswordReset(@Valid @RequestBody OtpRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Reset code sent successfully", authService.requestPasswordReset(req)));
     }
 
-    @PostMapping("/verify-code")
-    public ResponseEntity<Map<String, Object>> verifyCode(@Valid @RequestBody VerifyCodeRequest req) {
-        return respond(200, "Code verified successfully", authService.verifyCode(req));
+    @PostMapping("/password-resets/resend")
+    public ResponseEntity<ApiResponse<OtpResponse>> resendCode(@Valid @RequestBody OtpRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Code resent successfully", authService.resendCode(req)));
     }
 
-    @PostMapping("/resend-code")
-    public ResponseEntity<Map<String, Object>> resendCode(@Valid @RequestBody ForgotPasswordRequest req) {
-        return respond(200, "Code resent successfully", authService.resendCode(req));
+    @PostMapping("/password-resets/verify")
+    public ResponseEntity<ApiResponse<Void>> verifyCode(@Valid @RequestBody VerifyCodeRequest req) {
+        authService.verifyCode(req);
+        return ResponseEntity.ok(ApiResponse.ok("Code verified successfully"));
     }
 
-    @PostMapping("/reset-password")
-    public ResponseEntity<Map<String, Object>> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
-        return respond(200, "Password reset successfully", authService.resetPassword(req));
-    }
-
-    private ResponseEntity<Map<String, Object>> respond(int status, String message, Map<String, Object> data) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("message", message);
-        body.put("data", data == null ? Map.of() : data);
-        if (data != null && data.containsKey("token")) {
-            // The frontend reads data['token'] at the top level of the body.
-            body.put("token", data.get("token"));
-        }
-        return ResponseEntity.status(status).body(body);
-    }
-
-    @ExceptionHandler(AuthService.AuthException.class)
-    public ResponseEntity<Map<String, Object>> handleAuthException(AuthService.AuthException ex) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("message", ex.getMessage());
-        body.put("statusCode", ex.status);
-        return ResponseEntity.status(ex.status).body(body);
+    @PostMapping("/password-resets/confirm")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
+        authService.resetPassword(req);
+        return ResponseEntity.ok(ApiResponse.ok("Password reset successfully"));
     }
 }
