@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'screens/forgot_password_page.dart';
-import 'screens/home_page.dart';
 import 'screens/login_page.dart';
 import 'screens/reset_password_page.dart';
 import 'screens/create_account_page.dart';
 import 'screens/verification_page.dart';
-import 'services/token_storage.dart';
+import 'screens/dashboard_page.dart';
 
-enum AuthPage { login, signUp, forgotPassword, verification, resetPassword, home }
+enum AuthPage { login, signUp, forgotPassword, verification, resetPassword, dashboard }
 
 typedef Navigate = void Function(AuthPage page);
 
@@ -22,22 +21,7 @@ class _AuthFlowState extends State<AuthFlow> {
   AuthPage _page = AuthPage.login;
   String? _resetPhoneNumber;
   String? _resetVerificationCode;
-  bool _bootstrapping = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _restoreSession();
-  }
-
-  Future<void> _restoreSession() async {
-    final token = await TokenStorage.read();
-    if (!mounted) return;
-    setState(() {
-      _page = token != null ? AuthPage.home : AuthPage.login;
-      _bootstrapping = false;
-    });
-  }
+  bool _isResetPasswordFlow = true;
 
   void _goTo(AuthPage page) => setState(() => _page = page);
 
@@ -45,6 +29,16 @@ class _AuthFlowState extends State<AuthFlow> {
     setState(() {
       _resetPhoneNumber = phoneNumber;
       _resetVerificationCode = null;
+      _isResetPasswordFlow = true;
+      _page = AuthPage.verification;
+    });
+  }
+
+  void _beginSignUpVerification(String phoneNumber) {
+    setState(() {
+      _resetPhoneNumber = phoneNumber;
+      _resetVerificationCode = null;
+      _isResetPasswordFlow = false;
       _page = AuthPage.verification;
     });
   }
@@ -56,32 +50,37 @@ class _AuthFlowState extends State<AuthFlow> {
     });
   }
 
-  void _logout() {
-    setState(() => _page = AuthPage.login);
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_bootstrapping) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+    if (_page == AuthPage.dashboard) {
+      return DashboardPage(onNavigate: _goTo);
     }
 
     final page = switch (_page) {
       AuthPage.login => LoginPage(onNavigate: _goTo),
-      AuthPage.signUp => SignUpPage(onNavigate: _goTo),
+      AuthPage.signUp => SignUpPage(
+          onNavigate: _goTo,
+          onSignUpSuccess: _beginSignUpVerification,
+        ),
       AuthPage.forgotPassword => ForgotPasswordPage(
           onNavigate: _goTo, onResetRequested: _beginPasswordReset),
       AuthPage.verification => VerificationPage(
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
-          onVerified: _verifyPasswordReset),
+          isResetPasswordFlow: _isResetPasswordFlow,
+          onVerified: (code) {
+            if (_isResetPasswordFlow) {
+              _verifyPasswordReset(code);
+            } else {
+              _goTo(AuthPage.login);
+            }
+          },
+        ),
       AuthPage.resetPassword => ResetPasswordPage(
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
           verificationCode: _resetVerificationCode ?? ''),
-      AuthPage.home => HomePage(onLogout: _logout),
+      AuthPage.dashboard => throw StateError('Handled above'),
     };
     return Scaffold(body: SafeArea(child: page));
   }

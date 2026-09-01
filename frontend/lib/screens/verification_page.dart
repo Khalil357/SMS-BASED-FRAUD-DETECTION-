@@ -11,12 +11,14 @@ import '../widgets/fade_slide_transition.dart';
 class VerificationPage extends StatefulWidget {
   final Navigate onNavigate;
   final String phoneNumber;
+  final bool isResetPasswordFlow;
   final ValueChanged<String> onVerified;
 
   const VerificationPage({
     super.key,
     required this.onNavigate,
     required this.phoneNumber,
+    this.isResetPasswordFlow = true,
     required this.onVerified,
   });
 
@@ -38,6 +40,13 @@ class _VerificationPageState extends State<VerificationPage> {
       setState(() {
         _errorMessage = 'Please enter the complete 6-digit code';
       });
+      return;
+    }
+
+    if (widget.isResetPasswordFlow) {
+      // For reset password flow, we skip verifying at this step to prevent
+      // invalidating the OTP before confirming the password change.
+      widget.onVerified(_otpCode);
       return;
     }
 
