@@ -7,8 +7,8 @@ services:
   postgres:
     image: 'postgres:latest'
     environment:
-      - 'POSTGRES_DB=sms_fraud'
-      - 'POSTGRES_PASSWORD=sms_pass'
-      - 'POSTGRES_USER=sms_app'
+      - 'POSTGRES_DB=${POSTGRES_DB:-sms_fraud}'
+      - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sms_pass}'
+      - 'POSTGRES_USER=${POSTGRES_USER:-sms_app}'
     ports:
       - '5432:5432'

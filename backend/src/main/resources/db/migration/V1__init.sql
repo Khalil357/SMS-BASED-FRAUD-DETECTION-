@@ -1,7 +1,3 @@
--- UUID generation used by the UUID primary keys below.
--- This is harmless on PostgreSQL versions where gen_random_uuid() is built in.
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 -- Roles
 CREATE TABLE user_roles (
     role_id   SERIAL PRIMARY KEY,

@@ -4,7 +4,7 @@ import 'screens/forgot_password_page.dart';
 import 'screens/home_page.dart';
 import 'screens/login_page.dart';
 import 'screens/reset_password_page.dart';
-import 'screens/sign_up_page.dart';
+import 'screens/create_account_page.dart';
 import 'screens/verification_page.dart';
 import 'services/token_storage.dart';
 

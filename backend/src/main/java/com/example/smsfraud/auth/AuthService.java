@@ -5,8 +5,8 @@ import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
 import com.example.smsfraud.auth.dto.ResetPasswordRequest;
-import com.example.smsfraud.auth.dto.SignupRequest;
-import com.example.smsfraud.auth.dto.SignupResponse;
+import com.example.smsfraud.auth.dto.RegisterRequest;
+import com.example.smsfraud.auth.dto.RegisterResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 
 /**
@@ -16,7 +16,7 @@ import com.example.smsfraud.auth.dto.VerifyCodeRequest;
  */
 public interface AuthService {
 
-    SignupResponse register(SignupRequest req);
+    RegisterResponse register(RegisterRequest req);
 
     LoginResponse login(LoginRequest req);
 
