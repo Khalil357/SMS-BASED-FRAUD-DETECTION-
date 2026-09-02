@@ -4,7 +4,9 @@ import com.example.smsfraud.common.security.JwtAuthenticationFilter;
 import com.example.smsfraud.common.security.RestAuthenticationEntryPoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,11 +19,15 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 /**
- * Stateless security: the public /api/auth/** endpoints are open; everything else
- * requires a valid JWT (validated by {@link JwtAuthenticationFilter}). Passwords
- * are hashed with BCrypt.
+ * Stateless security: the public /api/auth/** and Swagger endpoints are open;
+ * everything else requires a valid JWT (validated by {@link JwtAuthenticationFilter}).
+ * Role-based access is enforced via {@code @PreAuthorize} annotations
+ * ({@link EnableMethodSecurity}); authorities are loaded from the database per request.
+ * Passwords are hashed with BCrypt.
  */
 @Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -59,6 +65,7 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(basic -> basic.disable())

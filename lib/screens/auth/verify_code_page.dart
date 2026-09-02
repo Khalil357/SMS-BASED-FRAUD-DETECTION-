@@ -5,6 +5,7 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/otp_input_field.dart';
 import '../../widgets/fade_slide_transition.dart';
 import 'reset_password_page.dart';
+import '../../services/auth_service.dart';
 
 class VerifyCodePage extends StatefulWidget {
   final String phoneNumber;
@@ -52,21 +53,44 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
     });
   }
 
-  void _handleResend() {
+  void _handleResend() async {
     if (_secondsRemaining == 0) {
-      _startTimer();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('A new 6-digit verification code has been sent!'),
-          backgroundColor: Colors.blue.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      setState(() {
+        _isLoading = true;
+      });
+
+      final result = await AuthService.resendCode(phoneNumber: widget.phoneNumber);
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        _startTimer();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'A new 6-digit verification code has been sent!'),
+            backgroundColor: Colors.blue.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Failed to resend code'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 
-  void _handleVerify() {
+  void _handleVerify() async {
     if (_otpCode.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -79,46 +103,66 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
       return;
     }
 
+    if (widget.isResetPasswordFlow) {
+      // In password reset flow, we do NOT hit the verify endpoint on the backend
+      // because it invalidates the OTP code, making the subsequent confirm step fail.
+      // We pass the code directly to the ResetPasswordPage to verify and reset in one go!
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ResetPasswordPage(
+            phoneNumber: widget.phoneNumber,
+            verificationCode: _otpCode,
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
-    // Simulate verification API call
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+    final result = await AuthService.verifyResetCode(
+      phoneNumber: widget.phoneNumber,
+      verificationCode: _otpCode,
+    );
 
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (result['success']) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Code verified successfully!'),
+            content: Text(result['message'] ?? 'Code verified successfully!'),
             backgroundColor: Colors.green.shade600,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
 
-        if (widget.isResetPasswordFlow) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const ResetPasswordPage(),
-            ),
-          );
-        } else {
-          Navigator.popUntil(context, (route) => route.isFirst);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Registration completed! Please log in.'),
-              backgroundColor: Colors.green.shade600,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        }
+        Navigator.popUntil(context, (route) => route.isFirst);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Registration completed! Please log in.'),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Invalid verification code'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
       }
-    });
+    }
   }
 
   String _formatTime(int seconds) {

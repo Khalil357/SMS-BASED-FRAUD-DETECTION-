@@ -7,19 +7,21 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.UUID;
 
 /**
- * Reads a {@code Authorization: Bearer <token>} header, validates the JWT, and
- * populates the security context so protected endpoints can be reached. A missing,
- * invalid, or expired token leaves the context empty, which the authentication
- * entry point then translates into a 401.
+ * Reads a {@code Authorization: Bearer <token>} header, validates the JWT, loads the
+ * user's authorities from the database, and populates the security context so that
+ * role-based access control (RBAC) works. A missing, invalid, or expired token — or a
+ * disabled/locked user — leaves the context empty, which the authentication entry
+ * point then translates into a 401.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -27,9 +29,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final TokenProvider tokenProvider;
+    private final UserDetailsService userDetailsService;
 
-    public JwtAuthenticationFilter(TokenProvider tokenProvider) {
+    public JwtAuthenticationFilter(TokenProvider tokenProvider, UserDetailsService userDetailsService) {
         this.tokenProvider = tokenProvider;
+        this.userDetailsService = userDetailsService;
     }
 
     @Override
@@ -40,10 +44,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 UUID userId = tokenProvider.validateToken(token);
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(userId, null, List.of());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                UserDetails userDetails = userDetailsService.loadUserByUsername(userId.toString());
+                if (userDetails.isEnabled() && userDetails.isAccountNonLocked()) {
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
             } catch (RuntimeException e) {
                 // Invalid, expired, or malformed token — treat as unauthenticated.
                 SecurityContextHolder.clearContext();

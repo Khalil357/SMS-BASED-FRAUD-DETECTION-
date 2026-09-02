@@ -168,6 +168,31 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                   children: [
                     const SizedBox(height: 10),
                     
+                    // Logo Icon with entrance animation
+                    FadeSlideTransition(
+                      delay: const Duration(milliseconds: 50),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: theme.primaryColor.withOpacity(0.08),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: theme.primaryColor.withOpacity(0.15),
+                              width: 2,
+                            ),
+                          ),
+                          child: Image.asset(
+                            'frontend/assets/images/sms_fraud_inapp_icon.png',
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
                     // Header titles
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 100),

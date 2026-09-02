@@ -29,30 +29,26 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
       });
 
-      // Simulate a backend response locally
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+      final result = await AuthService.login(
+        identifier: _identifierController.text.trim(),
+        password: _passwordController.text,
+      );
 
-          // Set temporary local user details for Dashboard view
-          AuthService.currentUser = {
-            'full_name': 'Argus User',
-            'email': _identifierController.text.trim().contains('@') ? _identifierController.text.trim() : 'user@argus.com',
-            'phone_number': _identifierController.text.trim().contains('@') ? '+1234567890' : _identifierController.text.trim(),
-          };
-          AuthService.token = 'mock_jwt_token';
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
 
+        if (result['success']) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Login successful!'),
+              content: Text(result['message'] ?? 'Login successful!'),
               backgroundColor: Colors.green.shade600,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -63,8 +59,17 @@ class _LoginPageState extends State<LoginPage> {
             context,
             MaterialPageRoute(builder: (context) => const DashboardPage()),
           );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Login failed'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
         }
-      });
+      }
     }
   }
 
@@ -88,21 +93,6 @@ class _LoginPageState extends State<LoginPage> {
                     ? AppTheme.heroBgGradientDark
                     : AppTheme.heroBgGradientLight,
               ),
-            ),
-          ),
-          
-          // Floating Theme Toggle Button
-          Positioned(
-            top: 40,
-            right: 16,
-            child: IconButton(
-              icon: Icon(
-                isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                color: theme.colorScheme.primary,
-              ),
-              onPressed: () {
-                MyApp.of(context).toggleTheme();
-              },
             ),
           ),
 
@@ -147,7 +137,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: Column(
                         children: [
                           Text(
-                            'Welcome Back',
+                            'Welcome Back!',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.headlineLarge,
                           ),
@@ -179,31 +169,31 @@ class _LoginPageState extends State<LoginPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                             // Phone Number or Email input field
-                             CustomTextField(
-                               controller: _identifierController,
-                               labelText: 'Phone Number or Email',
-                               hintText: 'e.g. +1234567890 or john@example.com',
-                               prefixIcon: Icons.login_outlined,
-                               keyboardType: TextInputType.emailAddress,
-                               validator: (value) {
-                                 if (value == null || value.trim().isEmpty) {
-                                   return 'Please enter your phone number or email';
-                                 }
-                                 final text = value.trim();
-                                 if (text.contains('@')) {
-                                   final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                                   if (!emailRegex.hasMatch(text)) {
-                                     return 'Please enter a valid email address';
-                                   }
-                                 } else {
-                                   if (text.length < 9) {
-                                     return 'Please enter a valid phone number';
-                                   }
-                                 }
-                                 return null;
-                               },
-                             ),
+                            // Identifier input field (Phone or Email)
+                            CustomTextField(
+                              controller: _identifierController,
+                              labelText: 'Phone Number or Email',
+                              hintText: 'e.g. +27821234567 or user@email.com',
+                              prefixIcon: Icons.login_outlined,
+                              keyboardType: TextInputType.emailAddress,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Please enter your phone number or email';
+                                }
+                                final val = value.trim();
+                                if (val.contains('@')) {
+                                  final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                                  if (!emailRegex.hasMatch(val)) {
+                                    return 'Please enter a valid email address';
+                                  }
+                                } else {
+                                  if (val.length < 9) {
+                                    return 'Please enter a valid phone number';
+                                  }
+                                }
+                                return null;
+                              },
+                            ),
                             const SizedBox(height: 20),
 
                             // Password input field
