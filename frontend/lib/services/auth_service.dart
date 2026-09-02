@@ -3,8 +3,14 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  // Dynamically resolve baseUrl to support Android emulators (10.0.2.2) and local hosts
+  /// Custom backend URL override (e.g. http://192.168.100.224:8080)
+  static String? customBaseUrl;
+
+  /// Dynamic baseUrl getter for logging/debugging
   static String get baseUrl {
+    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+      return customBaseUrl!.trim();
+    }
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:8080';
     }
@@ -14,6 +20,44 @@ class AuthService {
   // Session variables
   static Map<String, dynamic>? currentUser;
   static String? token;
+
+  /// Helper to send POST requests with automatic fallback for physical phone vs emulator
+  static Future<http.Response> _postRequest(String path, Map<String, dynamic> body) async {
+    final headers = {'Content-Type': 'application/json'};
+    final encodedBody = jsonEncode(body);
+
+    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+      return await http.post(
+        Uri.parse('${customBaseUrl!.trim()}$path'),
+        headers: headers,
+        body: encodedBody,
+      ).timeout(const Duration(seconds: 10));
+    }
+
+    if (Platform.isAndroid) {
+      // 1. Try 10.0.2.2 (standard for Android Emulator)
+      try {
+        return await http.post(
+          Uri.parse('http://10.0.2.2:8080$path'),
+          headers: headers,
+          body: encodedBody,
+        ).timeout(const Duration(seconds: 3));
+      } catch (_) {
+        // 2. Fallback to 127.0.0.1 (ADB reverse for physical phone)
+        return await http.post(
+          Uri.parse('http://127.0.0.1:8080$path'),
+          headers: headers,
+          body: encodedBody,
+        ).timeout(const Duration(seconds: 6));
+      }
+    }
+
+    return await http.post(
+      Uri.parse('http://localhost:8080$path'),
+      headers: headers,
+      body: encodedBody,
+    ).timeout(const Duration(seconds: 10));
+  }
 
   /// Safely decode JSON — returns empty map on null/empty/malformed body
   static Map<String, dynamic> _safeJsonDecode(String body) {
@@ -37,19 +81,13 @@ class AuthService {
     required String password,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/register'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'full_name': fullName,
-          'email': email,
-          'phone_number': phoneNumber,
-          'gender': gender,
-          'password': password,
-        }),
-      );
+      final response = await _postRequest('/api/auth/register', {
+        'full_name': fullName,
+        'email': email,
+        'phone_number': phoneNumber,
+        'gender': gender,
+        'password': password,
+      });
 
       final decoded = _safeJsonDecode(response.body);
 
@@ -82,16 +120,10 @@ class AuthService {
     required String password,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/login'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'phone_number': phoneNumber,
-          'password': password,
-        }),
-      );
+      final response = await _postRequest('/api/auth/login', {
+        'phone_number': phoneNumber,
+        'password': password,
+      });
 
       final decoded = _safeJsonDecode(response.body);
 
@@ -127,15 +159,9 @@ class AuthService {
     required String phoneNumber,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/password-resets'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'phone_number': phoneNumber,
-        }),
-      );
+      final response = await _postRequest('/api/auth/password-resets', {
+        'phone_number': phoneNumber,
+      });
 
       final decoded = _safeJsonDecode(response.body);
 
@@ -167,15 +193,9 @@ class AuthService {
     required String phoneNumber,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/password-resets/resend'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'phone_number': phoneNumber,
-        }),
-      );
+      final response = await _postRequest('/api/auth/password-resets/resend', {
+        'phone_number': phoneNumber,
+      });
 
       final decoded = _safeJsonDecode(response.body);
 
@@ -208,16 +228,10 @@ class AuthService {
     required String verificationCode,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/password-resets/verify'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'phone_number': phoneNumber,
-          'verification_code': verificationCode,
-        }),
-      );
+      final response = await _postRequest('/api/auth/password-resets/verify', {
+        'phone_number': phoneNumber,
+        'verification_code': verificationCode,
+      });
 
       final decoded = _safeJsonDecode(response.body);
 
@@ -251,17 +265,11 @@ class AuthService {
     required String newPassword,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/password-resets/confirm'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'phone_number': phoneNumber,
-          'verification_code': verificationCode,
-          'new_password': newPassword,
-        }),
-      );
+      final response = await _postRequest('/api/auth/password-resets/confirm', {
+        'phone_number': phoneNumber,
+        'verification_code': verificationCode,
+        'new_password': newPassword,
+      });
 
       final decoded = _safeJsonDecode(response.body);
 

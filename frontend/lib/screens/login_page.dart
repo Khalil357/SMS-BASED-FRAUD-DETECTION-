@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../main.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../widgets/custom_button.dart';
@@ -10,8 +8,13 @@ import '../services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   final Navigate onNavigate;
+  final ValueChanged<String>? onUnverifiedAccount;
 
-  const LoginPage({super.key, required this.onNavigate});
+  const LoginPage({
+    super.key,
+    required this.onNavigate,
+    this.onUnverifiedAccount,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -28,6 +31,51 @@ class _LoginPageState extends State<LoginPage> {
     _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _showUnverifiedAccountDialog(String identifier) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.mark_email_unread_outlined, color: AppTheme.red),
+            const SizedBox(width: 10),
+            const Text('Account Not Verified'),
+          ],
+        ),
+        content: const Text(
+          'Your account has been created but is not verified yet. Would you like to receive a verification code to complete setup?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              if (identifier.isNotEmpty) {
+                await AuthService.resendCode(phoneNumber: identifier);
+              }
+              if (mounted) {
+                if (widget.onUnverifiedAccount != null) {
+                  widget.onUnverifiedAccount!(identifier);
+                } else {
+                  widget.onNavigate(AuthPage.verification);
+                }
+              }
+            },
+            child: const Text('Verify Account Now', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _handleLogin() async {
@@ -57,14 +105,23 @@ class _LoginPageState extends State<LoginPage> {
           );
           widget.onNavigate(AuthPage.dashboard);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['message'] ?? 'Login failed'),
-              backgroundColor: Theme.of(context).colorScheme.error,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
+          final msg = (result['message'] ?? '').toString();
+          final isUnverified = msg.toLowerCase().contains('not verified') ||
+              msg.toLowerCase().contains('verify your email') ||
+              result['statusCode'] == 403;
+
+          if (isUnverified) {
+            _showUnverifiedAccountDialog(_identifierController.text.trim());
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result['message'] ?? 'Login failed'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            );
+          }
         }
       }
     }

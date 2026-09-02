@@ -91,12 +91,32 @@ class _SignUpPageState extends State<SignUpPage> {
       );
       widget.onSignUpSuccess(_phoneController.text.trim());
     } else {
+      final msg = (result['message'] ?? 'Registration failed').toString();
+      final isAlreadyRegistered = result['statusCode'] == 409 ||
+          msg.toLowerCase().contains('already registered') ||
+          msg.toLowerCase().contains('already exists');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'Registration failed'),
+          content: Text(msg),
           backgroundColor: Theme.of(context).colorScheme.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          action: isAlreadyRegistered
+              ? SnackBarAction(
+                  label: 'Verify / Login',
+                  textColor: Colors.amber,
+                  onPressed: () async {
+                    final phone = _phoneController.text.trim();
+                    if (phone.isNotEmpty) {
+                      await AuthService.resendCode(phoneNumber: phone);
+                      widget.onSignUpSuccess(phone);
+                    } else {
+                      widget.onNavigate(AuthPage.login);
+                    }
+                  },
+                )
+              : null,
         ),
       );
     }

@@ -57,7 +57,10 @@ class _AuthFlowState extends State<AuthFlow> {
     }
 
     final page = switch (_page) {
-      AuthPage.login => LoginPage(onNavigate: _goTo),
+      AuthPage.login => LoginPage(
+          onNavigate: _goTo,
+          onUnverifiedAccount: _beginSignUpVerification,
+        ),
       AuthPage.signUp => SignUpPage(
           onNavigate: _goTo,
           onSignUpSuccess: _beginSignUpVerification,

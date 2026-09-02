@@ -61,8 +61,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    _loadStoredData();
-    _checkPermissions();
+    _loadDataAndPermissions();
 
     // Listen to live incoming foreground messages
     _smsStreamSubscription = SmsIngestionService.smsStream.listen((newLog) {
@@ -73,6 +72,192 @@ class _DashboardPageState extends State<DashboardPage> {
         _showForegroundThreatSnackBar(newLog);
       }
     });
+  }
+
+  Future<void> _loadDataAndPermissions() async {
+    await _loadStoredData();
+    await _checkPermissions();
+    _checkFirstTimeIngestionPrompt();
+  }
+
+  void _checkFirstTimeIngestionPrompt() async {
+    final hasSeenPrompt = await SmsStorageService.getBoolSetting('has_seen_ingestion_onboarding', false);
+    if (!hasSeenPrompt && (!_hasSmsPermission || !_isIngestionEnabled)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showIngestionOnboardingBottomSheet();
+        }
+      });
+    }
+  }
+
+  void _showIngestionOnboardingBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.red.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.shield_outlined,
+                    color: AppTheme.red,
+                    size: 44,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Activate Real-Time SMS Protection',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Argus protects you from SMS phishing, bank scams, and fake lottery rewards by automatically analyzing incoming texts in real-time.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildOnboardingFeatureItem(
+                icon: Icons.flash_on_rounded,
+                title: 'Instant Background Ingestion',
+                subtitle: 'Automatically scans SMS as soon as they land on your phone.',
+                theme: theme,
+                isDark: isDark,
+              ),
+              const SizedBox(height: 12),
+              _buildOnboardingFeatureItem(
+                icon: Icons.lock_outline_rounded,
+                title: 'On-Device Privacy First',
+                subtitle: 'Messages are analyzed locally on your device using rule-based AI.',
+                theme: theme,
+                isDark: isDark,
+              ),
+              const SizedBox(height: 12),
+              _buildOnboardingFeatureItem(
+                icon: Icons.notifications_active_outlined,
+                title: 'Live Threat Alerts',
+                subtitle: 'Get notified immediately if a message is identified as fraud.',
+                theme: theme,
+                isDark: isDark,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.security),
+                label: const Text(
+                  'Enable Auto Protection',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                onPressed: () async {
+                  await SmsStorageService.saveBoolSetting('has_seen_ingestion_onboarding', true);
+                  if (mounted) Navigator.pop(context);
+                  await _requestPermissions();
+                  await _updateIngestion(true);
+                },
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () async {
+                  await SmsStorageService.saveBoolSetting('has_seen_ingestion_onboarding', true);
+                  if (mounted) Navigator.pop(context);
+                },
+                child: Text(
+                  'Skip for Now',
+                  style: TextStyle(color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOnboardingFeatureItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required ThemeData theme,
+    required bool isDark,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: theme.colorScheme.primary, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -833,6 +1018,113 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
             ),
           ),
+          
+          // Protection Action / Shield Status Banner
+          if (!_isIngestionEnabled || !_hasSmsPermission)
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(top: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? [const Color(0xFF451A03), const Color(0xFF78350F)]
+                      : [const Color(0xFFFEF3C7), const Color(0xFFFDE68A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.amber.shade600),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade700.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.security_update_warning_rounded, color: Colors.amber.shade900, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Auto Ingestion is Disabled',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Grant SMS permission & turn on auto-ingestion to scan incoming texts automatically.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.bolt, size: 16),
+                          label: const Text('Enable Protection Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: () async {
+                            await _requestPermissions();
+                            await _updateIngestion(true);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(top: 16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF064E3B).withOpacity(0.4) : const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green.shade400),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_user_rounded, color: Colors.green, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Real-Time Fraud Shield Active',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color: isDark ? Colors.green.shade200 : Colors.green.shade900,
+                          ),
+                        ),
+                        Text(
+                          'Argus is monitoring incoming SMS for scam links and fake alerts.',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: isDark ? Colors.green.shade300 : Colors.green.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 20),
 
           // Statistics Grid
@@ -1458,7 +1750,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       Switch(
                         value: _isIngestionEnabled,
-                        activeColor: theme.colorScheme.primary,
+                        activeThumbColor: theme.colorScheme.primary,
                         onChanged: Platform.isAndroid
                             ? (val) => _updateIngestion(val)
                             : null, // Disabled on iOS
@@ -1512,7 +1804,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   Switch(
                     value: _isNotificationsEnabled,
-                    activeColor: theme.colorScheme.primary,
+                    activeThumbColor: theme.colorScheme.primary,
                     onChanged: (val) => _updateNotifications(val),
                   ),
                 ],
@@ -1590,7 +1882,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   Switch(
                     value: isDark,
-                    activeColor: theme.colorScheme.primary,
+                    activeThumbColor: theme.colorScheme.primary,
                     onChanged: (val) {
                       SecureSignalApp.of(context).toggleTheme();
                     },

@@ -571,7 +571,7 @@ class _GenderDropdownState extends State<GenderDropdown> {
               widget.controller.text = value;
             }
           },
-          value: widget.controller.text.isEmpty ? null : widget.controller.text)
+          initialValue: widget.controller.text.isEmpty ? null : widget.controller.text)
     ]);
   }
 }
