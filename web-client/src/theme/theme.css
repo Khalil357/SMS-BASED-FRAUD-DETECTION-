@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  --primary-light: #dc2626;
+  --primary-dark: #ef4444;
+  --bg-light: #f8fafc;
+  --bg-dark: #0f172a;
+  --card-light: #ffffff;
+  --card-dark: #1e293b;
+  --border-light: #e2e8f0;
+  --border-dark: #334155;
+  --subtle-light: #64748b;
+  --subtle-dark: #94a3b8;
+  --text-body-light: #334155;
+  --text-body-dark: #e2e8f0;
+  --heading-light: #0f172a;
+  --heading-dark: #f8fafc;
+  --error-light: #dc2626;
+  --error-dark: #f87171;
+  --emerald: #10b981;
+  --amber: #f59e0b;
+  --blue: #3b82f6;
+
+  --font-main: 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --primary: var(--primary-light);
+  --error: var(--error-light);
+  --bg: var(--bg-light);
+  --card: var(--card-light);
+  --border: var(--border-light);
+  --subtle: var(--subtle-light);
+  --text-body: var(--text-body-light);
+  --heading: var(--heading-light);
+  --card-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08);
+  --card-shadow-hover: 0 10px 25px -3px rgba(15, 23, 42, 0.12);
+
+  color-scheme: light;
+}
+
+html.dark {
+  --primary: var(--primary-dark);
+  --error: var(--error-dark);
+  --bg: var(--bg-dark);
+  --card: var(--card-dark);
+  --border: var(--border-dark);
+  --subtle: var(--subtle-dark);
+  --text-body: var(--text-body-dark);
+  --heading: var(--heading-dark);
+  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  --card-shadow-hover: 0 10px 25px -3px rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, button, input, select, textarea {
+  font-family: var(--font-main) !important;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-main) !important;
+  background: var(--bg);
+  color: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
