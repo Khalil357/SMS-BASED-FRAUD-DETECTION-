@@ -1,11 +1,10 @@
 package com.example.smsfraud.email;
 
-import jakarta.mail.internet.MimeMessage;
+import com.resend.Resend;
+import com.resend.services.emails.model.SendEmailRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -13,28 +12,28 @@ public class EmailServiceImpl implements EmailService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailServiceImpl.class);
 
-    private final JavaMailSender mailSender;
+    private final Resend resend;
+    private final String fromEmail;
+    private final String appName;
 
-    @Value("${email.from}")
-    private String fromEmail;
-
-    @Value("${app.name:SMS Fraud Detection}")
-    private String appName;
-
-    public EmailServiceImpl(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
+    public EmailServiceImpl(@Value("${resend.api-key:}") String apiKey,
+                            @Value("${email.from:noreply@smsfraud.com}") String fromEmail,
+                            @Value("${app.name:SMS Fraud Detection}") String appName) {
+        this.resend = new Resend(apiKey);
+        this.fromEmail = fromEmail;
+        this.appName = appName;
     }
 
     @Override
     public void sendVerificationCode(String toEmail, String code) {
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
-            helper.setFrom(fromEmail);
-            helper.setTo(toEmail);
-            helper.setSubject("🔐 " + appName + " - Verification Code");
-            helper.setText("Your verification code is " + code + ".", false);
-            mailSender.send(message);
+            SendEmailRequest request = SendEmailRequest.builder()
+                    .from(fromEmail)
+                    .to(toEmail)
+                    .subject("🔐 " + appName + " - Verification Code")
+                    .text("Your verification code is " + code + ".")
+                    .build();
+            resend.emails().send(request);
         } catch (Exception e) {
             log.warn("Could not email verification code to {}: {}", toEmail, e.getMessage());
         }
