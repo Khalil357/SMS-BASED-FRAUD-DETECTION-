@@ -1,0 +1,53 @@
+:root {
+  --primary-light: #d32f2f;
+  --primary-dark: #ef5350;
+  --bg-light: #f8fafc;
+  --bg-dark: #0f172a;
+  --card-light: #ffffff;
+  --card-dark: #1e293b;
+  --border-light: #e2e8f0;
+  --border-dark: #334155;
+  --subtle-light: #64748b;
+  --subtle-dark: #94a3b8;
+  --text-body-light: #334155;
+  --text-body-dark: #e2e8f0;
+  --heading-light: #1e293b;
+  --heading-dark: #f1f5f9;
+  --error-light: #e11d48;
+  --error-dark: #fb7185;
+
+  --primary: var(--primary-light);
+  --error: var(--error-light);
+  --bg: var(--bg-light);
+  --card: var(--card-light);
+  --border: var(--border-light);
+  --subtle: var(--subtle-light);
+  --text-body: var(--text-body-light);
+  --heading: var(--heading-light);
+
+  color-scheme: light;
+}
+
+html.dark {
+  --primary: var(--primary-dark);
+  --error: var(--error-dark);
+  --bg: var(--bg-dark);
+  --card: var(--card-dark);
+  --border: var(--border-dark);
+  --subtle: var(--subtle-dark);
+  --text-body: var(--text-body-dark);
+  --heading: var(--heading-dark);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text-body);
+}

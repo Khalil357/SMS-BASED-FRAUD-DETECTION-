@@ -1,8 +1,6 @@
-package com.example.smsfraud.controller;
+package com.example.smsfraud.scan;
 
-import com.example.smsfraud.entity.SmsScan;
 import com.example.smsfraud.scan.dto.ScanQueryRequest;
-import com.example.smsfraud.service.SmsScanService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
