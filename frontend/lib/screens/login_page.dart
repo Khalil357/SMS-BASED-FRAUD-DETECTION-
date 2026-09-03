@@ -40,38 +40,57 @@ class _LoginPageState extends State<LoginPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.mark_email_unread_outlined, color: AppTheme.red),
+            const Icon(Icons.mark_email_unread_outlined, color: AppTheme.red),
             const SizedBox(width: 10),
-            const Text('Account Not Verified'),
+            const Expanded(
+              child: Text(
+                'Account Not Verified',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
           ],
         ),
-        content: const Text(
-          'Your account has been created but is not verified yet. Would you like to receive a verification code to complete setup?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+        content: SingleChildScrollView(
+          child: Text(
+            'Your account has been created but is not verified yet. Would you like to receive a verification code to complete setup?',
+            style: TextStyle(fontSize: 14, color: Theme.of(context).textTheme.bodyMedium?.color),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () async {
-              Navigator.pop(context);
-              if (identifier.isNotEmpty) {
-                await AuthService.resendCode(phoneNumber: identifier);
-              }
-              if (mounted) {
-                if (widget.onUnverifiedAccount != null) {
-                  widget.onUnverifiedAccount!(identifier);
-                } else {
-                  widget.onNavigate(AuthPage.verification);
-                }
-              }
-            },
-            child: const Text('Verify Account Now', style: TextStyle(color: Colors.white)),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.red,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  if (identifier.isNotEmpty) {
+                    await AuthService.resendCode(phoneNumber: identifier);
+                  }
+                  if (mounted) {
+                    if (widget.onUnverifiedAccount != null) {
+                      widget.onUnverifiedAccount!(identifier);
+                    } else {
+                      widget.onNavigate(AuthPage.verification);
+                    }
+                  }
+                },
+                child: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('Verify Account Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ],
           ),
         ],
       ),
@@ -85,7 +104,7 @@ class _LoginPageState extends State<LoginPage> {
       });
 
       final result = await AuthService.login(
-        phoneNumber: _identifierController.text.trim(),
+        identifier: _identifierController.text.trim(),
         password: _passwordController.text,
       );
 

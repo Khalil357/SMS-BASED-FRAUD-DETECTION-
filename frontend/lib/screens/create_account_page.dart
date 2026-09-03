@@ -324,8 +324,18 @@ class _SignUpPageState extends State<SignUpPage> {
                                 if (value == null || value.trim().isEmpty) {
                                   return 'Please enter a password';
                                 }
-                                if (value.trim().length < 6) {
-                                  return 'Password must be at least 6 characters';
+                                final val = value.trim();
+                                if (val.length < 8) {
+                                  return 'Password must be at least 8 characters';
+                                }
+                                if (!RegExp(r'[A-Z]').hasMatch(val)) {
+                                  return 'Include at least 1 uppercase letter (A-Z)';
+                                }
+                                if (!RegExp(r'[a-z]').hasMatch(val)) {
+                                  return 'Include at least 1 lowercase letter (a-z)';
+                                }
+                                if (!RegExp(r'[0-9]').hasMatch(val)) {
+                                  return 'Include at least 1 number (0-9)';
                                 }
                                 return null;
                               },

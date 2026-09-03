@@ -73,13 +73,6 @@
 			<version>10.0.0</version>
 		</dependency>
 
-		<!-- Dotenv: load .env file variables automatically -->
-		<dependency>
-			<groupId>io.github.cdimascio</groupId>
-			<artifactId>dotenv-java</artifactId>
-			<version>3.1.0</version>
-		</dependency>
-
 		<!-- OpenAPI / Swagger UI (3.0.x targets Spring Boot 4.x) -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
@@ -150,6 +143,10 @@
             <scope>test</scope>
             <optional>true</optional>
         </dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-thymeleaf</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

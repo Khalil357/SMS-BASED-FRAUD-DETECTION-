@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'services/auth_service.dart';
 import 'screens/forgot_password_page.dart';
 import 'screens/login_page.dart';
 import 'screens/reset_password_page.dart';
@@ -22,6 +23,25 @@ class _AuthFlowState extends State<AuthFlow> {
   String? _resetPhoneNumber;
   String? _resetVerificationCode;
   bool _isResetPasswordFlow = true;
+  bool _isCheckingSession = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkSavedSession();
+  }
+
+  Future<void> _checkSavedSession() async {
+    final hasSession = await AuthService.loadSession();
+    if (mounted) {
+      setState(() {
+        if (hasSession) {
+          _page = AuthPage.dashboard;
+        }
+        _isCheckingSession = false;
+      });
+    }
+  }
 
   void _goTo(AuthPage page) => setState(() => _page = page);
 
@@ -52,6 +72,14 @@ class _AuthFlowState extends State<AuthFlow> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isCheckingSession) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     if (_page == AuthPage.dashboard) {
       return DashboardPage(onNavigate: _goTo);
     }

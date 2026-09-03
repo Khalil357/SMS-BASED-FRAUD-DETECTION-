@@ -8,6 +8,8 @@ import com.example.smsfraud.auth.dto.ResetPasswordRequest;
 import com.example.smsfraud.auth.dto.RegisterRequest;
 import com.example.smsfraud.auth.dto.RegisterResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
+import com.example.smsfraud.auth.dto.VerifyLoginOtpRequest;
+import com.example.smsfraud.auth.dto.ResendLoginOtpRequest;
 import com.example.smsfraud.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -63,5 +65,17 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
         authService.resetPassword(req);
         return ResponseEntity.ok(ApiResponse.ok("Password reset successfully"));
+    }
+
+    @PostMapping("/verify-login-otp")
+    public ResponseEntity<ApiResponse<LoginResponse>> verifyLoginOtp(@Valid @RequestBody VerifyLoginOtpRequest req) {
+        return ResponseEntity.ok(
+                ApiResponse.ok("Login OTP verified successfully", authService.verifyLoginOtp(req.email(), req.verificationCode())));
+    }
+
+    @PostMapping("/resend-login-otp")
+    public ResponseEntity<ApiResponse<Void>> resendLoginOtp(@Valid @RequestBody ResendLoginOtpRequest req) {
+        authService.resendLoginOtp(req.email());
+        return ResponseEntity.ok(ApiResponse.ok("Login OTP resent successfully"));
     }
 }

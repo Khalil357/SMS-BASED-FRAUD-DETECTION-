@@ -250,8 +250,9 @@ class _VerificationPageState extends State<VerificationPage> {
                   // Resend Code Link
                   FadeSlideTransition(
                     delay: const Duration(milliseconds: 400),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
                           "Didn't receive the code? ",
@@ -268,8 +269,9 @@ class _VerificationPageState extends State<VerificationPage> {
                   // Back to Login Link for escape hatch navigation
                   FadeSlideTransition(
                     delay: const Duration(milliseconds: 450),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Icon(Icons.arrow_back, size: 16, color: theme.colorScheme.primary),
                         const SizedBox(width: 4),

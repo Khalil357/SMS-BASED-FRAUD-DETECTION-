@@ -382,6 +382,13 @@ class _DashboardPageState extends State<DashboardPage> {
     });
   }
 
+  Future<void> _handleLogout() async {
+    await AuthService.logout();
+    if (mounted) {
+      widget.onNavigate(AuthPage.login);
+    }
+  }
+
   // Live Metric Getters
   int get _scannedCount => _smsLogs.length;
   int get _threatsCount => _smsLogs.where((l) => l['type'] == 'Fraud').length;
@@ -850,12 +857,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _handleLogout() {
-    AuthService.currentUser = null;
-    AuthService.token = null;
-    widget.onNavigate(AuthPage.login);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -897,35 +898,147 @@ class _DashboardPageState extends State<DashboardPage> {
         3 => _buildProfileTab(fullName, user, theme, isDark),
         _ => const SizedBox(),
       },
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: theme.colorScheme.primary,
-        unselectedItemColor: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-        backgroundColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: isDark ? Colors.black.withOpacity(0.4) : Colors.black.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
+          border: Border.all(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            width: 1,
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history_outlined),
-            activeIcon: Icon(Icons.history),
-            label: 'Logs',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.block_outlined),
-            activeIcon: Icon(Icons.block),
-            label: 'Blocklist',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(
+              index: 0,
+              icon: Icons.grid_view_outlined,
+              activeIcon: Icons.grid_view_rounded,
+              label: 'Dashboard',
+              theme: theme,
+              isDark: isDark,
+            ),
+            _buildNavItem(
+              index: 1,
+              icon: Icons.shield_outlined,
+              activeIcon: Icons.shield_rounded,
+              label: 'Logs',
+              badgeCount: _threatsCount,
+              theme: theme,
+              isDark: isDark,
+            ),
+            _buildNavItem(
+              index: 2,
+              icon: Icons.do_not_disturb_on_outlined,
+              activeIcon: Icons.do_not_disturb_on_rounded,
+              label: 'Blocklist',
+              theme: theme,
+              isDark: isDark,
+            ),
+            _buildNavItem(
+              index: 3,
+              icon: Icons.person_outline_rounded,
+              activeIcon: Icons.person_rounded,
+              label: 'Profile',
+              theme: theme,
+              isDark: isDark,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required int index,
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+    int badgeCount = 0,
+    required ThemeData theme,
+    required bool isDark,
+  }) {
+    final isSelected = _currentIndex == index;
+    final activeColor = theme.colorScheme.primary;
+
+    return GestureDetector(
+      onTap: () => setState(() => _currentIndex = index),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 14 : 10,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? activeColor.withOpacity(isDark ? 0.2 : 0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  isSelected ? activeIcon : icon,
+                  color: isSelected
+                      ? activeColor
+                      : (isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+                  size: 22,
+                ),
+                if (badgeCount > 0 && index == 1)
+                  Positioned(
+                    top: -4,
+                    right: -6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: AppTheme.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: activeColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

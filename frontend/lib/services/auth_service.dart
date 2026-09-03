@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   /// Custom backend URL override (e.g. http://192.168.100.224:8080)
@@ -17,9 +18,49 @@ class AuthService {
     return 'http://localhost:8080';
   }
 
-  // Session variables
+  // Session variables & Storage Keys
   static Map<String, dynamic>? currentUser;
   static String? token;
+
+  static const String _keyToken = 'auth_token_v1';
+  static const String _keyUser = 'auth_user_v1';
+
+  /// Save session to persistent storage
+  static Future<void> saveSession(String tokenStr, Map<String, dynamic> userMap) async {
+    token = tokenStr;
+    currentUser = userMap;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyToken, tokenStr);
+    await prefs.setString(_keyUser, jsonEncode(userMap));
+  }
+
+  /// Load session from persistent storage
+  static Future<bool> loadSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final savedToken = prefs.getString(_keyToken);
+      final savedUserJson = prefs.getString(_keyUser);
+
+      if (savedToken != null && savedToken.isNotEmpty && savedUserJson != null && savedUserJson.isNotEmpty) {
+        token = savedToken;
+        currentUser = jsonDecode(savedUserJson) as Map<String, dynamic>;
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Clear persistent session (Logout)
+  static Future<void> logout() async {
+    token = null;
+    currentUser = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyToken);
+      await prefs.remove(_keyUser);
+    } catch (_) {}
+  }
 
   /// Helper to send POST requests with automatic fallback for physical phone vs emulator
   static Future<http.Response> _postRequest(String path, Map<String, dynamic> body) async {
@@ -113,29 +154,36 @@ class AuthService {
     }
   }
 
-  /// Login user
+  /// Login user with Phone Number or Email Address
   /// POST /api/auth/login
   static Future<Map<String, dynamic>> login({
-    required String phoneNumber,
+    required String identifier,
     required String password,
   }) async {
     try {
-      final response = await _postRequest('/api/auth/login', {
-        'phone_number': phoneNumber,
-        'password': password,
-      });
+      final trimmed = identifier.trim();
+      final isEmail = trimmed.contains('@');
 
+      final body = <String, dynamic>{
+        'password': password,
+        'phone_number': trimmed,
+        if (isEmail) 'email': trimmed,
+      };
+
+      final response = await _postRequest('/api/auth/login', body);
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200) {
         final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
-        currentUser = data;
-        token = decoded['token'] as String? ?? data['token'] as String?;
+        final tokenStr = decoded['token'] as String? ?? data['token'] as String? ?? '';
+
+        await saveSession(tokenStr, data);
+
         return {
           'success': true,
           'message': decoded['message'] ?? 'Login successful',
           'data': decoded,
-          'token': token,
+          'token': tokenStr,
         };
       } else {
         return {

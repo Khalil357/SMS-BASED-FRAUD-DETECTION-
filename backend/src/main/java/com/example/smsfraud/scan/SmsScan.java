@@ -1,4 +1,4 @@
-package com.example.smsfraud.entity;
+package com.example.smsfraud.scan;
 
 import jakarta.persistence.*;
 import java.time.Instant;
