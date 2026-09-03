@@ -81,7 +81,6 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         String otp = otpService.issueCode(user.getPhone());
-        emailService.sendVerificationCode(user.getEmail(), otp);
         smsService.sendSms(user.getPhone(), "ARGUS: Your verification code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
 
         return new RegisterResponse(user.getUserId(), otp);
@@ -122,7 +121,6 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByPhone(req.phoneNumber())
                 .orElseThrow(() -> new NotFoundException("No account found for that phone number"));
         String otp = otpService.issueCode(user.getPhone());
-        emailService.sendVerificationCode(user.getEmail(), otp);
         smsService.sendSms(user.getPhone(), "ARGUS: Your password reset code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
         return new OtpResponse(otp);
     }
