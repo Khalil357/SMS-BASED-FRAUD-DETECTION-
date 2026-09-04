@@ -1,4 +1,4 @@
-package com.example.smsfraud.repository;
+package com.example.smsfraud.smsScannedRepository;
 
 import com.example.smsfraud.entity.SmsScan;
 import org.springframework.data.domain.Page;

@@ -9,10 +9,8 @@ import org.springframework.web.client.RestClient;
 public class MlClientConfig {
 
     @Bean
-    public RestClient mlRestClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${http://13.53.200.176:3232}") String mlServiceUrl) {
-        return restClientBuilder
+    public RestClient mlRestClient(@Value("${ml.service.url}") String mlServiceUrl) {
+        return RestClient.builder()
                 .baseUrl(mlServiceUrl)
                 .build();
     }

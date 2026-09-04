@@ -2,29 +2,27 @@ package com.example.smsfraud.ml;
 
 import com.example.smsfraud.ml.dto.FraudCheckRequest;
 import com.example.smsfraud.ml.dto.FraudCheckResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
-import org.springframework.http.client.ClientHttpResponse;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 // Handles communication with the external ML fraud detection service.
 @Service
+@RequiredArgsConstructor
 public class MlFraudDetectionClient {
 
     private final RestClient restClient;
 
-    public MlFraudDetectionClient(RestClient restClient) {
+    public FraudCheckResponse analyzeSms(String message) {
+        FraudCheckRequest request = new FraudCheckRequest(message);
 
-        this.restClient = restClient;
-    }
-
-    public FraudCheckResponse analyzeSms(String sender, String content) {
-        FraudCheckRequest request = new FraudCheckRequest(sender, content);
-
-        return restClient.post()
+        var responseEntity = restClient
+                .post()
                 .uri("/predict")
                 .body(request)
                 .retrieve()
@@ -36,7 +34,13 @@ public class MlFraudDetectionClient {
                                     + response.getStatusCode()
                                     + (responseBody.isBlank() ? "" : ": " + responseBody));
                 })
-                .body(FraudCheckResponse.class);
+                .toEntity(FraudCheckResponse.class);
+
+        if (!responseEntity.hasBody()) {
+            throw new IllegalStateException("ML fraud detection service returned an empty response");
+        }
+
+        return responseEntity.getBody();
     }
 
     private String readResponseBody(ClientHttpResponse response) throws IOException {
