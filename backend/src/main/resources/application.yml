@@ -1,0 +1,3 @@
+ml:
+  service:
+    url: ${ML_SERVICE_URL:http://13.53.200.176:3232}
