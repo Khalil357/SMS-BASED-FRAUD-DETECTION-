@@ -27,4 +27,8 @@ public interface AuthService {
     void verifyCode(VerifyCodeRequest req);
 
     void resetPassword(ResetPasswordRequest req);
+
+    void resendLoginOtp(String email);
+
+    LoginResponse verifyLoginOtp(String email, String verificationCode);
 }

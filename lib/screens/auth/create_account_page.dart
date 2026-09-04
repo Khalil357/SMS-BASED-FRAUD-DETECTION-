@@ -5,6 +5,7 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/fade_slide_transition.dart';
 import 'verify_code_page.dart';
+import '../../services/auth_service.dart';
 
 class CreateAccountPage extends StatefulWidget {
   const CreateAccountPage({super.key});
@@ -56,7 +57,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     );
   }
 
-  void _handleCreateAccount() {
+  void _handleCreateAccount() async {
     if (_formKey.currentState!.validate()) {
       if (!_agreedToTerms) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -74,25 +75,56 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         _isLoading = true;
       });
 
-      // Simulate API call
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+      final result = await AuthService.signUp(
+        fullName: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        gender: _selectedGender ?? 'Other',
+        password: _passwordController.text,
+      );
 
-          // Navigate to Verification Screen
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => VerifyCodePage(
-                phoneNumber: _phoneController.text.trim(),
-                isResetPasswordFlow: false,
-              ),
-            ),
-          );
-        }
+      setState(() {
+        _isLoading = false;
       });
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        final message = result['message'] ?? 'Account created successfully';
+        // Note: Backend might return the OTP for development convenience.
+        final otp = result['data'] != null && result['data']['otp'] != null
+            ? result['data']['otp']
+            : null;
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(otp != null ? '$message (OTP: $otp)' : message),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+
+        // Navigate to Verification Screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VerifyCodePage(
+              phoneNumber: _phoneController.text.trim(),
+              isResetPasswordFlow: false,
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Registration failed'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 
@@ -278,6 +310,11 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                                 if (value.trim().length < 8) {
                                   return 'Password must be at least 8 characters';
                                 }
+                                final hasNumber = RegExp(r'[0-9]').hasMatch(value);
+                                final hasSpecial = RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(value);
+                                if (!hasNumber || !hasSpecial) {
+                                  return 'Password must contain a number and a symbol';
+                                }
                                 return null;
                               },
                             ),
@@ -337,7 +374,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                                               ..onTap = () {
                                                 _showTermsDialog(
                                                   'Terms of Service',
-                                                  'These are the Terms of Service for the SMS Fraud Detection System. You agree not to abuse this application, to provide accurate registration information, and to comply with local laws and regulations.',
+                                                  'These are the Terms of Service for the Argus System. You agree not to abuse this application, to provide accurate registration information, and to comply with local laws and regulations.',
                                                 );
                                               },
                                           ),
@@ -353,7 +390,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                                               ..onTap = () {
                                                 _showTermsDialog(
                                                   'Privacy Policy',
-                                                  'Your privacy is critical to us. The SMS Fraud Detection System collects phone number data and analytical logs strictly for identification of fraudulent SMS messages. We do not sell or share your data with unauthorized third parties.',
+                                                  'Your privacy is critical to us. The Argus System collects phone number data and analytical logs strictly for identification of fraudulent SMS messages. We do not sell or share your data with unauthorized third parties.',
                                                 );
                                               },
                                           ),

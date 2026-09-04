@@ -1,9 +1,7 @@
 package com.example.smsfraud.scan;
 
-import com.example.smsfraud.entity.SmsScan;
 import com.example.smsfraud.ml.MlFraudDetectionClient;
 import com.example.smsfraud.ml.dto.FraudCheckResponse;
-import com.example.smsfraud.smsScannedRepository.SmsScanRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -49,7 +47,7 @@ class SmsScanServiceTest {
         assertThat(result).isPresent();
         assertThat(captor.getValue().getUserId()).isEqualTo(userId);
         assertThat(captor.getValue().getMessageBody()).isEqualTo(message);
-        assertThat(captor.getValue().getVerdict()).isEqualTo("scam");
+        assertThat(captor.getValue().getVerdict()).isEqualTo("FRAUD");
         assertThat(captor.getValue().getConfidence()).isEqualTo(0.9564);
     }
 

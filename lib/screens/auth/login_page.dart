@@ -6,6 +6,8 @@ import '../../widgets/custom_text_field.dart';
 import '../../widgets/fade_slide_transition.dart';
 import 'forgot_password_page.dart';
 import 'create_account_page.dart';
+import '../../services/auth_service.dart';
+import '../dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,13 +18,13 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _phoneController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -33,19 +35,33 @@ class _LoginPageState extends State<LoginPage> {
         _isLoading = true;
       });
 
-      // Simulate API call
+      // Simulate a backend response locally
       Future.delayed(const Duration(milliseconds: 1500), () {
         if (mounted) {
           setState(() {
             _isLoading = false;
           });
+
+          // Set temporary local user details for Dashboard view
+          AuthService.currentUser = {
+            'full_name': 'Argus User',
+            'email': _identifierController.text.trim().contains('@') ? _identifierController.text.trim() : 'user@argus.com',
+            'phone_number': _identifierController.text.trim().contains('@') ? '+1234567890' : _identifierController.text.trim(),
+          };
+          AuthService.token = 'mock_jwt_token';
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Login successful! (Placeholder)'),
+              content: const Text('Login successful!'),
               backgroundColor: Colors.green.shade600,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
+          );
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const DashboardPage()),
           );
         }
       });
@@ -105,7 +121,7 @@ class _LoginPageState extends State<LoginPage> {
                       delay: const Duration(milliseconds: 100),
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.all(22),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: theme.primaryColor.withOpacity(0.08),
                             shape: BoxShape.circle,
@@ -114,10 +130,11 @@ class _LoginPageState extends State<LoginPage> {
                               width: 2,
                             ),
                           ),
-                          child: Icon(
-                            Icons.shield_outlined,
-                            size: 64,
-                            color: theme.primaryColor,
+                          child: Image.asset(
+                            'frontend/assets/images/sms_fraud_inapp_icon.png',
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
@@ -162,23 +179,31 @@ class _LoginPageState extends State<LoginPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Phone input field
-                            CustomTextField(
-                              controller: _phoneController,
-                              labelText: 'Phone Number',
-                              hintText: 'e.g. +1234567890',
-                              prefixIcon: Icons.phone_outlined,
-                              keyboardType: TextInputType.phone,
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Please enter your phone number';
-                                }
-                                if (value.trim().length < 9) {
-                                  return 'Please enter a valid phone number';
-                                }
-                                return null;
-                              },
-                            ),
+                             // Phone Number or Email input field
+                             CustomTextField(
+                               controller: _identifierController,
+                               labelText: 'Phone Number or Email',
+                               hintText: 'e.g. +1234567890 or john@example.com',
+                               prefixIcon: Icons.login_outlined,
+                               keyboardType: TextInputType.emailAddress,
+                               validator: (value) {
+                                 if (value == null || value.trim().isEmpty) {
+                                   return 'Please enter your phone number or email';
+                                 }
+                                 final text = value.trim();
+                                 if (text.contains('@')) {
+                                   final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                                   if (!emailRegex.hasMatch(text)) {
+                                     return 'Please enter a valid email address';
+                                   }
+                                 } else {
+                                   if (text.length < 9) {
+                                     return 'Please enter a valid phone number';
+                                   }
+                                 }
+                                 return null;
+                               },
+                             ),
                             const SizedBox(height: 20),
 
                             // Password input field
