@@ -113,6 +113,13 @@ public class AuthServiceImpl implements AuthService {
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
+        // Web/admin flow: issue + email the OTP so the code arrives right after login,
+        // instead of only on "Resend". Best-effort — a mail hiccup won't block login.
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            String otp = otpService.issueCode(user.getEmail());
+            emailService.sendVerificationCode(user.getEmail(), otp);
+        }
+
         String token = tokenProvider.generateToken(user.getUserId());
         return new LoginResponse(token, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
     }
