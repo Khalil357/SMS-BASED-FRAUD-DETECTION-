@@ -45,8 +45,7 @@ public class SmsScanService {
     }
 
     /**
-     * Analyze + persist a user-submitted message.
-     * Placeholder rules until a real ML model is wired in.
+     * Analyze and persist a user-submitted message.
      */
     public SmsScan queryAndSave(UUID userId, String sender, String body, String source) {
         String text = body == null ? "" : body.trim();
@@ -71,13 +70,17 @@ public class SmsScanService {
             }
         }
 
-        // 2. Call EC2 ML Model if URL is configured
+        // 2. Call the containerized ML service if it is configured
         if (mlServiceUrl != null && !mlServiceUrl.isBlank()) {
             try {
                 MlClassificationRequest request = new MlClassificationRequest(text);
                 MlClassificationResponse response = restTemplate.postForObject(mlServiceUrl + "/predict", request, MlClassificationResponse.class);
-                if (response != null && response.verdict() != null) {
-                    return new VerdictResult(response.verdict().toUpperCase(Locale.ROOT), response.confidence());
+                if (response != null && response.label() != null) {
+                    String label = response.label().toLowerCase(Locale.ROOT);
+                    String verdict = response.is_scam() || "scam".equals(label)
+                            ? "FRAUD"
+                            : "SAFE";
+                    return new VerdictResult(verdict, response.confidence());
                 }
             } catch (Exception e) {
                 log.error("Failed to reach ML service at {}. Falling back to heuristics.", mlServiceUrl, e);

@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/sms_detection_service.dart';
 import '../services/sms_storage_service.dart';
 import '../services/sms_ingestion_service.dart';
+import '../services/scan_service.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../main.dart';
@@ -267,19 +268,39 @@ class _DashboardPageState extends State<DashboardPage> {
       _scanResult = null;
     });
 
-    // Simulate AI model processing delay
-    await Future.delayed(const Duration(seconds: 2));
-
-    final result = SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    final remoteResult = await ScanService.queryMessage(
+      messageBody: text,
+      source: 'MANUAL_QUERY',
+    );
+    final remoteData = remoteResult['success'] == true
+        ? remoteResult['data'] as Map<String, dynamic>?
+        : null;
+    final localResult = SmsDetectionService.analyze(
+      message: text,
+      sender: 'Manual Scan',
+    );
+    final verdict = remoteData?['verdict']?.toString();
+    final classification = verdict == 'FRAUD'
+        ? 'Fraud'
+        : verdict == 'SAFE'
+            ? 'Safe'
+            : localResult.classification;
+    final threatLevel =
+        (remoteData?['confidence'] as num?)?.toDouble() ?? localResult.threatLevel;
+    final feedback = remoteData == null
+        ? localResult.feedback
+        : classification == 'Fraud'
+            ? 'The ML service classified this message as fraud.'
+            : 'The ML service classified this message as safe.';
 
     final logEntry = {
       'id': 'manual_${DateTime.now().millisecondsSinceEpoch}',
       'sender': 'Manual Scan',
       'message': text,
-      'type': result.classification,
+      'type': classification,
       'time': DateTime.now().toIso8601String(),
-      'threat': result.threatLevel,
-      'matchedReasons': result.matchedReasons,
+      'threat': threatLevel,
+      'matchedReasons': localResult.matchedReasons,
       'hasFeedback': false,
       'userFeedback': null,
     };
@@ -290,14 +311,14 @@ class _DashboardPageState extends State<DashboardPage> {
 
     setState(() {
       _isScanning = false;
-      _scanIsSafe = result.classification == 'Safe';
-      _threatLevel = result.threatLevel;
-      if (result.classification == 'Fraud') {
-        _scanResult = '🚨 High Risk Alert: Potential Phishing/Fraud detected!\n\n${result.feedback}';
-      } else if (result.classification == 'Spam') {
-        _scanResult = '⚠️ Moderate Risk: Spam content detected.\n\n${result.feedback}';
+      _scanIsSafe = classification == 'Safe';
+      _threatLevel = threatLevel;
+      if (classification == 'Fraud') {
+        _scanResult = '🚨 High Risk Alert: Potential Phishing/Fraud detected!\n\n$feedback';
+      } else if (classification == 'Spam') {
+        _scanResult = '⚠️ Moderate Risk: Spam content detected.\n\n$feedback';
       } else {
-        _scanResult = '✅ Secure: This message is safe.\n\n${result.feedback}';
+        _scanResult = '✅ Secure: This message is safe.\n\n$feedback';
       }
       
       _smsLogs.insert(0, logEntry);

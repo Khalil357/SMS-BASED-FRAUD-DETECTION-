@@ -20,7 +20,7 @@ class ScanService {
         Uri.parse('${AuthService.baseUrl}/api/scans?page=$page&size=$size'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer ' + token,
         },
       );
 
@@ -46,6 +46,7 @@ class ScanService {
   static Future<Map<String, dynamic>> queryMessage({
     required String messageBody,
     String? sender,
+    String source = 'MANUAL_QUERY',
   }) async {
     final token = await TokenStorage.read();
     if (token == null) {
@@ -57,12 +58,12 @@ class ScanService {
         Uri.parse('${AuthService.baseUrl}/api/scans'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer ' + token,
         },
         body: jsonEncode({
           'messageBody': messageBody,
           if (sender != null && sender.isNotEmpty) 'sender': sender,
-          'source': 'MANUAL_QUERY',
+          'source': source,
         }),
       );
 
