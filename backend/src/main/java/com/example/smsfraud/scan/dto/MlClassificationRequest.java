@@ -1,4 +1,4 @@
 package com.example.smsfraud.scan.dto;
 
-public record MlClassificationRequest(String text) {
+public record MlClassificationRequest(String message) {
 }
