@@ -3,5 +3,5 @@ target/
 .idea/
 *.iml
 .env
-.env.*
-!.env.example
+.env
+!.env

@@ -20,6 +20,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/sms_fraud
       SPRING_DATASOURCE_USERNAME: sms_app
       SPRING_DATASOURCE_PASSWORD: sms_pass
+    env_file:
+      - ./backend/.env
     depends_on:
       - db
     command: mvn -q -DskipTests spring-boot:run

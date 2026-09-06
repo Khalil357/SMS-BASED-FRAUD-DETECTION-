@@ -84,7 +84,7 @@ public class AuthServiceImpl implements AuthService {
         emailService.sendVerificationCode(user.getEmail(), otp);
         smsService.sendSms(user.getPhone(), "ARGUS: Your verification code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
 
-        return new RegisterResponse(user.getUserId(), otp);
+        return new RegisterResponse(user.getUserId());
     }
 
     @Override
@@ -124,7 +124,7 @@ public class AuthServiceImpl implements AuthService {
         String otp = otpService.issueCode(user.getPhone());
         emailService.sendVerificationCode(user.getEmail(), otp);
         smsService.sendSms(user.getPhone(), "ARGUS: Your password reset code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
-        return new OtpResponse(otp);
+        return new OtpResponse();
     }
 
     @Override

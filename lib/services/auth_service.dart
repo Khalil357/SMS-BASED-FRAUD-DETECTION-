@@ -69,21 +69,25 @@ class AuthService {
     }
   }
 
-  /// Login user
+  /// Login user with either phone number or email address
   /// POST /api/auth/login
   static Future<Map<String, dynamic>> login({
     required String identifier,
     required String password,
   }) async {
     try {
+      final trimmed = identifier.trim();
+      final isEmail = trimmed.contains('@');
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/auth/login'),
         headers: {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'phone_number': identifier, // Send identifier (phone or email) as phone_number
           'password': password,
+          'phone_number': trimmed,
+          if (isEmail) 'email': trimmed,
         }),
       );
 
