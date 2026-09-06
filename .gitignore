@@ -46,3 +46,5 @@ frontend/ios/Pods/
 # Secret files — never commit credentials
 .env
 backend/.env
+__pycache__/
+*.py[cod]
