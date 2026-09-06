@@ -43,3 +43,8 @@ frontend/android/.gradle/
 frontend/ios/Pods/
 
 .env.dev
+# Secret files — never commit credentials
+.env
+backend/.env
+__pycache__/
+*.py[cod]

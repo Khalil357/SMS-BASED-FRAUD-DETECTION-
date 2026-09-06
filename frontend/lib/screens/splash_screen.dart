@@ -139,7 +139,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   child: Column(
                     children: [
                       Text(
-                        'SECURE SIGNAL',
+                        'ARGUS',
                         style: theme.textTheme.headlineLarge?.copyWith(
                           fontSize: 34,
                           letterSpacing: 1.5,

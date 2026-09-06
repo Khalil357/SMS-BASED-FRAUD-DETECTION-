@@ -5,16 +5,18 @@ import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
 import com.example.smsfraud.auth.dto.ResetPasswordRequest;
-import com.example.smsfraud.auth.dto.SignupRequest;
-import com.example.smsfraud.auth.dto.SignupResponse;
+import com.example.smsfraud.auth.dto.RegisterRequest;
+import com.example.smsfraud.auth.dto.RegisterResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 import com.example.smsfraud.common.exception.BadRequestException;
 import com.example.smsfraud.common.exception.ConflictException;
+import com.example.smsfraud.common.exception.ForbiddenException;
 import com.example.smsfraud.common.exception.NotFoundException;
 import com.example.smsfraud.common.exception.UnauthorizedException;
 import com.example.smsfraud.common.security.TokenProvider;
 import com.example.smsfraud.email.EmailService;
 import com.example.smsfraud.otp.OtpService;
+import com.example.smsfraud.sms.SmsSenderService;
 import com.example.smsfraud.user.User;
 import com.example.smsfraud.user.UserRole;
 import com.example.smsfraud.user.UserRepository;
@@ -37,6 +39,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final EmailService emailService;
+    private final SmsSenderService smsService;
     private final TokenProvider tokenProvider;
 
     public AuthServiceImpl(UserRepository userRepository,
@@ -44,17 +47,19 @@ public class AuthServiceImpl implements AuthService {
                            PasswordEncoder passwordEncoder,
                            OtpService otpService,
                            EmailService emailService,
+                           SmsSenderService smsService,
                            TokenProvider tokenProvider) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.passwordEncoder = passwordEncoder;
         this.otpService = otpService;
         this.emailService = emailService;
+        this.smsService = smsService;
         this.tokenProvider = tokenProvider;
     }
 
     @Override
-    public SignupResponse register(SignupRequest req) {
+    public RegisterResponse register(RegisterRequest req) {
         if (userRepository.existsByEmail(req.email())) {
             throw new ConflictException("Email already registered");
         }
@@ -77,16 +82,33 @@ public class AuthServiceImpl implements AuthService {
 
         String otp = otpService.issueCode(user.getPhone());
         emailService.sendVerificationCode(user.getEmail(), otp);
+        smsService.sendSms(user.getPhone(), "ARGUS: Your verification code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
 
-        return new SignupResponse(user.getUserId(), otp);
+        return new RegisterResponse(user.getUserId());
     }
 
     @Override
     public LoginResponse login(LoginRequest req) {
-        User user = userRepository.findByPhone(req.phoneNumber())
-                .orElseThrow(() -> new UnauthorizedException("Invalid phone number or password"));
+        User user;
+        if (req.email() != null && !req.email().isBlank()) {
+            user = userRepository.findByEmail(req.email())
+                    .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
+        } else {
+            user = userRepository.findByPhone(req.phoneNumber())
+                    .orElseThrow(() -> new UnauthorizedException("Invalid phone number or password"));
+        }
+        
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
             throw new UnauthorizedException("Invalid phone number or password");
+        }
+        if (!user.isActive()) {
+            throw new ForbiddenException("Account is deactivated");
+        }
+        if (user.isLocked()) {
+            throw new ForbiddenException("Account is locked");
+        }
+        if (!user.isVerified()) {
+            throw new ForbiddenException("Email not verified. Please verify your email before logging in.");
         }
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
@@ -101,7 +123,8 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new NotFoundException("No account found for that phone number"));
         String otp = otpService.issueCode(user.getPhone());
         emailService.sendVerificationCode(user.getEmail(), otp);
-        return new OtpResponse(otp);
+        smsService.sendSms(user.getPhone(), "ARGUS: Your password reset code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
+        return new OtpResponse();
     }
 
     @Override
@@ -132,5 +155,29 @@ public class AuthServiceImpl implements AuthService {
         user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
         userRepository.save(user);
         otpService.invalidate(req.phoneNumber());
+    }
+
+    @Override
+    public void resendLoginOtp(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new NotFoundException("No account found for that email"));
+        String otp = otpService.issueCode(user.getEmail());
+        emailService.sendVerificationCode(user.getEmail(), otp);
+    }
+
+    @Override
+    public LoginResponse verifyLoginOtp(String email, String verificationCode) {
+        if (!otpService.verifyCode(email, verificationCode)) {
+            throw new BadRequestException("Invalid or expired verification code");
+        }
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new NotFoundException("No account found for that email"));
+        
+        otpService.invalidate(email);
+        user.setLastLoginAt(Instant.now());
+        userRepository.save(user);
+
+        String token = tokenProvider.generateToken(user.getUserId());
+        return new LoginResponse(token, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
     }
 }
