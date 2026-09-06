@@ -2,5 +2,8 @@ package com.example.smsfraud.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
 
-public record OtpRequest(@NotBlank String phoneNumber) {
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record OtpRequest(
+        @JsonProperty("phone_number") @NotBlank String phoneNumber) {
 }

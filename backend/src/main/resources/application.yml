@@ -1,0 +1,3 @@
+ml:
+  service:
+    url: ${ML_SERVICE_URL:http://ml-service:8000}
