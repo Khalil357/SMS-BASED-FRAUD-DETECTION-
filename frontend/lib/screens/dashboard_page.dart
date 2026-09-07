@@ -261,7 +261,14 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _handleManualScan() async {
     final text = _scanController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _scanIsSafe = null;
+        _scanResult = 'Enter an SMS message in the "Suspicious SMS Text" field before analyzing it.';
+      });
+      return;
+    }
 
     setState(() {
       _isScanning = true;
@@ -272,6 +279,17 @@ class _DashboardPageState extends State<DashboardPage> {
       messageBody: text,
       source: 'MANUAL_QUERY',
     );
+    if (remoteResult['success'] != true) {
+      if (!mounted) return;
+      setState(() {
+        _isScanning = false;
+        _scanIsSafe = null;
+        _scanResult =
+            'Unable to use the backend ML detector.\n\n${remoteResult['message'] ?? 'Please sign in and verify that the backend is running.'}';
+      });
+      return;
+    }
+
     final remoteData = remoteResult['success'] == true
         ? remoteResult['data'] as Map<String, dynamic>?
         : null;

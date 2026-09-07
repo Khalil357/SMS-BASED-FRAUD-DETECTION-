@@ -6,13 +6,38 @@ import 'auth_service.dart';
 import 'token_storage.dart';
 
 class ScanService {
+  static String _apiErrorMessage(String body, String fallback) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message']?.toString();
+        final errors = decoded['errors'];
+        if (errors is Map && errors.isNotEmpty) {
+          final details = errors.entries
+              .map((entry) => '${entry.key}: ${entry.value}')
+              .join(', ');
+          return message == null || message.isEmpty
+              ? details
+              : '$message ($details)';
+        }
+        if (message != null && message.isNotEmpty) return message;
+      }
+    } catch (_) {
+      // Preserve the fallback when the backend returns a non-JSON error.
+    }
+    return fallback;
+  }
+
   static Future<Map<String, dynamic>> fetchScans({
     int page = 0,
     int size = 20,
   }) async {
     final token = await TokenStorage.read();
     if (token == null) {
-      return {'success': false, 'message': 'Not logged in'};
+      return {
+        'success': false,
+        'message': 'No login token is available. Sign in again before scanning.',
+      };
     }
 
     try {
@@ -32,14 +57,16 @@ class ScanService {
         };
       }
 
-      final err = jsonDecode(response.body) as Map<String, dynamic>;
       return {
         'success': false,
-        'message': err['message'] ?? 'Failed to load scans',
+        'message': _apiErrorMessage(response.body, 'Failed to load scans'),
         'statusCode': response.statusCode,
       };
     } catch (e) {
-      return {'success': false, 'message': 'Error: $e'};
+      return {
+        'success': false,
+        'message': 'Could not reach the scan backend at ${AuthService.baseUrl}: $e',
+      };
     }
   }
 
@@ -50,7 +77,10 @@ class ScanService {
   }) async {
     final token = await TokenStorage.read();
     if (token == null) {
-      return {'success': false, 'message': 'Not logged in'};
+      return {
+        'success': false,
+        'message': 'No login token is available. Sign in again before scanning.',
+      };
     }
 
     try {
@@ -76,14 +106,16 @@ class ScanService {
         };
       }
 
-      final err = jsonDecode(response.body) as Map<String, dynamic>;
       return {
         'success': false,
-        'message': err['message'] ?? 'Scan failed',
+        'message': _apiErrorMessage(response.body, 'Scan failed'),
         'statusCode': response.statusCode,
       };
     } catch (e) {
-      return {'success': false, 'message': 'Error: $e'};
+      return {
+        'success': false,
+        'message': 'Could not reach the scan backend at ${AuthService.baseUrl}: $e',
+      };
     }
   }
 }

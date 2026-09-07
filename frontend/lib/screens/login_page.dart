@@ -37,7 +37,7 @@ class _LoginPageState extends State<LoginPage> {
       });
 
       final result = await AuthService.login(
-        phoneNumber: _identifierController.text.trim(),
+        identifier: _identifierController.text.trim(),
         password: _passwordController.text,
       );
 
