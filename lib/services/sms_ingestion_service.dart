@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'sms_detection_service.dart';
 import 'sms_storage_service.dart';
 import 'notification_service.dart';
+import 'auth_service.dart';
 
 @pragma('vm:entry-point')
 void backgroundSmsHandler(SmsMessage message) async {
@@ -15,37 +16,55 @@ void backgroundSmsHandler(SmsMessage message) async {
 
   if (body.isEmpty) return;
 
-  // Run analysis
-  final result = SmsDetectionService.analyze(message: body, sender: sender);
+  try {
+    // Run local analysis as baseline
+    final result = SmsDetectionService.analyze(message: body, sender: sender);
 
-  // Prepare log entry
-  final logEntry = {
-    'id': 'auto_${DateTime.now().millisecondsSinceEpoch}_${message.id ?? 0}',
-    'sender': sender,
-    'message': body,
-    'type': result.classification,
-    'time': DateTime.now().toIso8601String(),
-    'threat': result.threatLevel,
-    'matchedReasons': result.matchedReasons,
-    'hasFeedback': false,
-    'userFeedback': null,
-  };
+    // Prepare log entry
+    final logEntry = <String, dynamic>{
+      'id': 'auto_${DateTime.now().millisecondsSinceEpoch}_${message.id ?? 0}',
+      'sender': sender,
+      'message': body,
+      'type': result.classification,
+      'time': DateTime.now().toIso8601String(),
+      'threat': result.threatLevel,
+      'matchedReasons': List<String>.from(result.matchedReasons),
+      'hasFeedback': false,
+      'userFeedback': null,
+    };
 
-  // Add to storage
-  await SmsStorageService.addLog(logEntry);
+    // Submit scan payload to Backend API (POST /api/scans)
+    try {
+      final backendResult = await AuthService.submitScan(
+        sender: sender,
+        messageBody: body,
+        source: 'AUTO_LISTENER',
+      );
+      if (backendResult['success'] == true && backendResult['isScam'] != null) {
+        final isScam = backendResult['isScam'] == true;
+        final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
+        logEntry['type'] = isScam ? 'Fraud' : (result.classification == 'Spam' ? 'Spam' : 'Safe');
+        logEntry['threat'] = conf;
+        if (backendResult['label'] != null) {
+          (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} (${(conf * 100).toStringAsFixed(1)}% confidence)');
+        }
+      }
+    } catch (_) {}
 
-  // Trigger notification if threshold exceeded
-  final isNotificationsEnabled = await SmsStorageService.getBoolSetting(
-      SmsStorageService.keyNotificationsEnabled, true);
-  final notificationThreshold = await SmsStorageService.getDoubleSetting(
-      SmsStorageService.keyNotificationThreshold, 0.80);
+    // Add to storage
+    await SmsStorageService.addLog(logEntry);
 
-  if (isNotificationsEnabled && result.threatLevel >= notificationThreshold) {
-    await NotificationService.initialize();
-    await NotificationService.showThreatNotification(
-      title: '🚨 High Threat SMS Detected',
-      body: 'From $sender: ${result.classification} Risk (${(result.threatLevel * 100).toStringAsFixed(0)}% Threat Index)',
-    );
+    // Always trigger notification for Fraud / Spam / Threat Index >= 0.50
+    final threatLevel = (logEntry['threat'] as num).toDouble();
+    if (logEntry['type'] == 'Fraud' || logEntry['type'] == 'Spam' || threatLevel >= 0.50) {
+      await NotificationService.initialize();
+      await NotificationService.showThreatNotification(
+        title: '🚨 High Threat SMS Detected',
+        body: 'From $sender: ${logEntry['type']} Risk (${(threatLevel * 100).toStringAsFixed(0)}% Threat Index)',
+      );
+    }
+  } catch (e) {
+    debugPrint("Background SMS Handler Error: $e");
   }
 }
 
@@ -78,7 +97,7 @@ class SmsIngestionService {
 
         final result = SmsDetectionService.analyze(message: body, sender: sender);
 
-        final logEntry = {
+        final logEntry = <String, dynamic>{
           'id': 'auto_${DateTime.now().millisecondsSinceEpoch}_${message.id ?? 0}',
           'sender': sender,
           'message': body,
@@ -90,6 +109,24 @@ class SmsIngestionService {
           'userFeedback': null,
         };
 
+        // Submit scan payload to Backend API (POST /api/scans)
+        try {
+          final backendResult = await AuthService.submitScan(
+            sender: sender,
+            messageBody: body,
+            source: 'AUTO_LISTENER',
+          );
+          if (backendResult['success'] == true && backendResult['isScam'] != null) {
+            final isScam = backendResult['isScam'] == true;
+            final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
+            logEntry['type'] = isScam ? 'Fraud' : (result.classification == 'Spam' ? 'Spam' : 'Safe');
+            logEntry['threat'] = conf;
+            if (backendResult['label'] != null) {
+              (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} (${(conf * 100).toStringAsFixed(1)}% confidence)');
+            }
+          }
+        } catch (_) {}
+
         await SmsStorageService.addLog(logEntry);
         _smsStreamController.add(logEntry);
 
@@ -98,10 +135,11 @@ class SmsIngestionService {
         final notificationThreshold = await SmsStorageService.getDoubleSetting(
             SmsStorageService.keyNotificationThreshold, 0.80);
 
-        if (isNotificationsEnabled && result.threatLevel >= notificationThreshold) {
+        final threatLevel = (logEntry['threat'] as num).toDouble();
+        if (isNotificationsEnabled && threatLevel >= notificationThreshold) {
           await NotificationService.showThreatNotification(
             title: '🚨 High Threat SMS Detected',
-            body: 'From $sender: ${result.classification} Risk (${(result.threatLevel * 100).toStringAsFixed(0)}% Threat Index)',
+            body: 'From $sender: ${logEntry['type']} Risk (${(threatLevel * 100).toStringAsFixed(0)}% Threat Index)',
           );
         }
       },

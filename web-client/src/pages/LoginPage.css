@@ -312,3 +312,19 @@ html.dark .login-card {
 .login-security-footer .security-icon {
   color: var(--emerald);
 }
+
+.toggle-password-btn {
+  background: transparent;
+  border: none;
+  color: var(--subtle);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  transition: color 0.2s ease;
+}
+
+.toggle-password-btn:hover {
+  color: var(--heading);
+}

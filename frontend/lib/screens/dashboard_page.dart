@@ -281,6 +281,51 @@ class _DashboardPageState extends State<DashboardPage> {
       _isNotificationsEnabled = notifications;
       _notificationThreshold = threshold;
     });
+
+    // Fetch backend Fraud Scans (GET /api/scans/fraud?page=0&size=20)
+    _fetchBackendFraudScans();
+  }
+
+  Future<void> _fetchBackendFraudScans() async {
+    try {
+      final res = await AuthService.getFraudScans(page: 0, size: 20);
+      if (res['success'] == true && res['content'] is List) {
+        final List content = res['content'];
+        bool hasNew = false;
+        for (final item in content) {
+          if (item is Map<String, dynamic>) {
+            final msgText = item['message'] ?? item['messageBody'] ?? '';
+            if (msgText.toString().trim().isEmpty) continue;
+
+            final exists = _smsLogs.any((l) => l['message'] == msgText.toString());
+            if (!exists) {
+              final isScam = item['is_scam'] ?? item['isScam'] ?? (item['label'] == 'scam' || item['label'] == 'fraud');
+              final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
+              final logEntry = {
+                'id': 'backend_fraud_${DateTime.now().millisecondsSinceEpoch}_${item.hashCode}',
+                'sender': item['sender'] ?? 'Backend Shield Alert',
+                'message': msgText.toString(),
+                'type': isScam == false ? 'Safe' : 'Fraud',
+                'time': item['createdAt'] ?? item['time'] ?? DateTime.now().toIso8601String(),
+                'threat': conf,
+                'matchedReasons': [
+                  'Trained Model Label: ${item['label'] ?? (isScam ? 'scam' : 'safe')}',
+                  'Model Confidence: ${(conf * 100).toStringAsFixed(1)}%'
+                ],
+                'hasFeedback': false,
+                'userFeedback': null,
+              };
+              _smsLogs.insert(0, logEntry);
+              await SmsStorageService.addLog(logEntry);
+              hasNew = true;
+            }
+          }
+        }
+        if (hasNew && mounted) {
+          setState(() {});
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkPermissions() async {
@@ -320,6 +365,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _showForegroundThreatSnackBar(Map<String, dynamic> log) {
     if (log['type'] == 'Fraud' || log['type'] == 'Spam') {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -339,11 +385,12 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           backgroundColor: log['type'] == 'Fraud' ? AppTheme.red : Colors.amber.shade700,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 4),
           action: SnackBarAction(
             label: 'VIEW',
             textColor: Colors.white,
             onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
               setState(() {
                 _currentIndex = 1; // Go to Logs tab
               });
@@ -380,6 +427,58 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _notificationThreshold = val;
     });
+  }
+
+  void _confirmLogout() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.logout_rounded, color: AppTheme.red),
+            const SizedBox(width: 10),
+            Text(
+              'Confirm Logout',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to log out of Argus SMS Fraud Interception Platform?',
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _handleLogout();
+            },
+            child: Text(
+              'Yes, Logout',
+              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -459,10 +558,28 @@ class _DashboardPageState extends State<DashboardPage> {
       _scanResult = null;
     });
 
-    // Simulate AI model processing delay
-    await Future.delayed(const Duration(seconds: 2));
+    // Submit scan to Backend API (POST /api/scans) to run trained ML model
+    final backendResponse = await AuthService.submitScan(
+      sender: 'Manual Scan',
+      messageBody: text,
+      source: 'MANUAL_QUERY',
+    );
 
-    final result = SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    SmsAnalysisResult result;
+    bool evaluatedByBackend = false;
+
+    if (backendResponse['success'] == true && backendResponse['data'] != null) {
+      final data = backendResponse['data'] as Map<String, dynamic>;
+      result = SmsDetectionService.parseBackendResult(
+        backendData: data,
+        originalMessage: text,
+        sender: 'Manual Scan',
+      );
+      evaluatedByBackend = true;
+    } else {
+      // Fallback to local rule engine if backend is unreachable
+      result = SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    }
 
     final logEntry = {
       'id': 'manual_${DateTime.now().millisecondsSinceEpoch}',
@@ -484,14 +601,18 @@ class _DashboardPageState extends State<DashboardPage> {
       _isScanning = false;
       _scanIsSafe = result.classification == 'Safe';
       _threatLevel = result.threatLevel;
+
+      final confPct = (result.threatLevel * 100).toStringAsFixed(1);
+      final modelTag = evaluatedByBackend ? 'AI Trained Model' : 'Local Rule Engine';
+
       if (result.classification == 'Fraud') {
-        _scanResult = '🚨 High Risk Alert: Potential Phishing/Fraud detected!\n\n${result.feedback}';
+        _scanResult = '🚨 High Risk Alert ($modelTag):\nScam/Phishing detected with $confPct% confidence!\n\n${result.feedback}';
       } else if (result.classification == 'Spam') {
-        _scanResult = '⚠️ Moderate Risk: Spam content detected.\n\n${result.feedback}';
+        _scanResult = '⚠️ Moderate Risk ($modelTag):\nSpam content detected with $confPct% confidence.\n\n${result.feedback}';
       } else {
-        _scanResult = '✅ Secure: This message is safe.\n\n${result.feedback}';
+        _scanResult = '🛡️ Verified Safe ($modelTag):\nMessage evaluated as safe ($confPct% confidence).\n\n${result.feedback}';
       }
-      
+
       _smsLogs.insert(0, logEntry);
     });
   }
@@ -744,7 +865,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Your feedback feeds into our system to improve the ML algorithms for Sprint 3.',
+                        'Help train the Argus ML Threat Engine by reporting misclassified messages in real-time.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                           fontSize: 11,
@@ -1544,113 +1665,132 @@ class _DashboardPageState extends State<DashboardPage> {
 
           // Logs List
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 48,
-                          color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await _loadStoredData();
+              },
+              child: filtered.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Container(
+                        height: 350,
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.inbox_outlined,
+                              size: 48,
+                              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No matching SMS logs found.',
+                              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Pull down to refresh and sync remote alerts.',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No matching SMS logs found.',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final log = filtered[index];
-                      final type = log['type'];
-                      final Color statusColor = type == 'Safe'
-                          ? Colors.green
-                          : (type == 'Fraud' ? AppTheme.red : Colors.amber.shade700);
+                      ),
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final log = filtered[index];
+                        final type = log['type'];
+                        final Color statusColor = type == 'Safe'
+                            ? Colors.green
+                            : (type == 'Fraud' ? AppTheme.red : Colors.amber.shade700);
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: InkWell(
-                          onTap: () => _showLogDetail(log),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Sender: ${log['sender']}',
-                                      style: theme.textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: statusColor.withOpacity(0.2)),
-                                      ),
-                                      child: Text(
-                                        type,
-                                        style: GoogleFonts.inter(
-                                          color: statusColor,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: InkWell(
+                            onTap: () => _showLogDetail(log),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Sender: ${log['sender']}',
+                                        style: theme.textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  log['message'],
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      _formatLogTime(log['time']),
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          'Threat: ${(log['threat'] * 100).toStringAsFixed(0)}%',
-                                          style: theme.textTheme.bodyMedium?.copyWith(
-                                            color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: statusColor.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: statusColor.withOpacity(0.2)),
+                                        ),
+                                        child: Text(
+                                          type,
+                                          style: GoogleFonts.inter(
+                                            color: statusColor,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
                                           ),
                                         ),
-                                        const SizedBox(width: 4),
-                                        Icon(Icons.chevron_right, size: 14, color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
-                                      ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    log['message'],
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
                                     ),
-                                  ],
-                                ),
-                              ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _formatLogTime(log['time']),
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            'Threat: ${(log['threat'] * 100).toStringAsFixed(0)}%',
+                                            style: theme.textTheme.bodyMedium?.copyWith(
+                                              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Icon(Icons.chevron_right, size: 14, color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
+            ),
           ),
         ],
       ),
@@ -2011,7 +2151,7 @@ class _DashboardPageState extends State<DashboardPage> {
             text: 'Logout from System',
             type: ButtonType.ghost,
             icon: Icons.logout,
-            onPressed: _handleLogout,
+            onPressed: _confirmLogout,
           ),
           const SizedBox(height: 20),
         ],

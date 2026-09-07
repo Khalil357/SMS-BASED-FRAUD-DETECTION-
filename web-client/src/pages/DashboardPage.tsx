@@ -3,7 +3,6 @@ import type { ChangeEvent } from "react";
 import "./DashboardPage.css";
 import type {
   StatCardData,
-  ChartBarData,
   AlertData,
   SmsRecord,
   DetectionRule,
@@ -36,10 +35,10 @@ import {
   UserPlus,
   Bell,
   X,
-  ArrowUpRight,
   Terminal,
   Copy,
   Check,
+  Download,
 } from "lucide-react";
 import inAppIcon from "../assets/images/in_app_icon.png";
 
@@ -80,16 +79,6 @@ const mockStats: StatCardData[] = [
     type: "warning",
     category: "pending",
   },
-];
-
-const mockChart: ChartBarData[] = [
-  { day: "Mon", percentage: 42 },
-  { day: "Tue", percentage: 65 },
-  { day: "Wed", percentage: 54 },
-  { day: "Thu", percentage: 88 },
-  { day: "Fri", percentage: 70 },
-  { day: "Sat", percentage: 94 },
-  { day: "Sun", percentage: 76 },
 ];
 
 const mockAlerts: AlertData[] = [
@@ -305,6 +294,53 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [copiedCommandId, setCopiedCommandId] = useState<string | null>(null);
 
+  // Admin Profile state
+  const [adminProfile, setAdminProfile] = useState({
+    name: "System Admin",
+    email: "smsfraud.noreply@gmail.com",
+    phone: "+255 700 000 001",
+    role: "ADMINISTRATOR",
+    initials: "AD",
+  });
+
+  const [hoveredDonutKey, setHoveredDonutKey] = useState<string | null>(null);
+  const [hoveredTelemetryIndex, setHoveredTelemetryIndex] = useState<number | null>(null);
+
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editName, setEditName] = useState(adminProfile.name);
+  const [editEmail, setEditEmail] = useState(adminProfile.email);
+  const [editPhone, setEditPhone] = useState(adminProfile.phone);
+
+  const handleOpenEditProfile = () => {
+    setEditName(adminProfile.name);
+    setEditEmail(adminProfile.email);
+    setEditPhone(adminProfile.phone);
+    setIsEditProfileOpen(true);
+  };
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim() || !editEmail.trim()) return;
+
+    const initials = editName
+      .trim()
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase() || "AD";
+
+    setAdminProfile({
+      ...adminProfile,
+      name: editName.trim(),
+      email: editEmail.trim(),
+      phone: editPhone.trim(),
+      initials: initials,
+    });
+
+    setIsEditProfileOpen(false);
+  };
+
   const handleCopyCommand = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedCommandId(id);
@@ -438,38 +474,58 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
           <div className="brand-text">
             <h2>Argus</h2>
-            <span>Admin Console</span>
+            <span className="version-tag">v2.4 Enterprise</span>
           </div>
         </div>
 
         <nav className="sidebar-menu">
           {[
-            { name: "Overview", icon: Activity },
-            { name: "SMS Ingestion Logs", icon: MessageSquare, badge: smsList.filter((s) => s.status === "Fraud").length },
-            { name: "Rules & Threat Engine", icon: Sliders },
-            { name: "Blacklist Management", icon: ShieldAlert, badge: blacklist.length },
-            { name: "Users & Devices", icon: Users },
-            { name: "System Settings", icon: Settings },
-          ].map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.name;
-            return (
-              <button
-                key={item.name}
-                type="button"
-                className={`sidebar-link ${isActive ? "active" : ""}`}
-                onClick={() => setActiveTab(item.name)}
-              >
-                <Icon size={18} className="sidebar-link-icon" />
-                <span>{item.name}</span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className={`menu-badge ${item.name === "Blacklist Management" ? "dark" : "danger"}`}>
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+            {
+              category: "MAIN TELEMETRY",
+              items: [
+                { name: "Overview", icon: Activity },
+                { name: "SMS Ingestion Logs", icon: MessageSquare, badge: smsList.filter((s) => s.status === "Fraud").length },
+              ],
+            },
+            {
+              category: "SECURITY ENGINE",
+              items: [
+                { name: "Rules & Threat Engine", icon: Sliders, badge: rulesList.filter((r) => r.enabled).length },
+                { name: "Blacklist Management", icon: ShieldAlert, badge: blacklist.length },
+              ],
+            },
+            {
+              category: "ADMINISTRATION",
+              items: [
+                { name: "Users & Devices", icon: Users, badge: usersList.length },
+                { name: "System Settings", icon: Settings },
+              ],
+            },
+          ].map((group) => (
+            <div key={group.category} className="sidebar-nav-group">
+              <span className="sidebar-group-title">{group.category}</span>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.name;
+                return (
+                  <button
+                    key={item.name}
+                    type="button"
+                    className={`sidebar-link ${isActive ? "active" : ""}`}
+                    onClick={() => setActiveTab(item.name)}
+                  >
+                    <Icon size={18} className="sidebar-link-icon" />
+                    <span>{item.name}</span>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className={`menu-badge ${item.name === "Blacklist Management" ? "dark" : "danger"}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="sidebar-footer">
@@ -553,23 +609,52 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             </div>
 
             {/* ADMIN PROFILE PILL */}
-            <div className="admin-profile-pill">
-              <div className="admin-avatar">AD</div>
+            <button
+              type="button"
+              className="admin-profile-pill clickable"
+              onClick={handleOpenEditProfile}
+              title="Click to Edit Admin Profile"
+            >
+              <div className="admin-avatar">{adminProfile.initials}</div>
               <div className="admin-info">
-                <strong>System Admin</strong>
-                <small>ADMINISTRATOR</small>
+                <strong>{adminProfile.name}</strong>
+                <small>{adminProfile.role}</small>
               </div>
-            </div>
+            </button>
           </div>
         </header>
 
         {/* TAB 1: OVERVIEW */}
         {activeTab === "Overview" && (
           <div className="tab-content fade-slide">
+            {/* HERO SECURITY BANNER */}
+            <section className="dashboard-hero-banner">
+              <div className="hero-banner-content">
+                <div className="hero-text-block">
+                  <div className="hero-status-pill">
+                    <span className="pulse-indicator"></span>
+                    <span>Argus Neural Threat Engine Active</span>
+                  </div>
+                  <h2>Welcome back, {adminProfile.name}! 👋</h2>
+                  <p>
+                    Real-time SMS interception, fraud pattern matching, and global threat registry active.
+                  </p>
+                </div>
+                <div className="hero-banner-actions">
+                  <button type="button" className="btn-primary" onClick={() => setIsAddRuleOpen(true)}>
+                    <Plus size={16} /> New Rule
+                  </button>
+                  <button type="button" className="btn-secondary dark" onClick={() => setIsAddBlacklistOpen(true)}>
+                    <ShieldAlert size={16} /> Blacklist Number
+                  </button>
+                </div>
+              </div>
+            </section>
+
             {/* STATS GRID */}
             <section className="stats-cards-grid">
               {mockStats.map((stat) => (
-                <div key={stat.id} className="stat-card-box">
+                <div key={stat.id} className={`stat-card-box gradient-${stat.category}`}>
                   <div className="stat-header">
                     <span className="stat-title">{stat.title}</span>
                     <div className={`stat-icon-badge ${stat.category}`}>
@@ -589,58 +674,354 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
             {/* MIDDLE PANELS GRID */}
             <section className="middle-dashboard-grid">
-              {/* CHART PANEL */}
-              <div className="admin-panel chart-panel">
+              {/* PROFESSIONAL TELEMETRY AREA CHART PANEL */}
+              <div className="admin-panel telemetry-chart-panel">
                 <div className="panel-top">
                   <div>
-                    <h3>Fraud Detection Velocity</h3>
-                    <p>Daily intercepted scam payloads</p>
+                    <h3>SMS Traffic & Threat Telemetry</h3>
+                    <p>Hover data points for live crosshair inspection</p>
                   </div>
-                  <div className="panel-badge-pill">
-                    <Activity size={14} /> Live Stream
+                  <div className="telemetry-chart-legend">
+                    <span className="legend-pill total-pill">
+                      <span className="pill-dot blue" /> Total SMS
+                    </span>
+                    <span className="legend-pill fraud-pill">
+                      <span className="pill-dot red" /> Fraud Intercepts
+                    </span>
                   </div>
                 </div>
 
-                <div className="chart-wrapper">
-                  <div className="chart-bars-container">
-                    {mockChart.map((bar) => (
-                      <div key={bar.day} className="chart-bar-column">
-                        <div className="bar-value">{bar.percentage}%</div>
-                        <div className="bar-track">
-                          <div className="bar-fill" style={{ height: `${bar.percentage}%` }} />
-                        </div>
-                        <span className="bar-label">{bar.day}</span>
+                <div className="telemetry-chart-wrapper">
+                  <div className="telemetry-svg-container">
+                    <svg viewBox="0 0 720 220" className="telemetry-svg">
+                      <defs>
+                        {/* Total SMS Gradient */}
+                        <linearGradient id="totalSmsGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+                        </linearGradient>
+                        {/* Fraud Intercepts Gradient */}
+                        <linearGradient id="fraudSmsGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#dc2626" stopOpacity="0.3" />
+                          <stop offset="100%" stopColor="#dc2626" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Grid Lines */}
+                      <g className="grid-lines" stroke="var(--border)" strokeDasharray="4 4" strokeWidth="1">
+                        <line x1="50" y1="30" x2="700" y2="30" />
+                        <line x1="50" y1="75" x2="700" y2="75" />
+                        <line x1="50" y1="120" x2="700" y2="120" />
+                        <line x1="50" y1="165" x2="700" y2="165" />
+                      </g>
+
+                      {/* Y-Axis Labels */}
+                      <g className="y-axis-labels" fill="var(--subtle)" fontSize="10" fontWeight="600" textAnchor="end">
+                        <text x="42" y="34">100%</text>
+                        <text x="42" y="79">75%</text>
+                        <text x="42" y="124">50%</text>
+                        <text x="42" y="169">25%</text>
+                      </g>
+
+                      {/* Area Fill 1: Total SMS Ingested */}
+                      <path
+                        d="M 60,110 C 130,90 200,80 270,60 C 340,40 410,50 480,40 C 550,30 620,45 690,30 L 690,190 L 60,190 Z"
+                        fill="url(#totalSmsGradient)"
+                      />
+
+                      {/* Spline Line 1: Total SMS Ingested */}
+                      <path
+                        d="M 60,110 C 130,90 200,80 270,60 C 340,40 410,50 480,40 C 550,30 620,45 690,30"
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                      />
+
+                      {/* Area Fill 2: Fraud Intercepts */}
+                      <path
+                        d="M 60,150 C 130,130 200,115 270,95 C 340,45 410,70 480,110 C 550,50 620,60 690,80 L 690,190 L 60,190 Z"
+                        fill="url(#fraudSmsGradient)"
+                      />
+
+                      {/* Spline Line 2: Fraud Intercepts */}
+                      <path
+                        d="M 60,150 C 130,130 200,115 270,95 C 340,45 410,70 480,110 C 550,50 620,60 690,80"
+                        fill="none"
+                        stroke="#dc2626"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+
+                      {/* Interactive Hover Crosshair */}
+                      {hoveredTelemetryIndex !== null && (
+                        <line
+                          x1={[60, 165, 270, 340, 480, 585, 690][hoveredTelemetryIndex]}
+                          y1="25"
+                          x2={[60, 165, 270, 340, 480, 585, 690][hoveredTelemetryIndex]}
+                          y2="190"
+                          stroke="var(--primary)"
+                          strokeDasharray="3 3"
+                          strokeWidth="1.5"
+                          opacity="0.8"
+                        />
+                      )}
+
+                      {/* Data Point Markers - Fraud */}
+                      {[
+                        { day: "Mon", x: 60, y: 150, rate: "42%", count: "850 SMS" },
+                        { day: "Tue", x: 165, y: 130, rate: "65%", count: "1,240 SMS" },
+                        { day: "Wed", x: 270, y: 95, rate: "54%", count: "1,100 SMS" },
+                        { day: "Thu", x: 340, y: 45, rate: "88%", count: "1,890 SMS", peak: true },
+                        { day: "Fri", x: 480, y: 110, rate: "70%", count: "1,450 SMS" },
+                        { day: "Sat", x: 585, y: 50, rate: "94%", count: "2,100 SMS", peak: true },
+                        { day: "Sun", x: 690, y: 80, rate: "76%", count: "1,620 SMS" },
+                      ].map((pt, idx) => {
+                        const isHovered = hoveredTelemetryIndex === idx;
+                        return (
+                          <g
+                            key={pt.day}
+                            className="interactive-node-group"
+                            onMouseEnter={() => setHoveredTelemetryIndex(idx)}
+                            onMouseLeave={() => setHoveredTelemetryIndex(null)}
+                            style={{ cursor: "pointer" }}
+                          >
+                            {/* Hover Pulsing Outer Ring */}
+                            {isHovered && (
+                              <circle
+                                cx={pt.x}
+                                cy={pt.y}
+                                r="12"
+                                fill="rgba(220, 38, 38, 0.2)"
+                                stroke="#dc2626"
+                                strokeWidth="1.5"
+                              />
+                            )}
+                            <circle
+                              cx={pt.x}
+                              cy={pt.y}
+                              r={isHovered ? 7 : pt.peak ? 6 : 5}
+                              fill="#dc2626"
+                              stroke="var(--card)"
+                              strokeWidth="2.5"
+                            />
+                          </g>
+                        );
+                      })}
+
+                      {/* Peak Callout & Interactive Tooltip Badges */}
+                      {[
+                        { day: "Mon", x: 60, y: 150, rate: "42%", count: "850 SMS" },
+                        { day: "Tue", x: 165, y: 130, rate: "65%", count: "1,240 SMS" },
+                        { day: "Wed", x: 270, y: 95, rate: "54%", count: "1,100 SMS" },
+                        { day: "Thu", x: 340, y: 45, rate: "88%", count: "1,890 SMS", peak: true },
+                        { day: "Fri", x: 480, y: 110, rate: "70%", count: "1,450 SMS" },
+                        { day: "Sat", x: 585, y: 50, rate: "94%", count: "2,100 SMS", peak: true },
+                        { day: "Sun", x: 690, y: 80, rate: "76%", count: "1,620 SMS" },
+                      ].map((pt, idx) => {
+                        const isHovered = hoveredTelemetryIndex === idx;
+                        if (!isHovered && !pt.peak) return null;
+
+                        return (
+                          <g key={`badge-${pt.day}`} className="callout-badges pointer-events-none">
+                            <rect
+                              x={pt.x - 36}
+                              y={pt.y - 32}
+                              width="72"
+                              height="22"
+                              rx="6"
+                              fill={isHovered ? "#0f172a" : "#dc2626"}
+                              stroke={isHovered ? "#dc2626" : "none"}
+                              strokeWidth="1"
+                            />
+                            <text
+                              x={pt.x}
+                              y={pt.y - 17}
+                              fill="#ffffff"
+                              fontSize="10"
+                              fontWeight="800"
+                              textAnchor="middle"
+                            >
+                              {pt.rate} {isHovered ? "Threat" : "Peak"}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+
+                  {/* X-Axis Labels Row */}
+                  <div className="telemetry-x-labels">
+                    {[
+                      { day: "Mon", val: "42% Fraud", idx: 0 },
+                      { day: "Tue", val: "65% Fraud", idx: 1 },
+                      { day: "Wed", val: "54% Fraud", idx: 2 },
+                      { day: "Thu", val: "88% (Peak)", idx: 3, peak: true },
+                      { day: "Fri", val: "70% Fraud", idx: 4 },
+                      { day: "Sat", val: "94% (Peak)", idx: 5, peak: true },
+                      { day: "Sun", val: "76% Fraud", idx: 6 },
+                    ].map((lbl) => (
+                      <div
+                        key={lbl.day}
+                        className={`x-label-item ${lbl.peak ? "active-peak" : ""} ${hoveredTelemetryIndex === lbl.idx ? "hovered-label" : ""}`}
+                        onMouseEnter={() => setHoveredTelemetryIndex(lbl.idx)}
+                        onMouseLeave={() => setHoveredTelemetryIndex(null)}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <span>{lbl.day}</span>
+                        <small className={lbl.peak ? "peak-val" : "subtle-val"}>{lbl.val}</small>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
 
-              {/* THREAT ALERTS FEED */}
-              <div className="admin-panel alerts-panel">
+              {/* PIE / DONUT CHART BREAKDOWN PANEL */}
+              <div className="admin-panel pie-chart-panel">
                 <div className="panel-top">
                   <div>
-                    <h3>Real-Time Threat Alerts</h3>
-                    <p>Highest severity intercepts</p>
+                    <h3>Threat Category Breakdown</h3>
+                    <p>Hover segments or legend to inspect details</p>
                   </div>
-                  <button type="button" className="text-btn" onClick={() => setActiveTab("SMS Ingestion Logs")}>
-                    View Logs <ArrowUpRight size={14} />
-                  </button>
+                  <span className="type-tag phishing">2,840 Intercepts</span>
                 </div>
 
-                <div className="alerts-feed-list">
-                  {mockAlerts.map((alt) => (
-                    <div key={alt.id} className={`feed-alert-card ${alt.severity}`}>
-                      <div className="feed-alert-icon">
-                        {alt.severity === "high" ? <ShieldAlert size={18} /> : <AlertTriangle size={18} />}
-                      </div>
-                      <div className="feed-alert-content">
-                        <strong>{alt.title}</strong>
-                        <p>{alt.description}</p>
-                        <small>{alt.timeAgo}</small>
+                <div className="pie-donut-wrapper">
+                  <div className="donut-svg-box">
+                    <svg viewBox="0 0 160 160" className="donut-chart-svg">
+                      {/* Phishing (42%) */}
+                      <circle
+                        cx="80"
+                        cy="80"
+                        r="58"
+                        stroke="#dc2626"
+                        strokeWidth={hoveredDonutKey === "phishing" ? "24" : "20"}
+                        fill="none"
+                        strokeDasharray="153 211"
+                        strokeDashoffset="0"
+                        className={`donut-segment ${hoveredDonutKey && hoveredDonutKey !== "phishing" ? "dimmed" : ""}`}
+                        onMouseEnter={() => setHoveredDonutKey("phishing")}
+                        onMouseLeave={() => setHoveredDonutKey(null)}
+                      />
+                      {/* Impersonation (28%) */}
+                      <circle
+                        cx="80"
+                        cy="80"
+                        r="58"
+                        stroke="#f59e0b"
+                        strokeWidth={hoveredDonutKey === "impersonation" ? "24" : "20"}
+                        fill="none"
+                        strokeDasharray="102 262"
+                        strokeDashoffset="-153"
+                        className={`donut-segment ${hoveredDonutKey && hoveredDonutKey !== "impersonation" ? "dimmed" : ""}`}
+                        onMouseEnter={() => setHoveredDonutKey("impersonation")}
+                        onMouseLeave={() => setHoveredDonutKey(null)}
+                      />
+                      {/* Fake Promotion (18%) */}
+                      <circle
+                        cx="80"
+                        cy="80"
+                        r="58"
+                        stroke="#a855f7"
+                        strokeWidth={hoveredDonutKey === "promotion" ? "24" : "20"}
+                        fill="none"
+                        strokeDasharray="66 298"
+                        strokeDashoffset="-255"
+                        className={`donut-segment ${hoveredDonutKey && hoveredDonutKey !== "promotion" ? "dimmed" : ""}`}
+                        onMouseEnter={() => setHoveredDonutKey("promotion")}
+                        onMouseLeave={() => setHoveredDonutKey(null)}
+                      />
+                      {/* Loan Scam (12%) */}
+                      <circle
+                        cx="80"
+                        cy="80"
+                        r="58"
+                        stroke="#3b82f6"
+                        strokeWidth={hoveredDonutKey === "loan" ? "24" : "20"}
+                        fill="none"
+                        strokeDasharray="43 321"
+                        strokeDashoffset="-321"
+                        className={`donut-segment ${hoveredDonutKey && hoveredDonutKey !== "loan" ? "dimmed" : ""}`}
+                        onMouseEnter={() => setHoveredDonutKey("loan")}
+                        onMouseLeave={() => setHoveredDonutKey(null)}
+                      />
+                    </svg>
+
+                    <div className="donut-center-text">
+                      <strong>
+                        {hoveredDonutKey === "phishing"
+                          ? "1,192"
+                          : hoveredDonutKey === "impersonation"
+                          ? "795"
+                          : hoveredDonutKey === "promotion"
+                          ? "511"
+                          : hoveredDonutKey === "loan"
+                          ? "342"
+                          : "2,840"}
+                      </strong>
+                      <small>
+                        {hoveredDonutKey === "phishing"
+                          ? "Phishing (42%)"
+                          : hoveredDonutKey === "impersonation"
+                          ? "Bank Scam (28%)"
+                          : hoveredDonutKey === "promotion"
+                          ? "Promo (18%)"
+                          : hoveredDonutKey === "loan"
+                          ? "Loan Scam (12%)"
+                          : "Threats"}
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="pie-legend-list">
+                    <div
+                      className={`legend-row ${hoveredDonutKey === "phishing" ? "active-legend" : ""}`}
+                      onMouseEnter={() => setHoveredDonutKey("phishing")}
+                      onMouseLeave={() => setHoveredDonutKey(null)}
+                    >
+                      <span className="legend-dot red" />
+                      <div className="legend-info">
+                        <strong>Phishing URLs</strong>
+                        <small>1,192 (42%)</small>
                       </div>
                     </div>
-                  ))}
+
+                    <div
+                      className={`legend-row ${hoveredDonutKey === "impersonation" ? "active-legend" : ""}`}
+                      onMouseEnter={() => setHoveredDonutKey("impersonation")}
+                      onMouseLeave={() => setHoveredDonutKey(null)}
+                    >
+                      <span className="legend-dot amber" />
+                      <div className="legend-info">
+                        <strong>Bank Impersonation</strong>
+                        <small>795 (28%)</small>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`legend-row ${hoveredDonutKey === "promotion" ? "active-legend" : ""}`}
+                      onMouseEnter={() => setHoveredDonutKey("promotion")}
+                      onMouseLeave={() => setHoveredDonutKey(null)}
+                    >
+                      <span className="legend-dot purple" />
+                      <div className="legend-info">
+                        <strong>Fake Promotions</strong>
+                        <small>511 (18%)</small>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`legend-row ${hoveredDonutKey === "loan" ? "active-legend" : ""}`}
+                      onMouseEnter={() => setHoveredDonutKey("loan")}
+                      onMouseLeave={() => setHoveredDonutKey(null)}
+                    >
+                      <span className="legend-dot blue" />
+                      <div className="legend-info">
+                        <strong>Loan Scams</strong>
+                        <small>342 (12%)</small>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -800,20 +1181,30 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <div className="panel-top flex-wrap">
                 <div>
                   <h3>SMS Ingestion Audit Logs</h3>
-                  <p>Filter, search, and verify all intercepted messages</p>
+                  <p>Filter, search, and verify all intercepted messages ({filteredSms.length} records)</p>
                 </div>
 
-                <div className="filter-button-group">
-                  {["All", "Fraud", "Review", "Safe"].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      className={`filter-btn ${filterType === t ? "active" : ""}`}
-                      onClick={() => setFilterType(t)}
-                    >
-                      {t}
-                    </button>
-                  ))}
+                <div className="flex-align gap-3">
+                  <div className="filter-button-group">
+                    {["All", "Fraud", "Review", "Safe"].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        className={`filter-btn ${filterType === t ? "active" : ""}`}
+                        onClick={() => setFilterType(t)}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn-secondary dark"
+                    onClick={() => alert("Exporting intercepted SMS logs to CSV...")}
+                  >
+                    <Download size={15} /> Export CSV
+                  </button>
                 </div>
               </div>
 
@@ -1017,7 +1408,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   <h3>User & Device Registry</h3>
                   <p>Registered users, device authorization, and account security</p>
                 </div>
-                <button type="button" className="btn-primary" onClick={() => alert("Creating user...")}>
+                <button type="button" className="btn-primary" onClick={() => alert("Creating new system user...")}>
                   <UserPlus size={16} /> Add User
                 </button>
               </div>
@@ -1136,6 +1527,31 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   <div className="setting-item">
                     <label>PostgreSQL Database</label>
                     <input type="text" value="jdbc:postgresql://localhost:5432/sms_fraud" readOnly className="readonly-input" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="admin-panel">
+                <div className="panel-top">
+                  <div>
+                    <h3>Real-Time Webhook Gateway</h3>
+                    <p>Mobile app scan ingestion & push broadcast API</p>
+                  </div>
+                  <span className="status-pill safe">Listening</span>
+                </div>
+
+                <div className="settings-form">
+                  <div className="setting-item">
+                    <label>Mobile Ingestion API</label>
+                    <input type="text" value="POST http://localhost:8080/api/scans" readOnly className="readonly-input" />
+                  </div>
+                  <div className="setting-item">
+                    <label>System Fallback UUID</label>
+                    <input type="text" value="00000000-0000-0000-0000-000000000001" readOnly className="readonly-input" />
+                  </div>
+                  <div className="setting-item">
+                    <label>Auto-Blacklist Trigger</label>
+                    <input type="text" value="90% Risk Weight Index" readOnly className="readonly-input" />
                   </div>
                 </div>
               </div>
@@ -1323,6 +1739,80 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 </button>
                 <button type="submit" className="btn-primary danger">
                   Add to Blacklist
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* EDIT PROFILE MODAL */}
+      {isEditProfileOpen && (
+        <div className="modal-backdrop" onClick={() => setIsEditProfileOpen(false)}>
+          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex-align">
+                <div className="admin-avatar">{adminProfile.initials}</div>
+                <div>
+                  <h3 style={{ margin: 0 }}>Edit Admin Profile</h3>
+                  <small style={{ color: "var(--subtle)" }}>Update administrator details & preferences</small>
+                </div>
+              </div>
+              <button type="button" className="close-btn" onClick={() => setIsEditProfileOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Full Display Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. System Administrator"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. admin@smsfraud.com"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Phone Contact Number</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. +255 700 000 001"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>System Role & Permissions</label>
+                  <input
+                    type="text"
+                    value={adminProfile.role}
+                    readOnly
+                    className="readonly-input"
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setIsEditProfileOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Save Changes
                 </button>
               </div>
             </form>

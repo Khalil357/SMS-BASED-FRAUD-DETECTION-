@@ -94,6 +94,51 @@ class _DashboardPageState extends State<DashboardPage> {
       _isNotificationsEnabled = notifications;
       _notificationThreshold = threshold;
     });
+
+    // Fetch backend Fraud Scans (GET /api/scans/fraud?page=0&size=20)
+    _fetchBackendFraudScans();
+  }
+
+  Future<void> _fetchBackendFraudScans() async {
+    try {
+      final res = await AuthService.getFraudScans(page: 0, size: 20);
+      if (res['success'] == true && res['content'] is List) {
+        final List content = res['content'];
+        bool hasNew = false;
+        for (final item in content) {
+          if (item is Map<String, dynamic>) {
+            final msgText = item['message'] ?? item['messageBody'] ?? '';
+            if (msgText.toString().trim().isEmpty) continue;
+
+            final exists = _smsLogs.any((l) => l['message'] == msgText.toString());
+            if (!exists) {
+              final isScam = item['is_scam'] ?? item['isScam'] ?? (item['label'] == 'scam' || item['label'] == 'fraud');
+              final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
+              final logEntry = {
+                'id': 'backend_fraud_${DateTime.now().millisecondsSinceEpoch}_${item.hashCode}',
+                'sender': item['sender'] ?? 'Backend Shield Alert',
+                'message': msgText.toString(),
+                'type': isScam == false ? 'Safe' : 'Fraud',
+                'time': item['createdAt'] ?? item['time'] ?? DateTime.now().toIso8601String(),
+                'threat': conf,
+                'matchedReasons': [
+                  'Trained Model Label: ${item['label'] ?? (isScam ? 'scam' : 'safe')}',
+                  'Model Confidence: ${(conf * 100).toStringAsFixed(1)}%'
+                ],
+                'hasFeedback': false,
+                'userFeedback': null,
+              };
+              _smsLogs.insert(0, logEntry);
+              await SmsStorageService.addLog(logEntry);
+              hasNew = true;
+            }
+          }
+        }
+        if (hasNew && mounted) {
+          setState(() {});
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkPermissions() async {
@@ -133,6 +178,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _showForegroundThreatSnackBar(Map<String, dynamic> log) {
     if (log['type'] == 'Fraud' || log['type'] == 'Spam') {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -152,11 +198,12 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           backgroundColor: log['type'] == 'Fraud' ? AppTheme.primaryLight : Colors.amber.shade700,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 4),
           action: SnackBarAction(
             label: 'VIEW',
             textColor: Colors.white,
             onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
               setState(() {
                 _currentIndex = 1; // Go to Logs tab
               });
@@ -166,6 +213,58 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       );
     }
+  }
+
+  void _confirmLogout() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.logout_rounded, color: AppTheme.primaryLight),
+            const SizedBox(width: 10),
+            Text(
+              'Confirm Logout',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to log out of Argus SMS Fraud Interception Platform?',
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryLight,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _handleLogout();
+            },
+            child: Text(
+              'Yes, Logout',
+              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // Settings modification updates
@@ -265,10 +364,28 @@ class _DashboardPageState extends State<DashboardPage> {
       _scanResult = null;
     });
 
-    // Simulate AI model processing delay
-    await Future.delayed(const Duration(seconds: 2));
+    // Submit scan to Backend API (POST /api/scans) to run trained ML model
+    final backendResponse = await AuthService.submitScan(
+      sender: 'Manual Scan',
+      messageBody: text,
+      source: 'MANUAL_QUERY',
+    );
 
-    final result = SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    SmsDetectionResult result;
+    bool evaluatedByBackend = false;
+
+    if (backendResponse['success'] == true && backendResponse['data'] != null) {
+      final data = backendResponse['data'] as Map<String, dynamic>;
+      result = SmsDetectionService.parseBackendResult(
+        backendData: data,
+        originalMessage: text,
+        sender: 'Manual Scan',
+      );
+      evaluatedByBackend = true;
+    } else {
+      // Fallback to local rule engine if backend is unreachable
+      result = SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    }
 
     final logEntry = {
       'id': 'manual_${DateTime.now().millisecondsSinceEpoch}',
@@ -290,14 +407,18 @@ class _DashboardPageState extends State<DashboardPage> {
       _isScanning = false;
       _scanIsSafe = result.classification == 'Safe';
       _threatLevel = result.threatLevel;
+
+      final confPct = (result.threatLevel * 100).toStringAsFixed(1);
+      final modelTag = evaluatedByBackend ? 'AI Trained Model' : 'Local Rule Engine';
+
       if (result.classification == 'Fraud') {
-        _scanResult = '🚨 High Risk Alert: Potential Phishing/Fraud detected!\n\n${result.feedback}';
+        _scanResult = '🚨 High Risk Alert ($modelTag):\nScam/Phishing detected with $confPct% confidence!\n\n${result.feedback}';
       } else if (result.classification == 'Spam') {
-        _scanResult = '⚠️ Moderate Risk: Spam content detected.\n\n${result.feedback}';
+        _scanResult = '⚠️ Moderate Risk ($modelTag):\nSpam content detected with $confPct% confidence.\n\n${result.feedback}';
       } else {
-        _scanResult = '✅ Secure: This message is safe.\n\n${result.feedback}';
+        _scanResult = '🛡️ Verified Safe ($modelTag):\nMessage evaluated as safe ($confPct% confidence).\n\n${result.feedback}';
       }
-      
+
       _smsLogs.insert(0, logEntry);
     });
   }
@@ -550,7 +671,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Your feedback feeds into our system to improve the ML algorithms for Sprint 3.',
+                        'Help train the Argus ML Threat Engine by reporting misclassified messages in real-time.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                           fontSize: 11,

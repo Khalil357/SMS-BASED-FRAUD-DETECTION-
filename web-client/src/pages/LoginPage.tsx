@@ -4,7 +4,7 @@ import "./LoginPage.css";
 import { login } from "../services/authService";
 import { useTheme } from "../theme/ThemeContext";
 import inAppIcon from "../assets/images/in_app_icon.png";
-import { Mail, Lock, Sun, Moon, ShieldCheck } from "lucide-react";
+import { Mail, Lock, Sun, Moon, ShieldCheck, Eye, EyeOff } from "lucide-react";
 
 interface LoginPageProps {
   onLoginSuccess: (email: string) => void;
@@ -20,6 +20,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   const [email, setEmail] = useState("smsfraud.noreply@gmail.com");
   const [password, setPassword] = useState("Admin000!");
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -129,11 +130,19 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               <div className="field-input">
                 <Lock size={18} className="field-icon" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="•••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <button
+                  type="button"
+                  className="toggle-password-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? <EyeOff size={18} className="field-icon" /> : <Eye size={18} className="field-icon" />}
+                </button>
               </div>
               {errors.password && <span className="field-error">{errors.password}</span>}
             </label>

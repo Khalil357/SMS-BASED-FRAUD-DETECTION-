@@ -45,6 +45,7 @@ function App() {
           <VerificationPage
             email={loginEmail || "your email"}
             onVerified={() => setPage("dashboard")}
+            onNavigateToLogin={() => setPage("login")}
           />
         );
 

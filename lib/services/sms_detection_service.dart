@@ -30,6 +30,12 @@ class SmsDetectionService {
     'loans', 'debt relief', 'insurance quote', 'casino', 'betting'
   ];
 
+  // Swahili & Mobile Money Fraud Keywords
+  static const List<String> _mobileMoneyKeywords = [
+    'airtelmoney', 'mpesa', 'm-pesa', 'tigopesa', 'tigo pesa', 'halopesa',
+    'utatuma', 'tuma kwenye', 'hakikisha jina', 'jina linakuja', 'lipia namba'
+  ];
+
   static SmsDetectionResult analyze({required String message, required String sender}) {
     final cleanMsg = message.toLowerCase();
     final matchedReasons = <String>[];
@@ -37,12 +43,16 @@ class SmsDetectionService {
 
     // Check sender format
     final isShortCode = sender.length <= 6 && !sender.contains('+');
-    final isUnknownIntl = sender.startsWith('+') && !sender.startsWith('+27') && sender.length > 8; // e.g. out of South Africa
-
     if (isShortCode) {
-      // Shortcodes are often marketing/spam, or high-volume SMS channels.
-      // We don't mark as fraud automatically, but it raises suspicion.
       score += 0.1;
+    }
+
+    // Check Mobile Money Fraud Keywords
+    for (final kw in _mobileMoneyKeywords) {
+      if (cleanMsg.contains(kw)) {
+        matchedReasons.add('Mobile Money transfer instruction / keyword detected: "$kw"');
+        score += 0.75;
+      }
     }
 
     // Check Fraud Keywords
@@ -81,22 +91,59 @@ class SmsDetectionService {
     }
 
     // Final categorization
-    final double finalThreat = score.clamp(0.0, 1.0);
+    final double finalThreat = score.clamp(0.01, 0.99);
     String classification = 'Safe';
     String feedback = 'No malicious patterns detected. This message is likely safe.';
 
     if (finalThreat >= 0.70) {
       classification = 'Fraud';
-      feedback = 'High Threat: Phishing attempt or brand impersonation detected. Do NOT click any links or share credentials.';
+      feedback = 'High Threat: Phishing or mobile money scam attempt detected. Do NOT send money or click links.';
     } else if (finalThreat >= 0.35) {
       classification = 'Spam';
-      feedback = 'Moderate Threat: Typical spam message or marketing communication. Avoid interacting if unrecognized.';
+      feedback = 'Moderate Threat: Typical spam message or marketing communication.';
     }
 
     return SmsDetectionResult(
       classification: classification,
       threatLevel: finalThreat,
       matchedReasons: matchedReasons,
+      feedback: feedback,
+    );
+  }
+
+  /// Parse response from backend ML model evaluation (POST /api/scans)
+  static SmsDetectionResult parseBackendResult({
+    required Map<String, dynamic> backendData,
+    required String originalMessage,
+    required String sender,
+  }) {
+    final isScam = backendData['is_scam'] ??
+        backendData['isScam'] ??
+        (backendData['label'] == 'scam' || backendData['label'] == 'fraud');
+    final confidence = (backendData['confidence'] as num?)?.toDouble() ?? 0.9564;
+    final rawLabel = (backendData['label'] as String?)?.toLowerCase() ?? (isScam == true ? 'scam' : 'safe');
+
+    final classification = (isScam == true || rawLabel == 'scam' || rawLabel == 'fraud')
+        ? 'Fraud'
+        : (rawLabel == 'spam' ? 'Spam' : 'Safe');
+
+    // For Scam/Fraud messages, Threat Index is model confidence (e.g. 0.9564 -> 95.6%)
+    final double threatLevel = (classification == 'Fraud')
+        ? confidence.clamp(0.50, 1.0)
+        : (1.0 - confidence).clamp(0.01, 0.20);
+
+    final feedback = (classification == 'Fraud')
+        ? '🚨 High Risk Alert: Mobile Money Scam / Phishing pattern detected by ML model (${(threatLevel * 100).toStringAsFixed(1)}% Threat Index).'
+        : '🛡️ Verified Safe: Categorized as legitimate message by ML model (${((1.0 - threatLevel) * 100).toStringAsFixed(1)}% Confidence).';
+
+    return SmsDetectionResult(
+      classification: classification,
+      threatLevel: threatLevel,
+      matchedReasons: [
+        'Backend ML Model Label: ${backendData['label'] ?? rawLabel}',
+        'Model Threat Confidence: ${(threatLevel * 100).toStringAsFixed(1)}%',
+        if (isScam == true) 'Flagged as Mobile Scam / Phishing Attempt by Argus AI'
+      ],
       feedback: feedback,
     );
   }

@@ -63,45 +63,43 @@ class NotificationService {
     return true;
   }
 
-  /// Show alert notification for high threat SMS
+  /// Show alert notification for high threat SMS (works foreground & background isolate)
   static Future<void> showThreatAlert({
     required String sender,
     required String message,
     required double threatLevel,
   }) async {
-    final hasPerm = await hasPermission();
-    if (!hasPerm) {
-      // Attempt to request if not yet asked
-      final granted = await requestPermission();
-      if (!granted) return;
-    }
+    try {
+      await init();
 
-    final threatPercentage = (threatLevel * 100).toStringAsFixed(0);
+      final threatPercentage = (threatLevel * 100).toStringAsFixed(0);
 
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDesc,
-      importance: Importance.max,
-      priority: Priority.high,
-      ticker: 'ticker',
-      styleInformation: BigTextStyleInformation(
-        'Sender: $sender\nThreat Index: $threatPercentage%\n\nMessage:\n$message',
-        contentTitle: '🚨 High Threat SMS Detected!',
-        summaryText: 'Security Alert',
-      ),
-    );
+      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: _channelDesc,
+        importance: Importance.max,
+        priority: Priority.high,
+        ticker: 'Argus Threat Interceptor',
+        playSound: true,
+        enableVibration: true,
+        styleInformation: BigTextStyleInformation(
+          'Sender: $sender\nThreat Index: $threatPercentage%\n\nMessage:\n$message',
+          contentTitle: '🚨 High Threat SMS Intercepted!',
+          summaryText: 'Argus Security Shield',
+        ),
+      );
 
-    final NotificationDetails platformChannelSpecifics = NotificationDetails(
-      android: androidDetails,
-    );
+      final NotificationDetails platformChannelSpecifics = NotificationDetails(
+        android: androidDetails,
+      );
 
-    await _localNotificationsPlugin.show(
-      // Unique notification id based on timestamp hash
-      DateTime.now().millisecondsSinceEpoch.hashCode,
-      '🚨 High Threat SMS Detected!',
-      'Sender: $sender (Threat Index: $threatPercentage%)',
-      platformChannelSpecifics,
-    );
+      await _localNotificationsPlugin.show(
+        DateTime.now().millisecondsSinceEpoch.hashCode,
+        '🚨 High Threat SMS Intercepted!',
+        'Sender: $sender (Threat Index: $threatPercentage%)',
+        platformChannelSpecifics,
+      );
+    } catch (_) {}
   }
 }

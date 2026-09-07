@@ -286,4 +286,117 @@ class AuthService {
       };
     }
   }
+
+  /// Submit SMS scan payload to backend API
+  /// POST /api/scans
+  static Future<Map<String, dynamic>> submitScan({
+    required String sender,
+    required String messageBody,
+    String source = 'MANUAL_QUERY',
+  }) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+      final body = jsonEncode({
+        'sender': sender,
+        'messageBody': messageBody,
+        'message': messageBody,
+        'source': source,
+      });
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/scans'),
+        headers: headers,
+        body: body,
+      );
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = decoded['data'] is Map<String, dynamic>
+            ? (decoded['data'] as Map<String, dynamic>)
+            : decoded;
+
+        final isScam = data['is_scam'] ??
+            data['isScam'] ??
+            (data['label'] == 'scam' || data['label'] == 'fraud');
+        final label = data['label'] ?? (isScam == true ? 'scam' : 'safe');
+        final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.95;
+
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Scan processed successfully',
+          'data': data,
+          'isScam': isScam == true,
+          'label': label,
+          'confidence': confidence,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Scan submission failed',
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to submit scan to backend server.',
+        'error': e,
+      };
+    }
+  }
+
+  /// Fetch authenticated user's "FRAUD" messages with pagination
+  /// GET /api/scans/fraud?page=0&size=20
+  static Future<Map<String, dynamic>> getFraudScans({
+    int page = 0,
+    int size = 20,
+  }) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/scans/fraud?page=$page&size=$size'),
+        headers: headers,
+      );
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final data = decoded['data'] is Map<String, dynamic>
+            ? (decoded['data'] as Map<String, dynamic>)
+            : <String, dynamic>{};
+        final content = data['content'] is List ? (data['content'] as List) : [];
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Fraud scans retrieved successfully',
+          'content': content,
+          'totalElements': data['totalElements'] ?? content.length,
+          'totalPages': data['totalPages'] ?? 1,
+          'number': data['number'] ?? page,
+          'data': data,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Failed to fetch fraud scans',
+          'statusCode': response.statusCode,
+          'content': [],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server.',
+        'error': e,
+        'content': [],
+      };
+    }
+  }
 }
