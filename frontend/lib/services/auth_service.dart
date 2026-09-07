@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -25,16 +24,6 @@ class AuthService {
 
   static const String _keyToken = 'auth_token_v1';
   static const String _keyUser = 'auth_user_v1';
-
-  static String _connectionErrorMessage(Object error) {
-    if (error is TimeoutException) {
-      return 'The backend at $baseUrl did not respond in time. Start the backend and try again.';
-    }
-    if (error is SocketException) {
-      return 'Cannot reach the backend at $baseUrl. Start the backend and verify port 8080 is available.';
-    }
-    return 'Backend request failed at $baseUrl: ${error.runtimeType}.';
-  }
 
   /// Save session to persistent storage
   static Future<void> saveSession(String tokenStr, Map<String, dynamic> userMap) async {
@@ -159,7 +148,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -206,7 +195,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -240,7 +229,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -274,7 +263,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -310,7 +299,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -348,7 +337,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }

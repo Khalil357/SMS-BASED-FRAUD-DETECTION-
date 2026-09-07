@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../main.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../services/auth_service.dart';

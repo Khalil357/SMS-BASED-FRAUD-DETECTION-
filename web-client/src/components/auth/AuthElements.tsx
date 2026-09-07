@@ -1,13 +1,19 @@
 import React from "react";
 import type { LucideIcon } from "lucide-react";
+import inAppIcon from "../../assets/images/in_app_icon.png";
 import "./AuthElements.css";
 
-export const AuthIcon: React.FC<{ icon: LucideIcon; size?: number }> = ({
+export const AuthIcon: React.FC<{ icon?: LucideIcon; size?: number; useBrandImage?: boolean }> = ({
   icon: Icon,
   size = 34,
+  useBrandImage = true,
 }) => (
   <div className="auth-icon-circle">
-    <Icon size={size} />
+    {useBrandImage ? (
+      <img src={inAppIcon} alt="Argus" style={{ width: size, height: size, objectFit: "contain" }} />
+    ) : Icon ? (
+      <Icon size={size} />
+    ) : null}
   </div>
 );
 

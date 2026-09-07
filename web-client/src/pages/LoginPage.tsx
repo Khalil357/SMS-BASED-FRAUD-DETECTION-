@@ -3,8 +3,8 @@ import type { FormEvent } from "react";
 import "./LoginPage.css";
 import { login } from "../services/authService";
 import { useTheme } from "../theme/ThemeContext";
-import { Mail, Lock, Sun, Moon } from "lucide-react";
-import smsFraudIcon from "../assets/images/sms_fraud_app_icon.png";
+import inAppIcon from "../assets/images/in_app_icon.png";
+import { Mail, Lock, Sun, Moon, ShieldCheck } from "lucide-react";
 
 interface LoginPageProps {
   onLoginSuccess: (email: string) => void;
@@ -18,8 +18,8 @@ interface FormErrors {
 const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { isDark, toggleTheme } = useTheme();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("smsfraud.noreply@gmail.com");
+  const [password, setPassword] = useState("Admin000!");
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -86,15 +86,30 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       <div className="login-content">
         <form className="login-form" onSubmit={handleLogin} noValidate>
           <div className="icon-circle fade-slide" style={{ animationDelay: "100ms" }}>
-            <img src={smsFraudIcon} alt="Argus" />
+            <img src={inAppIcon} alt="Argus" />
           </div>
 
           <div className="titles fade-slide" style={{ animationDelay: "200ms" }}>
-            <h1 style={{ color: "#D32f2f" }}>Argus</h1>
+            <h1 style={{ color: "var(--primary)", margin: 0, fontSize: "2rem", fontWeight: 800 }}>Argus</h1>
+            <p style={{ color: "var(--subtle)", margin: "4px 0 0 0", fontSize: "0.875rem" }}>SMS Fraud Detection System</p>
           </div>
 
           <div className="login-card fade-slide" style={{ animationDelay: "300ms" }}>
-            <center><h2 className="admin-portal-name">Admin Portal</h2></center>
+            <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+              <span style={{
+                display: "inline-block",
+                padding: "4px 12px",
+                borderRadius: "20px",
+                backgroundColor: "rgba(220, 38, 38, 0.1)",
+                color: "var(--primary)",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase"
+              }}>
+                Admin Portal
+              </span>
+            </div>
             <label className="field">
               <span className="field-label">Email Address</span>
               <div className="field-input">
@@ -124,8 +139,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </label>
 
             <button type="submit" className="login-button" disabled={isLoading}>
-              {isLoading ? <span className="spinner" /> : "Login"}
+              {isLoading ? <span className="spinner" /> : "Login to Console"}
             </button>
+
+            <div className="login-security-footer">
+              <ShieldCheck size={14} className="security-icon" />
+              <span>256-Bit SSL Encrypted Admin Portal</span>
+            </div>
           </div>
         </form>
       </div>

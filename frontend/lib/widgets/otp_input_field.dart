@@ -80,9 +80,11 @@ class _OtpInputFieldState extends State<OtpInputField> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(widget.length, (index) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: List.generate(widget.length, (index) {
         final isFocused = _isFocusedList[index];
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -149,6 +151,7 @@ class _OtpInputFieldState extends State<OtpInputField> {
           ),
         );
       }),
+    ),
     );
   }
 }

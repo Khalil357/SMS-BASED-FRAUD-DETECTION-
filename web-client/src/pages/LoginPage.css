@@ -297,3 +297,18 @@ html.dark .login-card {
     height: 64px;
   }
 }
+
+.login-security-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 18px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--subtle);
+}
+
+.login-security-footer .security-icon {
+  color: var(--emerald);
+}

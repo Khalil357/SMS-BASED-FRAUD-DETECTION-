@@ -6,7 +6,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'sms_detection_service.dart';
 import 'sms_storage_service.dart';
 import 'notification_service.dart';
-import 'scan_service.dart';
 
 /// Top-level background message handler required by Telephony.
 /// Marked with @pragma('vm:entry-point') so the Dart compiler doesn't tree-shake it.
@@ -24,50 +23,36 @@ Future<void> backgroundSmsHandler(SmsMessage message) async {
       SmsStorageService.keyIngestionEnabled, true);
   if (!isIngestionEnabled) return;
 
-  final remoteResult = await ScanService.queryMessage(
-    messageBody: body,
-    sender: sender,
-    source: 'INCOMING_SMS',
-  );
-  final remoteData = remoteResult['success'] == true
-      ? remoteResult['data'] as Map<String, dynamic>?
-      : null;
-  final localResult = SmsDetectionService.analyze(
-    message: body,
-    sender: sender,
-  );
-  final verdict = remoteData?['verdict']?.toString();
-  final confidence = (remoteData?['confidence'] as num?)?.toDouble();
+  // 2. Perform the rule-based threat analysis
+  final result = SmsDetectionService.analyze(message: body, sender: sender);
 
+  // 3. Persist the log entry
   final logEntry = {
     'id': 'auto_${DateTime.now().millisecondsSinceEpoch}',
     'sender': sender,
     'message': body,
-    'type': verdict == 'FRAUD'
-        ? 'Fraud'
-        : verdict == 'SAFE'
-            ? 'Safe'
-            : localResult.classification,
+    'type': result.classification,
     'time': DateTime.now().toIso8601String(),
-    'threat': confidence ?? localResult.threatLevel,
-    'matchedReasons': localResult.matchedReasons,
+    'threat': result.threatLevel,
+    'matchedReasons': result.matchedReasons,
     'hasFeedback': false,
     'userFeedback': null,
   };
   await SmsStorageService.addLog(logEntry);
 
+  // 4. Trigger alert notification if high risk (exceeds user threshold)
   final isAlertEnabled = await SmsStorageService.getBoolSetting(
       SmsStorageService.keyNotificationsEnabled, true);
   final alertThreshold = await SmsStorageService.getDoubleSetting(
       SmsStorageService.keyNotificationThreshold, 0.80);
 
-  final threatLevel = (logEntry['threat'] as num).toDouble();
-  if (isAlertEnabled && threatLevel >= alertThreshold) {
+  if (isAlertEnabled && result.threatLevel >= alertThreshold) {
+    // Initialize notification service in background isolate to show the notification
     await NotificationService.init();
     await NotificationService.showThreatAlert(
       sender: sender,
       message: body,
-      threatLevel: threatLevel,
+      threatLevel: result.threatLevel,
     );
   }
 }
@@ -129,32 +114,18 @@ class SmsIngestionService {
               SmsStorageService.keyIngestionEnabled, true);
           if (!isIngestionEnabled) return;
 
-          final remoteResult = await ScanService.queryMessage(
-            messageBody: body,
-            sender: sender,
-            source: 'INCOMING_SMS',
-          );
-          final remoteData = remoteResult['success'] == true
-              ? remoteResult['data'] as Map<String, dynamic>?
-              : null;
-          final localResult = SmsDetectionService.analyze(
-            message: body,
-            sender: sender,
-          );
-          final verdict = remoteData?['verdict']?.toString();
-          final confidence = (remoteData?['confidence'] as num?)?.toDouble();
+          // Analyze
+          final result = SmsDetectionService.analyze(message: body, sender: sender);
+
+          // Save
           final logEntry = {
             'id': 'auto_${DateTime.now().millisecondsSinceEpoch}',
             'sender': sender,
             'message': body,
-            'type': verdict == 'FRAUD'
-                ? 'Fraud'
-                : verdict == 'SAFE'
-                    ? 'Safe'
-                    : localResult.classification,
+            'type': result.classification,
             'time': DateTime.now().toIso8601String(),
-            'threat': confidence ?? localResult.threatLevel,
-            'matchedReasons': localResult.matchedReasons,
+            'threat': result.threatLevel,
+            'matchedReasons': result.matchedReasons,
             'hasFeedback': false,
             'userFeedback': null,
           };
@@ -169,12 +140,11 @@ class SmsIngestionService {
           final alertThreshold = await SmsStorageService.getDoubleSetting(
               SmsStorageService.keyNotificationThreshold, 0.80);
 
-          final threatLevel = (logEntry['threat'] as num).toDouble();
-          if (isAlertEnabled && threatLevel >= alertThreshold) {
+          if (isAlertEnabled && result.threatLevel >= alertThreshold) {
             await NotificationService.showThreatAlert(
               sender: sender,
               message: body,
-              threatLevel: threatLevel,
+              threatLevel: result.threatLevel,
             );
           }
         },
