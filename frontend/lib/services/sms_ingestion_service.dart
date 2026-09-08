@@ -47,12 +47,17 @@ Future<void> backgroundSmsHandler(SmsMessage message) async {
         source: 'AUTO_LISTENER',
       );
       if (backendResult['success'] == true && backendResult['isScam'] != null) {
-        final isScam = backendResult['isScam'] == true;
+        final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
         final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
-        logEntry['type'] = isScam ? 'Fraud' : (result.classification == 'Spam' ? 'Spam' : 'Safe');
-        logEntry['threat'] = conf;
+        final type = isScam ? 'Fraud' : (result.classification == 'Spam' ? 'Spam' : 'Safe');
+        final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
+
+        logEntry['type'] = type;
+        logEntry['threat'] = threatLevel;
         if (backendResult['label'] != null) {
-          (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} (${(conf * 100).toStringAsFixed(1)}% confidence)');
+          final confPct = (conf * 100).toStringAsFixed(1);
+          final threatPct = (threatLevel * 100).toStringAsFixed(1);
+          (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
         }
       }
     } catch (_) {}
@@ -154,12 +159,17 @@ class SmsIngestionService {
               source: 'AUTO_LISTENER',
             );
             if (backendResult['success'] == true && backendResult['isScam'] != null) {
-              final isScam = backendResult['isScam'] == true;
+              final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
               final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
-              logEntry['type'] = isScam ? 'Fraud' : (result.classification == 'Spam' ? 'Spam' : 'Safe');
-              logEntry['threat'] = conf;
+              final type = isScam ? 'Fraud' : (result.classification == 'Spam' ? 'Spam' : 'Safe');
+              final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
+
+              logEntry['type'] = type;
+              logEntry['threat'] = threatLevel;
               if (backendResult['label'] != null) {
-                (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} (${(conf * 100).toStringAsFixed(1)}% confidence)');
+                final confPct = (conf * 100).toStringAsFixed(1);
+                final threatPct = (threatLevel * 100).toStringAsFixed(1);
+                (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
               }
             }
           } catch (_) {}

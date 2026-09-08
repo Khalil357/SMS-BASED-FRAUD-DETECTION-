@@ -127,21 +127,28 @@ class SmsDetectionService {
         ? 'Fraud'
         : (rawLabel == 'spam' ? 'Spam' : 'Safe');
 
-    // For Scam/Fraud messages, Threat Index is model confidence (e.g. 0.9564 -> 95.6%)
-    final double threatLevel = (classification == 'Fraud')
-        ? confidence.clamp(0.50, 1.0)
-        : (1.0 - confidence).clamp(0.01, 0.20);
+    // For Scam/Fraud messages, Threat Index is model confidence (e.g. 0.9564 -> 95.6% Threat Index)
+    // For Safe messages, Threat Index is complement of confidence (e.g. 1.0 - 0.9564 = 0.0436 -> 4.4% Threat Index)
+    final double threatLevel = (classification == 'Safe')
+        ? (1.0 - confidence).clamp(0.0, 1.0)
+        : confidence.clamp(0.0, 1.0);
+
+    final safeConfidencePct = ((1.0 - threatLevel) * 100).toStringAsFixed(1);
+    final threatIndexPct = (threatLevel * 100).toStringAsFixed(1);
 
     final feedback = (classification == 'Fraud')
-        ? '🚨 High Risk Alert: Mobile Money Scam / Phishing pattern detected by ML model (${(threatLevel * 100).toStringAsFixed(1)}% Threat Index).'
-        : '🛡️ Verified Safe: Categorized as legitimate message by ML model (${((1.0 - threatLevel) * 100).toStringAsFixed(1)}% Confidence).';
+        ? '🚨 High Risk Alert: Mobile Money Scam / Phishing pattern detected by ML model ($threatIndexPct% Threat Index).'
+        : '🛡️ Verified Safe: Categorized as legitimate message by ML model ($safeConfidencePct% Confidence, $threatIndexPct% Threat Index).';
 
     return SmsDetectionResult(
       classification: classification,
       threatLevel: threatLevel,
       matchedReasons: [
         'Backend ML Model Label: ${backendData['label'] ?? rawLabel}',
-        'Model Threat Confidence: ${(threatLevel * 100).toStringAsFixed(1)}%',
+        if (classification == 'Safe')
+          'Model Safe Confidence: $safeConfidencePct% (Threat Index: $threatIndexPct%)'
+        else
+          'Model Threat Confidence: $threatIndexPct%',
         if (isScam == true) 'Flagged as Mobile Scam / Phishing Attempt by Argus AI'
       ],
       feedback: feedback,
