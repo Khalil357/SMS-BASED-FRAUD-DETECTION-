@@ -1,10 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  // Local backend (web/desktop on the same machine). For an Android emulator
-  // use 'http://10.0.2.2:8080'; for a physical device use your LAN IP.
-  static const String baseUrl = 'http://localhost:8080';
+  // Dynamically resolve baseUrl to support Android emulators (10.0.2.2) and local hosts
+  static String get baseUrl {
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:8080';
+    }
+    return 'http://localhost:8080';
+  }
 
   // Session variables
   static Map<String, dynamic>? currentUser;
@@ -23,7 +28,7 @@ class AuthService {
   }
 
   /// Register a new user
-  /// POST /api/auth/signup
+  /// POST /api/auth/register
   static Future<Map<String, dynamic>> signUp({
     required String fullName,
     required String email,
@@ -33,7 +38,7 @@ class AuthService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/signup'),
+        Uri.parse('$baseUrl/api/auth/register'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -46,24 +51,25 @@ class AuthService {
         }),
       );
 
+      final decoded = _safeJsonDecode(response.body);
+
       if (response.statusCode == 201 || response.statusCode == 200) {
         return {
           'success': true,
-          'message': 'Account created successfully',
-          'data': jsonDecode(response.body),
+          'message': decoded['message'] ?? 'Account created successfully',
+          'data': decoded['data'] ?? decoded,
         };
       } else {
-        final errorData = jsonDecode(response.body);
         return {
           'success': false,
-          'message': errorData['message'] ?? 'Sign up failed',
+          'message': decoded['message'] ?? 'Sign up failed',
           'statusCode': response.statusCode,
         };
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Error: ${e.toString()}',
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -91,41 +97,42 @@ class AuthService {
         }),
       );
 
+      final decoded = _safeJsonDecode(response.body);
+
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        currentUser = data['data'] as Map<String, dynamic>?;
-        token = data['token'] as String?;
+        final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
+        currentUser = data;
+        token = decoded['token'] as String? ?? data['token'] as String?;
         return {
           'success': true,
-          'message': 'Login successful',
-          'data': data,
-          'token': data['token'],
+          'message': decoded['message'] ?? 'Login successful',
+          'data': decoded,
+          'token': token,
         };
       } else {
-        final errorData = jsonDecode(response.body);
         return {
           'success': false,
-          'message': errorData['message'] ?? 'Login failed',
+          'message': decoded['message'] ?? 'Login failed',
           'statusCode': response.statusCode,
         };
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Error: ${e.toString()}',
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
   }
 
   /// Request password reset code
-  /// POST /api/auth/forgot-password
+  /// POST /api/auth/password-resets
   static Future<Map<String, dynamic>> requestPasswordReset({
     required String phoneNumber,
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/forgot-password'),
+        Uri.parse('$baseUrl/api/auth/password-resets'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -134,38 +141,79 @@ class AuthService {
         }),
       );
 
+      final decoded = _safeJsonDecode(response.body);
+
       if (response.statusCode == 200) {
         return {
           'success': true,
-          'message': 'Reset code sent successfully',
-          'data': jsonDecode(response.body),
+          'message': decoded['message'] ?? 'Reset code sent successfully',
+          'data': decoded['data'] ?? decoded,
         };
       } else {
-        final errorData = jsonDecode(response.body);
         return {
           'success': false,
-          'message': errorData['message'] ?? 'Failed to send reset code',
+          'message': decoded['message'] ?? 'Failed to send reset code',
           'statusCode': response.statusCode,
         };
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Error: ${e.toString()}',
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
   }
 
-  /// Verify reset code
-  /// POST /api/auth/verify-code
+  /// Resend verification code
+  /// POST /api/auth/password-resets/resend
+  static Future<Map<String, dynamic>> resendCode({
+    required String phoneNumber,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/password-resets/resend'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'phone_number': phoneNumber,
+        }),
+      );
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Code resent successfully',
+          'data': decoded['data'] ?? decoded,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Failed to resend code',
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'error': e,
+      };
+    }
+  }
+
+  /// Verify reset code / sign-up code
+  /// POST /api/auth/password-resets/verify
   static Future<Map<String, dynamic>> verifyResetCode({
     required String phoneNumber,
     required String verificationCode,
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/verify-code'),
+        Uri.parse('$baseUrl/api/auth/password-resets/verify'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -175,70 +223,32 @@ class AuthService {
         }),
       );
 
+      final decoded = _safeJsonDecode(response.body);
+
       if (response.statusCode == 200) {
         return {
           'success': true,
-          'message': 'Code verified successfully',
-          'data': jsonDecode(response.body),
+          'message': decoded['message'] ?? 'Code verified successfully',
+          'data': decoded['data'] ?? decoded,
         };
       } else {
-        final errorData = jsonDecode(response.body);
         return {
           'success': false,
-          'message': errorData['message'] ?? 'Invalid verification code',
+          'message': decoded['message'] ?? 'Invalid verification code',
           'statusCode': response.statusCode,
         };
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Error: ${e.toString()}',
-        'error': e,
-      };
-    }
-  }
-
-  /// Resend verification code
-  /// POST /api/auth/resend-code
-  static Future<Map<String, dynamic>> resendCode({
-    required String phoneNumber,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/resend-code'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'phone_number': phoneNumber,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': 'Code resent successfully',
-          'data': jsonDecode(response.body),
-        };
-      } else {
-        final errorData = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': errorData['message'] ?? 'Failed to resend code',
-          'statusCode': response.statusCode,
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: ${e.toString()}',
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
   }
 
   /// Reset password with verification code
-  /// POST /api/auth/reset-password
+  /// POST /api/auth/password-resets/confirm
   static Future<Map<String, dynamic>> resetPassword({
     required String phoneNumber,
     required String verificationCode,
@@ -246,7 +256,7 @@ class AuthService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/reset-password'),
+        Uri.parse('$baseUrl/api/auth/password-resets/confirm'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -257,25 +267,139 @@ class AuthService {
         }),
       );
 
+      final decoded = _safeJsonDecode(response.body);
+
       if (response.statusCode == 200) {
         return {
           'success': true,
-          'message': 'Password reset successfully',
-          'data': jsonDecode(response.body),
+          'message': decoded['message'] ?? 'Password reset successfully',
+          'data': decoded['data'] ?? decoded,
         };
       } else {
-        final errorData = jsonDecode(response.body);
         return {
           'success': false,
-          'message': errorData['message'] ?? 'Failed to reset password',
+          'message': decoded['message'] ?? 'Failed to reset password',
           'statusCode': response.statusCode,
         };
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Error: ${e.toString()}',
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
+      };
+    }
+  }
+
+  /// Submit SMS scan payload to backend API
+  /// POST /api/scans
+  static Future<Map<String, dynamic>> submitScan({
+    required String sender,
+    required String messageBody,
+    String source = 'MANUAL_QUERY',
+  }) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+      final body = jsonEncode({
+        'sender': sender,
+        'messageBody': messageBody,
+        'message': messageBody,
+        'source': source,
+      });
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/scans'),
+        headers: headers,
+        body: body,
+      );
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = decoded['data'] is Map<String, dynamic>
+            ? (decoded['data'] as Map<String, dynamic>)
+            : decoded;
+
+        final isScam = data['is_scam'] ??
+            data['isScam'] ??
+            (data['label'] == 'scam' || data['label'] == 'fraud');
+        final label = data['label'] ?? (isScam == true ? 'scam' : 'safe');
+        final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.95;
+
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Scan processed successfully',
+          'data': data,
+          'isScam': isScam == true,
+          'label': label,
+          'confidence': confidence,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Scan submission failed',
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to submit scan to backend server.',
+        'error': e,
+      };
+    }
+  }
+
+  /// Fetch authenticated user's "FRAUD" messages with pagination
+  /// GET /api/scans/fraud?page=0&size=20
+  static Future<Map<String, dynamic>> getFraudScans({
+    int page = 0,
+    int size = 20,
+  }) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/scans/fraud?page=$page&size=$size'),
+        headers: headers,
+      );
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final data = decoded['data'] is Map<String, dynamic>
+            ? (decoded['data'] as Map<String, dynamic>)
+            : <String, dynamic>{};
+        final content = data['content'] is List ? (data['content'] as List) : [];
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Fraud scans retrieved successfully',
+          'content': content,
+          'totalElements': data['totalElements'] ?? content.length,
+          'totalPages': data['totalPages'] ?? 1,
+          'number': data['number'] ?? page,
+          'data': data,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Failed to fetch fraud scans',
+          'statusCode': response.statusCode,
+          'content': [],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server.',
+        'error': e,
+        'content': [],
       };
     }
   }

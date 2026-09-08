@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../main.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../widgets/custom_button.dart';
@@ -10,8 +8,13 @@ import '../services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   final Navigate onNavigate;
+  final ValueChanged<String>? onUnverifiedAccount;
 
-  const LoginPage({super.key, required this.onNavigate});
+  const LoginPage({
+    super.key,
+    required this.onNavigate,
+    this.onUnverifiedAccount,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -30,6 +33,70 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  void _showUnverifiedAccountDialog(String identifier) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.mark_email_unread_outlined, color: AppTheme.red),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Account Not Verified',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            'Your account has been created but is not verified yet. Would you like to receive a verification code to complete setup?',
+            style: TextStyle(fontSize: 14, color: Theme.of(context).textTheme.bodyMedium?.color),
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.red,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  if (identifier.isNotEmpty) {
+                    await AuthService.resendCode(phoneNumber: identifier);
+                  }
+                  if (mounted) {
+                    if (widget.onUnverifiedAccount != null) {
+                      widget.onUnverifiedAccount!(identifier);
+                    } else {
+                      widget.onNavigate(AuthPage.verification);
+                    }
+                  }
+                },
+                child: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('Verify Account Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -37,7 +104,7 @@ class _LoginPageState extends State<LoginPage> {
       });
 
       final result = await AuthService.login(
-        phoneNumber: _identifierController.text.trim(),
+        identifier: _identifierController.text.trim(),
         password: _passwordController.text,
       );
 
@@ -57,14 +124,23 @@ class _LoginPageState extends State<LoginPage> {
           );
           widget.onNavigate(AuthPage.dashboard);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['message'] ?? 'Login failed'),
-              backgroundColor: Theme.of(context).colorScheme.error,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
+          final msg = (result['message'] ?? '').toString();
+          final isUnverified = msg.toLowerCase().contains('not verified') ||
+              msg.toLowerCase().contains('verify your email') ||
+              result['statusCode'] == 403;
+
+          if (isUnverified) {
+            _showUnverifiedAccountDialog(_identifierController.text.trim());
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result['message'] ?? 'Login failed'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            );
+          }
         }
       }
     }

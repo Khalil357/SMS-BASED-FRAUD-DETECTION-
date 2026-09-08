@@ -6,6 +6,8 @@ import '../../widgets/custom_text_field.dart';
 import '../../widgets/fade_slide_transition.dart';
 import 'forgot_password_page.dart';
 import 'create_account_page.dart';
+import '../../services/auth_service.dart';
+import '../dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,39 +18,58 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _phoneController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
       });
 
-      // Simulate API call
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+      final result = await AuthService.login(
+        identifier: _identifierController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        if (result['success']) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Login successful! (Placeholder)'),
+              content: Text(result['message'] ?? 'Login successful!'),
               backgroundColor: Colors.green.shade600,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           );
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const DashboardPage()),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Login failed'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
         }
-      });
+      }
     }
   }
 
@@ -74,21 +95,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-          
-          // Floating Theme Toggle Button
-          Positioned(
-            top: 40,
-            right: 16,
-            child: IconButton(
-              icon: Icon(
-                isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                color: theme.colorScheme.primary,
-              ),
-              onPressed: () {
-                MyApp.of(context).toggleTheme();
-              },
-            ),
-          ),
 
           SafeArea(
             child: SingleChildScrollView(
@@ -105,7 +111,7 @@ class _LoginPageState extends State<LoginPage> {
                       delay: const Duration(milliseconds: 100),
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.all(22),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: theme.primaryColor.withOpacity(0.08),
                             shape: BoxShape.circle,
@@ -114,10 +120,11 @@ class _LoginPageState extends State<LoginPage> {
                               width: 2,
                             ),
                           ),
-                          child: Icon(
-                            Icons.shield_outlined,
-                            size: 64,
-                            color: theme.primaryColor,
+                          child: Image.asset(
+                            'frontend/assets/images/sms_fraud_inapp_icon.png',
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
@@ -130,7 +137,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: Column(
                         children: [
                           Text(
-                            'Welcome Back',
+                            'Welcome Back!',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.headlineLarge,
                           ),
@@ -162,19 +169,27 @@ class _LoginPageState extends State<LoginPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Phone input field
+                            // Identifier input field (Phone or Email)
                             CustomTextField(
-                              controller: _phoneController,
-                              labelText: 'Phone Number',
-                              hintText: 'e.g. +1234567890',
-                              prefixIcon: Icons.phone_outlined,
-                              keyboardType: TextInputType.phone,
+                              controller: _identifierController,
+                              labelText: 'Phone Number or Email',
+                              hintText: 'e.g. +27821234567 or user@email.com',
+                              prefixIcon: Icons.login_outlined,
+                              keyboardType: TextInputType.emailAddress,
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
-                                  return 'Please enter your phone number';
+                                  return 'Please enter your phone number or email';
                                 }
-                                if (value.trim().length < 9) {
-                                  return 'Please enter a valid phone number';
+                                final val = value.trim();
+                                if (val.contains('@')) {
+                                  final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                                  if (!emailRegex.hasMatch(val)) {
+                                    return 'Please enter a valid email address';
+                                  }
+                                } else {
+                                  if (val.length < 9) {
+                                    return 'Please enter a valid phone number';
+                                  }
                                 }
                                 return null;
                               },

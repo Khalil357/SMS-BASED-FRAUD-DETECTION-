@@ -46,5 +46,14 @@ frontend/ios/Pods/
 # Secret files — never commit credentials
 .env
 backend/.env
+
+# Flutter/Android generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+android/.gradle/
+
+# Python (ML fraud-detection service)
 __pycache__/
 *.py[cod]

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -25,16 +24,6 @@ class AuthService {
 
   static const String _keyToken = 'auth_token_v1';
   static const String _keyUser = 'auth_user_v1';
-
-  static String _connectionErrorMessage(Object error) {
-    if (error is TimeoutException) {
-      return 'The backend at $baseUrl did not respond in time. Start the backend and try again.';
-    }
-    if (error is SocketException) {
-      return 'Cannot reach the backend at $baseUrl. Start the backend and verify port 8080 is available.';
-    }
-    return 'Backend request failed at $baseUrl: ${error.runtimeType}.';
-  }
 
   /// Save session to persistent storage
   static Future<void> saveSession(String tokenStr, Map<String, dynamic> userMap) async {
@@ -74,8 +63,16 @@ class AuthService {
   }
 
   /// Helper to send POST requests with automatic fallback for physical phone vs emulator
-  static Future<http.Response> _postRequest(String path, Map<String, dynamic> body) async {
-    final headers = {'Content-Type': 'application/json'};
+  static Future<http.Response> _postRequest(
+    String path,
+    Map<String, dynamic> body, {
+    Map<String, String>? customHeaders,
+  }) async {
+    final headers = {
+      'Content-Type': 'application/json',
+      if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      ...?customHeaders,
+    };
     final encodedBody = jsonEncode(body);
 
     if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
@@ -109,6 +106,142 @@ class AuthService {
       headers: headers,
       body: encodedBody,
     ).timeout(const Duration(seconds: 10));
+  }
+
+  /// Helper to send GET requests with automatic fallback for physical phone vs emulator
+  static Future<http.Response> _getRequest(
+    String path, {
+    Map<String, String>? customHeaders,
+  }) async {
+    final headers = {
+      'Content-Type': 'application/json',
+      if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      ...?customHeaders,
+    };
+
+    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+      return await http.get(
+        Uri.parse('${customBaseUrl!.trim()}$path'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
+    }
+
+    if (Platform.isAndroid) {
+      try {
+        return await http.get(
+          Uri.parse('http://10.0.2.2:8080$path'),
+          headers: headers,
+        ).timeout(const Duration(seconds: 3));
+      } catch (_) {
+        return await http.get(
+          Uri.parse('http://127.0.0.1:8080$path'),
+          headers: headers,
+        ).timeout(const Duration(seconds: 6));
+      }
+    }
+
+    return await http.get(
+      Uri.parse('http://localhost:8080$path'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 10));
+  }
+
+  /// Submit SMS scan payload to backend API
+  /// POST /api/scans
+  static Future<Map<String, dynamic>> submitScan({
+    required String sender,
+    required String messageBody,
+    String source = 'MANUAL_QUERY',
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'sender': sender,
+        'message_body': messageBody,
+        'messageBody': messageBody,
+        'message': messageBody,
+        'source': source,
+      };
+
+      print("[Argus Scan Endpoint] POST $baseUrl/api/scans | sender: $sender, source: $source");
+      final response = await _postRequest('/api/scans', body);
+      print("[Argus Scan Endpoint] Status: ${response.statusCode} | Response: ${response.body}");
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = decoded['data'] is Map<String, dynamic>
+            ? (decoded['data'] as Map<String, dynamic>)
+            : decoded;
+
+        final isScam = data['is_scam'] ??
+            data['isScam'] ??
+            (data['label'] == 'scam' || data['label'] == 'fraud');
+        final label = data['label'] ?? (isScam == true ? 'scam' : 'safe');
+        final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.95;
+
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Scan submitted successfully',
+          'data': data,
+          'isScam': isScam == true,
+          'label': label,
+          'confidence': confidence,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Scan submission failed',
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to submit scan to backend server.',
+        'error': e,
+      };
+    }
+  }
+
+  /// Fetch authenticated user's "FRAUD" messages with pagination
+  /// GET /api/scans/fraud?page=0&size=20
+  static Future<Map<String, dynamic>> getFraudScans({
+    int page = 0,
+    int size = 20,
+  }) async {
+    try {
+      final response = await _getRequest('/api/scans/fraud?page=$page&size=$size');
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final data = decoded['data'] is Map<String, dynamic>
+            ? (decoded['data'] as Map<String, dynamic>)
+            : <String, dynamic>{};
+        final content = data['content'] is List ? (data['content'] as List) : [];
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Fraud scans retrieved successfully',
+          'content': content,
+          'totalElements': data['totalElements'] ?? content.length,
+          'totalPages': data['totalPages'] ?? 1,
+          'number': data['number'] ?? page,
+          'data': data,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Failed to fetch fraud scans',
+          'statusCode': response.statusCode,
+          'content': [],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server.',
+        'error': e,
+        'content': [],
+      };
+    }
   }
 
   /// Safely decode JSON — returns empty map on null/empty/malformed body
@@ -159,7 +292,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -206,7 +339,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -240,7 +373,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -274,7 +407,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -310,7 +443,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -348,7 +481,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': _connectionErrorMessage(e),
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }

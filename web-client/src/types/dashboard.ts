@@ -5,7 +5,6 @@ export interface StatCardData {
   change: string;
   type: 'positive' | 'negative' | 'warning';
   category: 'total' | 'fraud' | 'safe' | 'pending';
-  icon: string;
 }
 
 export interface ChartBarData {
@@ -19,15 +18,43 @@ export interface AlertData {
   description: string;
   timeAgo: string;
   severity: 'high' | 'medium' | 'low';
-  icon: string;
 }
 
 export interface SmsRecord {
   id: string;
   sender: string;
   message: string;
-  fraudType: 'Phishing' | 'Impersonation' | 'Fake Promotion' | 'Loan Scam';
+  fraudType: 'Phishing' | 'Impersonation' | 'Fake Promotion' | 'Loan Scam' | 'Clean';
   riskScore: number;
   date: string;
-  status: 'Fraud' | 'Review';
+  status: 'Fraud' | 'Review' | 'Safe';
+}
+
+export interface DetectionRule {
+  id: string;
+  name: string;
+  type: 'Keyword' | 'Regex Pattern' | 'Link Analyzer' | 'Sender Spoofing';
+  pattern: string;
+  riskWeight: number;
+  enabled: boolean;
+  matchesCount: number;
+}
+
+export interface BlacklistedSender {
+  id: string;
+  number: string;
+  reason: string;
+  addedBy: string;
+  dateAdded: string;
+}
+
+export interface SystemUser {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'ADMIN' | 'USER';
+  isVerified: boolean;
+  isLocked: boolean;
+  lastActive: string;
 }

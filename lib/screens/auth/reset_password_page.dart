@@ -3,9 +3,17 @@ import '../../theme.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/fade_slide_transition.dart';
+import '../../services/auth_service.dart';
 
 class ResetPasswordPage extends StatefulWidget {
-  const ResetPasswordPage({super.key});
+  final String phoneNumber;
+  final String verificationCode;
+
+  const ResetPasswordPage({
+    super.key,
+    required this.phoneNumber,
+    required this.verificationCode,
+  });
 
   @override
   State<ResetPasswordPage> createState() => _ResetPasswordPageState();
@@ -24,31 +32,45 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     super.dispose();
   }
 
-  void _handleSubmit() {
+  void _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
       });
 
-      // Simulate API call
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+      final result = await AuthService.resetPassword(
+        phoneNumber: widget.phoneNumber,
+        verificationCode: widget.verificationCode,
+        newPassword: _passwordController.text,
+      );
 
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        if (result['success']) {
           Navigator.popUntil(context, (route) => route.isFirst);
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Password reset successfully! Please login with your new password.'),
+              content: Text(result['message'] ?? 'Password reset successfully! Please login with your new password.'),
               backgroundColor: Colors.green.shade600,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Failed to reset password'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
         }
-      });
+      }
     }
   }
 

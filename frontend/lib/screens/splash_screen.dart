@@ -53,6 +53,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final showOnboarding = prefs.getBool('show_onboarding') ?? true;
 
     if (showOnboarding) {

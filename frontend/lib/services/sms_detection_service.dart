@@ -73,7 +73,27 @@ class SmsDetectionService {
       reasons.add('Contains external hyperlink or link call-to-action');
     }
 
-    // 3. Check Bank Impersonation / Urgency / Credential Verification
+    // 3. Check Mobile Money Fraud (AirtelMoney, M-Pesa, TigoPesa, HaloPesa, "Utatuma", "Hakikisha jina")
+    bool hasMobileMoney = lowerText.contains('airtelmoney') ||
+        lowerText.contains('mpesa') ||
+        lowerText.contains('m-pesa') ||
+        lowerText.contains('tigopesa') ||
+        lowerText.contains('tigo pesa') ||
+        lowerText.contains('halopesa');
+
+    bool hasTransferPrompt = lowerText.contains('utatuma') ||
+        lowerText.contains('tuma kwenye') ||
+        lowerText.contains('hakikisha jina') ||
+        lowerText.contains('jina linakuja') ||
+        lowerText.contains('lipia namba');
+
+    if (hasMobileMoney || hasTransferPrompt) {
+      isFraud = true;
+      if (hasMobileMoney) reasons.add('Mobile Money service reference detected (AirtelMoney/M-Pesa/TigoPesa)');
+      if (hasTransferPrompt) reasons.add('Unsolicited money transfer instruction ("Utatuma / Hakikisha jina")');
+    }
+
+    // 4. Check Bank Impersonation / Urgency / Credential Verification
     bool hasUrgency = lowerText.contains('urgent');
     bool hasVerification = lowerText.contains('verify') || lowerText.contains('update');
     bool hasBankOrLogin = lowerText.contains('account') ||
@@ -88,7 +108,7 @@ class SmsDetectionService {
       if (hasBankOrLogin) reasons.add('Financial institution or login page reference');
     }
 
-    // 4. Check Unsolicited Promotional / Sales (only if not already fraud)
+    // 5. Check Unsolicited Promotional / Sales (only if not already fraud)
     bool hasPromo = lowerText.contains('promo') ||
         lowerText.contains('offer') ||
         lowerText.contains('subscribe') ||
@@ -103,18 +123,18 @@ class SmsDetectionService {
       reasons.add('Unsolicited promotional keywords detected (e.g. offer, sale, promo, free)');
     }
 
-    // 5. Calculate Threat Level & Feedback
+    // 6. Calculate Threat Level & Feedback
     double calculatedThreat = 0.0;
     String feedback = '';
 
     if (isFraud) {
-      calculatedThreat = 0.85 + (0.14 * (message.length % 10) / 10);
-      feedback = 'This message contains high-risk external link, urgency triggers, or financial fraud patterns.';
+      calculatedThreat = 0.92 + (0.07 * (message.length % 10) / 10);
+      feedback = 'This message contains high-risk mobile money fraud, payment transfer scam, or phishing triggers.';
     } else if (isSpam) {
       calculatedThreat = 0.50 + (0.25 * (message.length % 10) / 10);
       feedback = 'Unsolicited promotional content patterns detected.';
     } else {
-      calculatedThreat = 0.01 + (0.09 * (message.length % 10) / 10);
+      calculatedThreat = 0.01 + (0.04 * (message.length % 10) / 10);
       feedback = 'No suspicious characteristics detected. This message appears normal.';
       reasons.add('No suspicious patterns matched');
     }
@@ -124,7 +144,7 @@ class SmsDetectionService {
       calculatedThreat = (calculatedThreat + 0.15).clamp(0.0, 0.99);
       if (isSpam || !isFraud) {
         isSpam = false;
-        isFraud = true; // Upgrade to fraud if sender name is spoofed
+        isFraud = true;
       }
       reasons.add('Threat rating increased due to deceptive Sender ID');
     }
@@ -136,6 +156,43 @@ class SmsDetectionService {
       classification: classification,
       feedback: feedback,
       matchedReasons: reasons,
+    );
+  }
+
+  /// Parse response from backend ML model evaluation (POST /api/scans)
+  static SmsAnalysisResult parseBackendResult({
+    required Map<String, dynamic> backendData,
+    required String originalMessage,
+    required String sender,
+  }) {
+    final isScam = backendData['is_scam'] ??
+        backendData['isScam'] ??
+        (backendData['label'] == 'scam' || backendData['label'] == 'fraud');
+    final confidence = (backendData['confidence'] as num?)?.toDouble() ?? 0.9564;
+    final rawLabel = (backendData['label'] as String?)?.toLowerCase() ?? (isScam == true ? 'scam' : 'safe');
+
+    final classification = (isScam == true || rawLabel == 'scam' || rawLabel == 'fraud')
+        ? 'Fraud'
+        : (rawLabel == 'spam' ? 'Spam' : 'Safe');
+
+    // For Scam/Fraud messages, Threat Index is model confidence (e.g. 0.9564 -> 95.6%)
+    final double threatLevel = (classification == 'Fraud')
+        ? confidence.clamp(0.50, 1.0)
+        : (1.0 - confidence).clamp(0.01, 0.20);
+
+    final feedback = (classification == 'Fraud')
+        ? '🚨 High Risk Alert: Mobile Money Scam / Phishing pattern detected by ML model (${(threatLevel * 100).toStringAsFixed(1)}% Threat Index).'
+        : '🛡️ Verified Safe: Categorized as legitimate message by ML model (${((1.0 - threatLevel) * 100).toStringAsFixed(1)}% Confidence).';
+
+    return SmsAnalysisResult(
+      threatLevel: threatLevel,
+      classification: classification,
+      feedback: feedback,
+      matchedReasons: [
+        'Backend ML Model Label: ${backendData['label'] ?? rawLabel}',
+        'Model Threat Confidence: ${(threatLevel * 100).toStringAsFixed(1)}%',
+        if (isScam == true) 'Flagged as Mobile Scam / Phishing Attempt by Argus AI'
+      ],
     );
   }
 }

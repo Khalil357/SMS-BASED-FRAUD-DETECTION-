@@ -84,7 +84,7 @@ public class AuthServiceImpl implements AuthService {
         emailService.sendVerificationCode(user.getEmail(), otp);
         smsService.sendSms(user.getPhone(), "ARGUS: Your verification code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
 
-        return new RegisterResponse(user.getUserId());
+        return new RegisterResponse(user.getUserId(), otp);
     }
 
     @Override
@@ -113,6 +113,13 @@ public class AuthServiceImpl implements AuthService {
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
+        // Web/admin flow: issue + email the OTP so the code arrives right after login,
+        // instead of only on "Resend". Best-effort — a mail hiccup won't block login.
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            String otp = otpService.issueCode(user.getEmail());
+            emailService.sendVerificationCode(user.getEmail(), otp);
+        }
+
         String token = tokenProvider.generateToken(user.getUserId());
         return new LoginResponse(token, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
     }
@@ -124,7 +131,7 @@ public class AuthServiceImpl implements AuthService {
         String otp = otpService.issueCode(user.getPhone());
         emailService.sendVerificationCode(user.getEmail(), otp);
         smsService.sendSms(user.getPhone(), "ARGUS: Your password reset code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
-        return new OtpResponse();
+        return new OtpResponse(otp);
     }
 
     @Override

@@ -1,6 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 :root {
-  --primary-light: #d32f2f;
-  --primary-dark: #ef5350;
+  --primary-light: #dc2626;
+  --primary-dark: #ef4444;
   --bg-light: #f8fafc;
   --bg-dark: #0f172a;
   --card-light: #ffffff;
@@ -11,10 +13,23 @@
   --subtle-dark: #94a3b8;
   --text-body-light: #334155;
   --text-body-dark: #e2e8f0;
-  --heading-light: #1e293b;
-  --heading-dark: #f1f5f9;
-  --error-light: #e11d48;
-  --error-dark: #fb7185;
+  --heading-light: #0f172a;
+  --heading-dark: #f8fafc;
+  --error-light: #dc2626;
+  --error-dark: #f87171;
+  --emerald: #10b981;
+  --amber: #f59e0b;
+  --blue: #3b82f6;
+
+  --font-title: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  --font-btn: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-main: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --glass-bg-light: rgba(255, 255, 255, 0.7);
+  --glass-bg-dark: rgba(15, 23, 42, 0.75);
+  --glass-border-light: rgba(226, 232, 240, 0.7);
+  --glass-border-dark: rgba(255, 255, 255, 0.08);
 
   --primary: var(--primary-light);
   --error: var(--error-light);
@@ -24,6 +39,10 @@
   --subtle: var(--subtle-light);
   --text-body: var(--text-body-light);
   --heading: var(--heading-light);
+  --glass-bg: var(--glass-bg-light);
+  --glass-border: var(--glass-border-light);
+  --card-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.06);
+  --card-shadow-hover: 0 12px 36px 0 rgba(220, 38, 38, 0.12);
 
   color-scheme: light;
 }
@@ -37,6 +56,10 @@ html.dark {
   --subtle: var(--subtle-dark);
   --text-body: var(--text-body-dark);
   --heading: var(--heading-dark);
+  --glass-bg: var(--glass-bg-dark);
+  --glass-border: var(--glass-border-dark);
+  --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  --card-shadow-hover: 0 12px 36px 0 rgba(220, 38, 38, 0.25);
 
   color-scheme: dark;
 }
@@ -45,9 +68,20 @@ html.dark {
   box-sizing: border-box;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-title) !important;
+  letter-spacing: -0.02em;
+}
+
+button, input, select, textarea, .btn-primary, .btn-secondary, .sidebar-link, .filter-btn, .status-pill, .type-tag {
+  font-family: var(--font-btn) !important;
+}
+
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-main) !important;
   background: var(--bg);
   color: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

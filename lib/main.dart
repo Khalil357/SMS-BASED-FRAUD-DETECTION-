@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
-import 'screens/auth/login_page.dart';
+import 'screens/splash_screen.dart';
+import 'services/notification_service.dart';
+import 'services/sms_ingestion_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize notifications
+  await NotificationService.initialize();
+
+  // Listen to SMS if permission is already granted
+  final hasPerm = await SmsIngestionService.hasSmsPermission();
+  if (hasPerm) {
+    await SmsIngestionService.startListening();
+  }
+
   runApp(const MyApp());
 }
 
@@ -30,12 +43,12 @@ class MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SMS Fraud Detection',
+      title: 'Argus',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
-      home: const LoginPage(),
+      home: const SplashScreen(),
     );
   }
 }

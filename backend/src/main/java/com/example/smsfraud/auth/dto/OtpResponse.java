@@ -1,8 +1,9 @@
 package com.example.smsfraud.auth.dto;
 
 /**
- * Confirms that an OTP delivery request was accepted without exposing the
- * one-time code to the client.
+ * Carries the issued one-time code back to the caller. Returned only for
+ * development convenience (so the flow can be exercised without SMTP); remove
+ * before production.
  */
-public record OtpResponse() {
+public record OtpResponse(String otp) {
 }

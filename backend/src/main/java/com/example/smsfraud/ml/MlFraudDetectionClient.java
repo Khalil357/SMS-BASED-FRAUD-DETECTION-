@@ -24,6 +24,7 @@ public class MlFraudDetectionClient {
         var responseEntity = restClient
                 .post()
                 .uri("/predict")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (clientRequest, response) -> {

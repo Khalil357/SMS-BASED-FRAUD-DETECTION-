@@ -51,21 +51,21 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private void seedAdminUser() {
-        String adminEmail = "admin@gmail.com";
+        String adminEmail = "james06alexander@gmail.com";
         if (userRepository.findByEmail(adminEmail).isEmpty()) {
             UserRole adminRole = roleRepository.findByRoleName("ADMIN").orElseThrow();
-            
+
             User admin = new User();
             admin.setEmail(adminEmail);
-            admin.setPhone("+00000000000"); // Admins might not need a phone, but it's unique
+            admin.setPhone("+00000000001"); // Admins might not need a phone, but it's unique
             admin.setFullName("System Administrator");
             admin.setPasswordHash(passwordEncoder.encode("admin123"));
             admin.setRole(adminRole);
             admin.setVerified(true); // Auto verify admin
             admin.setActive(true);
-            
+
             userRepository.save(admin);
-            log.info("Seeded admin user: admin@gmail.com / admin123");
+            log.info("Seeded admin user: james06alexander@gmail.com / admin123");
         }
     }
 }

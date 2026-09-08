@@ -61,8 +61,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    _loadStoredData();
-    _checkPermissions();
+    _loadDataAndPermissions();
 
     // Listen to live incoming foreground messages
     _smsStreamSubscription = SmsIngestionService.smsStream.listen((newLog) {
@@ -73,6 +72,192 @@ class _DashboardPageState extends State<DashboardPage> {
         _showForegroundThreatSnackBar(newLog);
       }
     });
+  }
+
+  Future<void> _loadDataAndPermissions() async {
+    await _loadStoredData();
+    await _checkPermissions();
+    _checkFirstTimeIngestionPrompt();
+  }
+
+  void _checkFirstTimeIngestionPrompt() async {
+    final hasSeenPrompt = await SmsStorageService.getBoolSetting('has_seen_ingestion_onboarding', false);
+    if (!hasSeenPrompt && (!_hasSmsPermission || !_isIngestionEnabled)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showIngestionOnboardingBottomSheet();
+        }
+      });
+    }
+  }
+
+  void _showIngestionOnboardingBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.red.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.shield_outlined,
+                    color: AppTheme.red,
+                    size: 44,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Activate Real-Time SMS Protection',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Argus protects you from SMS phishing, bank scams, and fake lottery rewards by automatically analyzing incoming texts in real-time.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildOnboardingFeatureItem(
+                icon: Icons.flash_on_rounded,
+                title: 'Instant Background Ingestion',
+                subtitle: 'Automatically scans SMS as soon as they land on your phone.',
+                theme: theme,
+                isDark: isDark,
+              ),
+              const SizedBox(height: 12),
+              _buildOnboardingFeatureItem(
+                icon: Icons.lock_outline_rounded,
+                title: 'On-Device Privacy First',
+                subtitle: 'Messages are analyzed locally on your device using rule-based AI.',
+                theme: theme,
+                isDark: isDark,
+              ),
+              const SizedBox(height: 12),
+              _buildOnboardingFeatureItem(
+                icon: Icons.notifications_active_outlined,
+                title: 'Live Threat Alerts',
+                subtitle: 'Get notified immediately if a message is identified as fraud.',
+                theme: theme,
+                isDark: isDark,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.security),
+                label: const Text(
+                  'Enable Auto Protection',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                onPressed: () async {
+                  await SmsStorageService.saveBoolSetting('has_seen_ingestion_onboarding', true);
+                  if (mounted) Navigator.pop(context);
+                  await _requestPermissions();
+                  await _updateIngestion(true);
+                },
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () async {
+                  await SmsStorageService.saveBoolSetting('has_seen_ingestion_onboarding', true);
+                  if (mounted) Navigator.pop(context);
+                },
+                child: Text(
+                  'Skip for Now',
+                  style: TextStyle(color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOnboardingFeatureItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required ThemeData theme,
+    required bool isDark,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: theme.colorScheme.primary, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -96,6 +281,51 @@ class _DashboardPageState extends State<DashboardPage> {
       _isNotificationsEnabled = notifications;
       _notificationThreshold = threshold;
     });
+
+    // Fetch backend Fraud Scans (GET /api/scans/fraud?page=0&size=20)
+    _fetchBackendFraudScans();
+  }
+
+  Future<void> _fetchBackendFraudScans() async {
+    try {
+      final res = await AuthService.getFraudScans(page: 0, size: 20);
+      if (res['success'] == true && res['content'] is List) {
+        final List content = res['content'];
+        bool hasNew = false;
+        for (final item in content) {
+          if (item is Map<String, dynamic>) {
+            final msgText = item['message'] ?? item['messageBody'] ?? '';
+            if (msgText.toString().trim().isEmpty) continue;
+
+            final exists = _smsLogs.any((l) => l['message'] == msgText.toString());
+            if (!exists) {
+              final isScam = item['is_scam'] ?? item['isScam'] ?? (item['label'] == 'scam' || item['label'] == 'fraud');
+              final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
+              final logEntry = {
+                'id': 'backend_fraud_${DateTime.now().millisecondsSinceEpoch}_${item.hashCode}',
+                'sender': item['sender'] ?? 'Backend Shield Alert',
+                'message': msgText.toString(),
+                'type': isScam == false ? 'Safe' : 'Fraud',
+                'time': item['createdAt'] ?? item['time'] ?? DateTime.now().toIso8601String(),
+                'threat': conf,
+                'matchedReasons': [
+                  'Trained Model Label: ${item['label'] ?? (isScam ? 'scam' : 'safe')}',
+                  'Model Confidence: ${(conf * 100).toStringAsFixed(1)}%'
+                ],
+                'hasFeedback': false,
+                'userFeedback': null,
+              };
+              _smsLogs.insert(0, logEntry);
+              await SmsStorageService.addLog(logEntry);
+              hasNew = true;
+            }
+          }
+        }
+        if (hasNew && mounted) {
+          setState(() {});
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkPermissions() async {
@@ -135,6 +365,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _showForegroundThreatSnackBar(Map<String, dynamic> log) {
     if (log['type'] == 'Fraud' || log['type'] == 'Spam') {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -154,11 +385,12 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           backgroundColor: log['type'] == 'Fraud' ? AppTheme.red : Colors.amber.shade700,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 4),
           action: SnackBarAction(
             label: 'VIEW',
             textColor: Colors.white,
             onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
               setState(() {
                 _currentIndex = 1; // Go to Logs tab
               });
@@ -195,6 +427,65 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _notificationThreshold = val;
     });
+  }
+
+  void _confirmLogout() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.logout_rounded, color: AppTheme.red),
+            const SizedBox(width: 10),
+            Text(
+              'Confirm Logout',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to log out of Argus SMS Fraud Interception Platform?',
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _handleLogout();
+            },
+            child: Text(
+              'Yes, Logout',
+              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    await AuthService.logout();
+    if (mounted) {
+      widget.onNavigate(AuthPage.login);
+    }
   }
 
   // Live Metric Getters
@@ -267,10 +558,28 @@ class _DashboardPageState extends State<DashboardPage> {
       _scanResult = null;
     });
 
-    // Simulate AI model processing delay
-    await Future.delayed(const Duration(seconds: 2));
+    // Submit scan to Backend API (POST /api/scans) to run trained ML model
+    final backendResponse = await AuthService.submitScan(
+      sender: 'Manual Scan',
+      messageBody: text,
+      source: 'MANUAL_QUERY',
+    );
 
-    final result = SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    SmsAnalysisResult result;
+    bool evaluatedByBackend = false;
+
+    if (backendResponse['success'] == true && backendResponse['data'] != null) {
+      final data = backendResponse['data'] as Map<String, dynamic>;
+      result = SmsDetectionService.parseBackendResult(
+        backendData: data,
+        originalMessage: text,
+        sender: 'Manual Scan',
+      );
+      evaluatedByBackend = true;
+    } else {
+      // Fallback to local rule engine if backend is unreachable
+      result = SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    }
 
     final logEntry = {
       'id': 'manual_${DateTime.now().millisecondsSinceEpoch}',
@@ -292,14 +601,18 @@ class _DashboardPageState extends State<DashboardPage> {
       _isScanning = false;
       _scanIsSafe = result.classification == 'Safe';
       _threatLevel = result.threatLevel;
+
+      final confPct = (result.threatLevel * 100).toStringAsFixed(1);
+      final modelTag = evaluatedByBackend ? 'AI Trained Model' : 'Local Rule Engine';
+
       if (result.classification == 'Fraud') {
-        _scanResult = '🚨 High Risk Alert: Potential Phishing/Fraud detected!\n\n${result.feedback}';
+        _scanResult = '🚨 High Risk Alert ($modelTag):\nScam/Phishing detected with $confPct% confidence!\n\n${result.feedback}';
       } else if (result.classification == 'Spam') {
-        _scanResult = '⚠️ Moderate Risk: Spam content detected.\n\n${result.feedback}';
+        _scanResult = '⚠️ Moderate Risk ($modelTag):\nSpam content detected with $confPct% confidence.\n\n${result.feedback}';
       } else {
-        _scanResult = '✅ Secure: This message is safe.\n\n${result.feedback}';
+        _scanResult = '🛡️ Verified Safe ($modelTag):\nMessage evaluated as safe ($confPct% confidence).\n\n${result.feedback}';
       }
-      
+
       _smsLogs.insert(0, logEntry);
     });
   }
@@ -552,7 +865,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Your feedback feeds into our system to improve the ML algorithms for Sprint 3.',
+                        'Help train the Argus ML Threat Engine by reporting misclassified messages in real-time.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                           fontSize: 11,
@@ -665,12 +978,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _handleLogout() {
-    AuthService.currentUser = null;
-    AuthService.token = null;
-    widget.onNavigate(AuthPage.login);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -712,35 +1019,147 @@ class _DashboardPageState extends State<DashboardPage> {
         3 => _buildProfileTab(fullName, user, theme, isDark),
         _ => const SizedBox(),
       },
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: theme.colorScheme.primary,
-        unselectedItemColor: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-        backgroundColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: isDark ? Colors.black.withOpacity(0.4) : Colors.black.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
+          border: Border.all(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            width: 1,
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history_outlined),
-            activeIcon: Icon(Icons.history),
-            label: 'Logs',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.block_outlined),
-            activeIcon: Icon(Icons.block),
-            label: 'Blocklist',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(
+              index: 0,
+              icon: Icons.grid_view_outlined,
+              activeIcon: Icons.grid_view_rounded,
+              label: 'Dashboard',
+              theme: theme,
+              isDark: isDark,
+            ),
+            _buildNavItem(
+              index: 1,
+              icon: Icons.shield_outlined,
+              activeIcon: Icons.shield_rounded,
+              label: 'Logs',
+              badgeCount: _threatsCount,
+              theme: theme,
+              isDark: isDark,
+            ),
+            _buildNavItem(
+              index: 2,
+              icon: Icons.do_not_disturb_on_outlined,
+              activeIcon: Icons.do_not_disturb_on_rounded,
+              label: 'Blocklist',
+              theme: theme,
+              isDark: isDark,
+            ),
+            _buildNavItem(
+              index: 3,
+              icon: Icons.person_outline_rounded,
+              activeIcon: Icons.person_rounded,
+              label: 'Profile',
+              theme: theme,
+              isDark: isDark,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required int index,
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+    int badgeCount = 0,
+    required ThemeData theme,
+    required bool isDark,
+  }) {
+    final isSelected = _currentIndex == index;
+    final activeColor = theme.colorScheme.primary;
+
+    return GestureDetector(
+      onTap: () => setState(() => _currentIndex = index),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 14 : 10,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? activeColor.withOpacity(isDark ? 0.2 : 0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  isSelected ? activeIcon : icon,
+                  color: isSelected
+                      ? activeColor
+                      : (isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+                  size: 22,
+                ),
+                if (badgeCount > 0 && index == 1)
+                  Positioned(
+                    top: -4,
+                    right: -6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: AppTheme.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: activeColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -833,6 +1252,113 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
             ),
           ),
+          
+          // Protection Action / Shield Status Banner
+          if (!_isIngestionEnabled || !_hasSmsPermission)
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(top: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? [const Color(0xFF451A03), const Color(0xFF78350F)]
+                      : [const Color(0xFFFEF3C7), const Color(0xFFFDE68A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.amber.shade600),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade700.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.security_update_warning_rounded, color: Colors.amber.shade900, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Auto Ingestion is Disabled',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Grant SMS permission & turn on auto-ingestion to scan incoming texts automatically.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.bolt, size: 16),
+                          label: const Text('Enable Protection Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: () async {
+                            await _requestPermissions();
+                            await _updateIngestion(true);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(top: 16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF064E3B).withOpacity(0.4) : const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green.shade400),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_user_rounded, color: Colors.green, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Real-Time Fraud Shield Active',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color: isDark ? Colors.green.shade200 : Colors.green.shade900,
+                          ),
+                        ),
+                        Text(
+                          'Argus is monitoring incoming SMS for scam links and fake alerts.',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: isDark ? Colors.green.shade300 : Colors.green.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 20),
 
           // Statistics Grid
@@ -1139,113 +1665,132 @@ class _DashboardPageState extends State<DashboardPage> {
 
           // Logs List
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 48,
-                          color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await _loadStoredData();
+              },
+              child: filtered.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Container(
+                        height: 350,
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.inbox_outlined,
+                              size: 48,
+                              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No matching SMS logs found.',
+                              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Pull down to refresh and sync remote alerts.',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No matching SMS logs found.',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final log = filtered[index];
-                      final type = log['type'];
-                      final Color statusColor = type == 'Safe'
-                          ? Colors.green
-                          : (type == 'Fraud' ? AppTheme.red : Colors.amber.shade700);
+                      ),
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final log = filtered[index];
+                        final type = log['type'];
+                        final Color statusColor = type == 'Safe'
+                            ? Colors.green
+                            : (type == 'Fraud' ? AppTheme.red : Colors.amber.shade700);
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: InkWell(
-                          onTap: () => _showLogDetail(log),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Sender: ${log['sender']}',
-                                      style: theme.textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: statusColor.withOpacity(0.2)),
-                                      ),
-                                      child: Text(
-                                        type,
-                                        style: GoogleFonts.inter(
-                                          color: statusColor,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: InkWell(
+                            onTap: () => _showLogDetail(log),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Sender: ${log['sender']}',
+                                        style: theme.textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  log['message'],
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      _formatLogTime(log['time']),
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          'Threat: ${(log['threat'] * 100).toStringAsFixed(0)}%',
-                                          style: theme.textTheme.bodyMedium?.copyWith(
-                                            color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: statusColor.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: statusColor.withOpacity(0.2)),
+                                        ),
+                                        child: Text(
+                                          type,
+                                          style: GoogleFonts.inter(
+                                            color: statusColor,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
                                           ),
                                         ),
-                                        const SizedBox(width: 4),
-                                        Icon(Icons.chevron_right, size: 14, color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
-                                      ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    log['message'],
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
                                     ),
-                                  ],
-                                ),
-                              ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _formatLogTime(log['time']),
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            'Threat: ${(log['threat'] * 100).toStringAsFixed(0)}%',
+                                            style: theme.textTheme.bodyMedium?.copyWith(
+                                              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Icon(Icons.chevron_right, size: 14, color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
+            ),
           ),
         ],
       ),
@@ -1458,7 +2003,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       Switch(
                         value: _isIngestionEnabled,
-                        activeColor: theme.colorScheme.primary,
+                        activeThumbColor: theme.colorScheme.primary,
                         onChanged: Platform.isAndroid
                             ? (val) => _updateIngestion(val)
                             : null, // Disabled on iOS
@@ -1512,7 +2057,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   Switch(
                     value: _isNotificationsEnabled,
-                    activeColor: theme.colorScheme.primary,
+                    activeThumbColor: theme.colorScheme.primary,
                     onChanged: (val) => _updateNotifications(val),
                   ),
                 ],
@@ -1590,7 +2135,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   Switch(
                     value: isDark,
-                    activeColor: theme.colorScheme.primary,
+                    activeThumbColor: theme.colorScheme.primary,
                     onChanged: (val) {
                       SecureSignalApp.of(context).toggleTheme();
                     },
@@ -1606,7 +2151,7 @@ class _DashboardPageState extends State<DashboardPage> {
             text: 'Logout from System',
             type: ButtonType.ghost,
             icon: Icons.logout,
-            onPressed: _handleLogout,
+            onPressed: _confirmLogout,
           ),
           const SizedBox(height: 20),
         ],
