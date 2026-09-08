@@ -35,12 +35,12 @@ public class SmsScanService {
         }
 
         SmsScan scan = new SmsScan();
-        scan.setScanId(UUID.randomUUID());
         scan.setUserId(userId);
         scan.setSender(sender);
         scan.setMessageBody(message);
         scan.setVerdict("FRAUD");
         scan.setConfidence(result.confidence());
+        scan.setIsScam(result.isScam());
         scan.setSource(source == null || source.isBlank() ? "MANUAL_QUERY" : source);
         scan.setScannedAt(Instant.now());
         return Optional.of(repository.save(scan));

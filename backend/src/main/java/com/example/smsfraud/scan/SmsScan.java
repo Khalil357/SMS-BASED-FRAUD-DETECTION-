@@ -13,7 +13,7 @@ public class SmsScan {
     @Column(name = "scan_id")
     private UUID scanId;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id")
     private UUID userId;
 
     private String sender;
@@ -21,7 +21,6 @@ public class SmsScan {
     @Column(name = "message_body", nullable = false, columnDefinition = "TEXT")
     private String messageBody;
 
-    @Column(nullable = false)
     private String verdict;
 
     private Double confidence;
@@ -31,6 +30,9 @@ public class SmsScan {
 
     @Column(name = "scanned_at", nullable = false, updatable = false)
     private Instant scannedAt = Instant.now();
+
+    @Column(name = "is_scam")
+    private Boolean isScam = true;
 
     public UUID getScanId() {
         return scanId;
@@ -94,5 +96,13 @@ public class SmsScan {
 
     public void setScannedAt(Instant scannedAt) {
         this.scannedAt = scannedAt;
+    }
+
+    public Boolean getIsScam() {
+        return isScam;
+    }
+
+    public void setIsScam(Boolean isScam) {
+        this.isScam = isScam;
     }
 }
