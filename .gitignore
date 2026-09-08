@@ -53,3 +53,7 @@ backend/.env
 .flutter-plugins-dependencies
 .packages
 android/.gradle/
+
+# Python (ML fraud-detection service)
+__pycache__/
+*.py[cod]

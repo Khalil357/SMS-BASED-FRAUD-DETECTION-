@@ -11,18 +11,34 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./backend/db:/docker-entrypoint-initdb.d:ro
+
+  ml-service:
+    build:
+      context: .
+      dockerfile: ml-service.Dockerfile
+    environment:
+      MODEL_DIR: /app/final_model
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
   backend:
-    image: openjdk:17
-    working_dir: /workspace
-    volumes:
-      - ./backend:/workspace
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/sms_fraud
       SPRING_DATASOURCE_USERNAME: sms_app
       SPRING_DATASOURCE_PASSWORD: sms_pass
+      ML_SERVICE_URL: http://ml-service:8000
+    env_file:
+      - ./backend/.env
     depends_on:
       - db
-    command: mvn -q -DskipTests spring-boot:run
+      - ml-service
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
 
 volumes:
   db_data:
