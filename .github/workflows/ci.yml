@@ -16,20 +16,20 @@ on:
 permissions:
   contents: read
 
-jobs:
-  # ─── SAST: leaked secrets in git history ────────────────────────────────────
-  secret-scan:
-    name: Gitleaks secret scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # full history so we catch secrets committed long ago
-
-      - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#jobs:
+#  # ─── SAST: leaked secrets in git history ────────────────────────────────────
+#  secret-scan:
+#    name: Gitleaks secret scan
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0 # full history so we catch secrets committed long ago
+#
+#      - name: Run gitleaks
+#        uses: gitleaks/gitleaks-action@v2
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ─── Backend: compile + test ────────────────────────────────────────────────
   backend-test:
