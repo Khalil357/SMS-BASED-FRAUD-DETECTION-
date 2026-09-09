@@ -114,16 +114,18 @@ class _DashboardPageState extends State<DashboardPage> {
             if (!exists) {
               final isScam = item['is_scam'] ?? item['isScam'] ?? (item['label'] == 'scam' || item['label'] == 'fraud');
               final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
+              final type = (isScam == true) ? 'Fraud' : ((item['label'] == 'spam') ? 'Spam' : 'Safe');
+              final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
               final logEntry = {
                 'id': 'backend_fraud_${DateTime.now().millisecondsSinceEpoch}_${item.hashCode}',
                 'sender': item['sender'] ?? 'Backend Shield Alert',
                 'message': msgText.toString(),
-                'type': isScam == false ? 'Safe' : 'Fraud',
+                'type': type,
                 'time': item['createdAt'] ?? item['time'] ?? DateTime.now().toIso8601String(),
-                'threat': conf,
+                'threat': threatLevel,
                 'matchedReasons': [
                   'Trained Model Label: ${item['label'] ?? (isScam ? 'scam' : 'safe')}',
-                  'Model Confidence: ${(conf * 100).toStringAsFixed(1)}%'
+                  'Threat Index: ${(threatLevel * 100).toStringAsFixed(1)}%'
                 ],
                 'hasFeedback': false,
                 'userFeedback': null,
@@ -408,15 +410,16 @@ class _DashboardPageState extends State<DashboardPage> {
       _scanIsSafe = result.classification == 'Safe';
       _threatLevel = result.threatLevel;
 
-      final confPct = (result.threatLevel * 100).toStringAsFixed(1);
+      final safeConfPct = ((1.0 - result.threatLevel) * 100).toStringAsFixed(1);
+      final threatPct = (result.threatLevel * 100).toStringAsFixed(1);
       final modelTag = evaluatedByBackend ? 'AI Trained Model' : 'Local Rule Engine';
 
       if (result.classification == 'Fraud') {
-        _scanResult = '🚨 High Risk Alert ($modelTag):\nScam/Phishing detected with $confPct% confidence!\n\n${result.feedback}';
+        _scanResult = '🚨 High Risk Alert ($modelTag):\nScam/Phishing detected with $threatPct% Threat Index!\n\n${result.feedback}';
       } else if (result.classification == 'Spam') {
-        _scanResult = '⚠️ Moderate Risk ($modelTag):\nSpam content detected with $confPct% confidence.\n\n${result.feedback}';
+        _scanResult = '⚠️ Moderate Risk ($modelTag):\nSpam content detected with $threatPct% Threat Index.\n\n${result.feedback}';
       } else {
-        _scanResult = '🛡️ Verified Safe ($modelTag):\nMessage evaluated as safe ($confPct% confidence).\n\n${result.feedback}';
+        _scanResult = '🛡️ Verified Safe ($modelTag):\nMessage evaluated as safe ($safeConfPct% Confidence, $threatPct% Threat Index).\n\n${result.feedback}';
       }
 
       _smsLogs.insert(0, logEntry);
@@ -454,7 +457,8 @@ class _DashboardPageState extends State<DashboardPage> {
         final isDark = theme.brightness == Brightness.dark;
         
         final type = log['type'] as String;
-        final threatVal = (log['threat'] as num).toDouble();
+        final rawThreat = (log['threat'] as num).toDouble();
+        final threatVal = (type == 'Safe' && rawThreat > 0.50) ? (1.0 - rawThreat) : rawThreat;
         final matchedReasons = List<String>.from(log['matchedReasons'] ?? []);
         
         final Color classificationColor = type == 'Safe'
@@ -1346,18 +1350,23 @@ class _DashboardPageState extends State<DashboardPage> {
                                       ),
                                     ),
                                     Row(
-                                      children: [
-                                        Text(
-                                          'Threat: ${(log['threat'] * 100).toStringAsFixed(0)}%',
-                                          style: theme.textTheme.bodyMedium?.copyWith(
-                                            color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
+                                      children: (() {
+                                        final logType = log['type'] ?? 'Safe';
+                                        final rawThreat = (log['threat'] as num?)?.toDouble() ?? 0.0;
+                                        final displayThreat = (logType == 'Safe' && rawThreat > 0.50) ? (1.0 - rawThreat) : rawThreat;
+                                        return [
+                                          Text(
+                                            'Threat: ${(displayThreat * 100).toStringAsFixed(0)}%',
+                                            style: theme.textTheme.bodyMedium?.copyWith(
+                                              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Icon(Icons.chevron_right, size: 14, color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
-                                      ],
+                                          const SizedBox(width: 4),
+                                          Icon(Icons.chevron_right, size: 14, color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+                                        ];
+                                      })(),
                                     ),
                                   ],
                                 ),
