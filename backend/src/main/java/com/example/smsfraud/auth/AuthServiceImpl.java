@@ -1,6 +1,7 @@
 package com.example.smsfraud.auth;
 
 import com.example.smsfraud.auth.dto.LoginRequest;
+import com.example.smsfraud.auth.dto.LoginPendingResponse;
 import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
@@ -88,7 +89,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public LoginResponse login(LoginRequest req) {
+    public LoginPendingResponse login(LoginRequest req) {
         User user;
         if (req.email() != null && !req.email().isBlank()) {
             user = userRepository.findByEmail(req.email())
@@ -97,7 +98,7 @@ public class AuthServiceImpl implements AuthService {
             user = userRepository.findByPhone(req.phoneNumber())
                     .orElseThrow(() -> new UnauthorizedException("Invalid phone number or password"));
         }
-        
+
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
             throw new UnauthorizedException("Invalid phone number or password");
         }
@@ -113,15 +114,15 @@ public class AuthServiceImpl implements AuthService {
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
-        // Web/admin flow: issue + email the OTP so the code arrives right after login,
-        // instead of only on "Resend". Best-effort — a mail hiccup won't block login.
+        // Two-step login: credentials are valid, so issue + email the OTP.
+        // No token is returned here — the client must verify the OTP via
+        // verifyLoginOtp() to receive the JWT.
         if (user.getEmail() != null && !user.getEmail().isBlank()) {
             String otp = otpService.issueCode(user.getEmail());
             emailService.sendVerificationCode(user.getEmail(), otp);
         }
 
-        String token = tokenProvider.generateToken(user.getUserId());
-        return new LoginResponse(token, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
+        return new LoginPendingResponse(user.getEmail(), "OTP sent; verify to complete login");
     }
 
     @Override

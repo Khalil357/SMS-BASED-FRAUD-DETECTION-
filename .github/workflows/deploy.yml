@@ -29,7 +29,7 @@ jobs:
           # On the box: pull the requested tag, then (re)start db + backend + web-client.
           script: |
             cd ~/argus || { echo "no ~/argus dir"; exit 1; }
-            echo "DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}" > .env
+            echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" > .env
             echo "TAG=${{ github.event.inputs.tag || 'latest' }}" >> .env
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans

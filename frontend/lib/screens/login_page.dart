@@ -9,11 +9,13 @@ import '../services/auth_service.dart';
 class LoginPage extends StatefulWidget {
   final Navigate onNavigate;
   final ValueChanged<String>? onUnverifiedAccount;
+  final ValueChanged<String>? onLoginOtp;
 
   const LoginPage({
     super.key,
     required this.onNavigate,
     this.onUnverifiedAccount,
+    this.onLoginOtp,
   });
 
   @override
@@ -116,13 +118,26 @@ class _LoginPageState extends State<LoginPage> {
         if (result['success']) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['message'] ?? 'Login successful!'),
+              content: Text(result['message'] ?? 'Verification code sent!'),
               backgroundColor: Colors.green.shade600,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           );
-          widget.onNavigate(AuthPage.dashboard);
+          final email = (result['email'] ?? '').toString();
+          if (email.isNotEmpty && widget.onLoginOtp != null) {
+            widget.onLoginOtp!(email);
+          } else {
+            // Fallback: no email in response — can't complete two-step login.
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Could not start OTP verification. Please try again.'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            );
+          }
         } else {
           final msg = (result['message'] ?? '').toString();
           final isUnverified = msg.toLowerCase().contains('not verified') ||
