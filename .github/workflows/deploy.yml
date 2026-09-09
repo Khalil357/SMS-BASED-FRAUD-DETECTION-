@@ -1,0 +1,36 @@
+name: Deploy
+
+# Deploys the published Docker images to the production EC2 instance.
+# Manual trigger only (workflow_dispatch) so a bad push never auto-deploys;
+# optionally also auto-deploy when main is tagged.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          # On the box: pull the requested tag, then (re)start db + backend + web-client.
+          script: |
+            cd ~/argus || { echo "no ~/argus dir"; exit 1; }
+            echo "DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}" > .env
+            echo "TAG=${{ github.event.inputs.tag || 'latest' }}" >> .env
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f

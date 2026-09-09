@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   db:
     image: postgres:15
@@ -38,6 +37,16 @@ services:
       - ml-service
     ports:
       - "8080:8080"
+    restart: unless-stopped
+
+  web-client:
+    build:
+      context: ./web-client
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
     restart: unless-stopped
 
 volumes:

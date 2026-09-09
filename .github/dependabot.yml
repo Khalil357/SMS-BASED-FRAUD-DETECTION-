@@ -1,0 +1,33 @@
+# Dependabot keeps dependencies patched and alerts on vulnerable versions.
+# Covers the backend (Maven), web client (npm), and the CI actions themselves.
+
+version: 2
+updates:
+  # ─── Backend: Maven ──────────────────────────────────────────────────────────
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - backend
+
+  # ─── Web client: npm ────────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /web-client
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - frontend
+
+  # ─── GitHub Actions (pin/update the actions we depend on) ───────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - ci
