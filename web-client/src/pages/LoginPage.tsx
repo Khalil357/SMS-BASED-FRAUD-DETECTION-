@@ -18,8 +18,8 @@ interface FormErrors {
 const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { isDark, toggleTheme } = useTheme();
 
-  const [email, setEmail] = useState("smsfraud.noreply@gmail.com");
-  const [password, setPassword] = useState("Admin000!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);

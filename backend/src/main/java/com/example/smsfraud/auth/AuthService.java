@@ -1,6 +1,7 @@
 package com.example.smsfraud.auth;
 
 import com.example.smsfraud.auth.dto.LoginRequest;
+import com.example.smsfraud.auth.dto.LoginPendingResponse;
 import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
@@ -18,7 +19,7 @@ public interface AuthService {
 
     RegisterResponse register(RegisterRequest req);
 
-    LoginResponse login(LoginRequest req);
+    LoginPendingResponse login(LoginRequest req);
 
     OtpResponse requestPasswordReset(OtpRequest req);
 
