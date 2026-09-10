@@ -11,7 +11,7 @@ import 'auth_service.dart';
 /// Top-level background message handler required by Telephony.
 /// Marked with @pragma('vm:entry-point') so the Dart compiler doesn't tree-shake it.
 @pragma('vm:entry-point')
-Future<void> backgroundSmsHandler(SmsMessage message) async {
+Future<void> handleBackgroundSms(SmsMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   
   final body = message.body ?? '';
@@ -194,7 +194,7 @@ class SmsIngestionService {
             );
           }
         },
-        onBackgroundMessage: backgroundSmsHandler,
+        onBackgroundMessage: handleBackgroundSms,
       );
       debugPrint("SMS Ingestion: Background & Foreground listeners registered.");
     } catch (e) {

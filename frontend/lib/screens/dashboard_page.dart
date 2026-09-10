@@ -11,6 +11,10 @@ import '../auth_flow.dart';
 import '../main.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
+import '../widgets/interactive_threat_chart.dart';
+import '../widgets/security_illustrations.dart';
+import '../services/safety_tips_service.dart';
+import 'safety_tips_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final Navigate onNavigate;
@@ -21,7 +25,7 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   // Controllers
@@ -61,6 +65,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadDataAndPermissions();
 
     // Listen to live incoming foreground messages
@@ -72,6 +77,13 @@ class _DashboardPageState extends State<DashboardPage> {
         _showForegroundThreatSnackBar(newLog);
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadStoredData();
+    }
   }
 
   Future<void> _loadDataAndPermissions() async {
@@ -262,6 +274,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scanController.dispose();
     _blockNumberController.dispose();
     _searchController.dispose();
@@ -1000,27 +1013,72 @@ class _DashboardPageState extends State<DashboardPage> {
               _currentIndex == 0
                   ? 'Argus'
                   : _currentIndex == 1
-                      ? 'Scan Logs'
+                      ? 'Threat Analytics'
                       : _currentIndex == 2
-                          ? 'Spam Blocklist'
-                          : 'Profile & Settings',
+                          ? 'Scan Logs'
+                          : _currentIndex == 3
+                              ? 'Safety Tips'
+                              : 'Profile & Settings',
               style: GoogleFonts.inter(fontWeight: FontWeight.w800),
             ),
           ],
         ),
         actions: [
-          if (_currentIndex == 3)
-            IconButton(
-              icon: const Icon(Icons.logout_outlined),
-              onPressed: _handleLogout,
+          // 1. Light/Dark Mode Toggle Button (to the left of Profile)
+          IconButton(
+            icon: Icon(
+              isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+              color: isDark ? Colors.amber : theme.colorScheme.primary,
             ),
+            tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+            onPressed: () {
+              SecureSignalApp.of(context).toggleTheme();
+            },
+          ),
+          // 2. Profile Avatar Button on the Far Top Right
+          Padding(
+            padding: const EdgeInsets.only(right: 12.0),
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _currentIndex = 4; // Open Profile & Settings view
+                });
+              },
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _currentIndex == 4
+                        ? theme.colorScheme.primary
+                        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    width: 2,
+                  ),
+                ),
+                child: CircleAvatar(
+                  radius: 15,
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+                  child: Text(
+                    fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
       body: switch (_currentIndex) {
         0 => _buildHomeTab(fullName, theme, isDark),
-        1 => _buildLogsTab(theme, isDark),
-        2 => _buildBlocklistTab(theme, isDark),
-        3 => _buildProfileTab(fullName, user, theme, isDark),
+        1 => _buildAnalyticsTab(theme, isDark),
+        2 => _buildLogsTab(theme, isDark),
+        3 => const SafetyTipsPage(),
+        4 => _buildProfileTab(fullName, user, theme, isDark),
         _ => const SizedBox(),
       },
       bottomNavigationBar: Container(
@@ -1054,6 +1112,14 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             _buildNavItem(
               index: 1,
+              icon: Icons.bar_chart_outlined,
+              activeIcon: Icons.bar_chart_rounded,
+              label: 'Analytics',
+              theme: theme,
+              isDark: isDark,
+            ),
+            _buildNavItem(
+              index: 2,
               icon: Icons.shield_outlined,
               activeIcon: Icons.shield_rounded,
               label: 'Logs',
@@ -1062,18 +1128,10 @@ class _DashboardPageState extends State<DashboardPage> {
               isDark: isDark,
             ),
             _buildNavItem(
-              index: 2,
-              icon: Icons.do_not_disturb_on_outlined,
-              activeIcon: Icons.do_not_disturb_on_rounded,
-              label: 'Blocklist',
-              theme: theme,
-              isDark: isDark,
-            ),
-            _buildNavItem(
               index: 3,
-              icon: Icons.person_outline_rounded,
-              activeIcon: Icons.person_rounded,
-              label: 'Profile',
+              icon: Icons.lightbulb_outline,
+              activeIcon: Icons.lightbulb_rounded,
+              label: 'Tips',
               theme: theme,
               isDark: isDark,
             ),
@@ -1168,12 +1226,107 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Widget _buildAnalyticsTab(ThemeData theme, bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InteractiveThreatChart(logs: _smsLogs),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTipOfTheDayBanner(ThemeData theme, bool isDark) {
+    final tip = SafetyTipsService.getTipOfTheDay();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.amber.shade700.withOpacity(0.3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.amber.shade700.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.lightbulb_rounded, color: Colors.amber.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'FRAUD SAFETY TIP OF THE DAY',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.amber.shade800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _currentIndex = 3; // Go to Safety Tips tab
+                  });
+                },
+                child: Text(
+                  'View All',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            tip.title,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            tip.summary,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontSize: 12,
+              height: 1.3,
+              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHomeTab(String name, ThemeData theme, bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Tip of the Day Banner
+          _buildTipOfTheDayBanner(theme, isDark),
+
           // Welcome Card
           Container(
             padding: const EdgeInsets.all(20.0),
