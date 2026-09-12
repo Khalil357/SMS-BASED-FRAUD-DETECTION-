@@ -78,88 +78,101 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
               // Bars Canvas
               SizedBox(
                 height: 180,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: List.generate(dailyStats.length, (index) {
-                    final stat = dailyStats[index];
-                    final isSelected = _selectedDayIndex == index;
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: dailyStats.length > 7 ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
+                  child: Container(
+                    constraints: BoxConstraints(
+                      minWidth: MediaQuery.of(context).size.width - 64,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: List.generate(dailyStats.length, (index) {
+                        final stat = dailyStats[index];
+                        final isSelected = _selectedDayIndex == index;
 
-                    final total = stat['total'] as int;
-                    final safeCount = stat['safe'] as int;
-                    final spamCount = stat['spam'] as int;
-                    final fraudCount = stat['fraud'] as int;
-                    final maxTotal = dailyStats.map((s) => s['total'] as int).fold(1, max);
+                        final total = stat['total'] as int;
+                        final safeCount = stat['safe'] as int;
+                        final spamCount = stat['spam'] as int;
+                        final fraudCount = stat['fraud'] as int;
+                        final maxTotal = dailyStats.map((s) => s['total'] as int).fold(1, max);
 
-                    final barHeightFactor = total == 0 ? 0.08 : (total / maxTotal).clamp(0.12, 1.0);
+                        final barHeightFactor = total == 0 ? 0.08 : (total / maxTotal).clamp(0.12, 1.0);
+                        final barWidth = dailyStats.length > 14 ? 12.0 : (dailyStats.length > 7 ? 16.0 : (isSelected ? 22.0 : 16.0));
 
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedDayIndex = _selectedDayIndex == index ? null : index;
-                        });
-                      },
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          // Stacked Bar
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            width: isSelected ? 24 : 18,
-                            height: 140 * barHeightFactor,
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? theme.colorScheme.primary.withOpacity(0.2)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
-                              border: isSelected
-                                  ? Border.all(color: theme.colorScheme.primary, width: 2)
-                                  : null,
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: total == 0
-                                  ? Container(
-                                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                                    )
-                                  : Column(
-                                      children: [
-                                        if (fraudCount > 0)
-                                          Expanded(
-                                            flex: fraudCount,
-                                            child: Container(color: AppTheme.red),
+                        return Padding(
+                          padding: EdgeInsets.symmetric(horizontal: dailyStats.length > 7 ? 4.0 : 2.0),
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedDayIndex = _selectedDayIndex == index ? null : index;
+                              });
+                            },
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                // Stacked Bar
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  width: barWidth,
+                                  height: 140 * barHeightFactor,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? theme.colorScheme.primary.withOpacity(0.2)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: isSelected
+                                        ? Border.all(color: theme.colorScheme.primary, width: 2)
+                                        : null,
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: total == 0
+                                        ? Container(
+                                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                          )
+                                        : Column(
+                                            children: [
+                                              if (fraudCount > 0)
+                                                Expanded(
+                                                  flex: fraudCount,
+                                                  child: Container(color: AppTheme.red),
+                                                ),
+                                              if (spamCount > 0)
+                                                Expanded(
+                                                  flex: spamCount,
+                                                  child: Container(color: Colors.amber.shade700),
+                                                ),
+                                              if (safeCount > 0)
+                                                Expanded(
+                                                  flex: safeCount,
+                                                  child: Container(color: Colors.green),
+                                                ),
+                                            ],
                                           ),
-                                        if (spamCount > 0)
-                                          Expanded(
-                                            flex: spamCount,
-                                            child: Container(color: Colors.amber.shade700),
-                                          ),
-                                        if (safeCount > 0)
-                                          Expanded(
-                                            flex: safeCount,
-                                            child: Container(color: Colors.green),
-                                          ),
-                                      ],
-                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+
+                                // Day Label
+                                Text(
+                                  stat['label'] as String,
+                                  style: GoogleFonts.inter(
+                                    fontSize: dailyStats.length > 14 ? 8 : 10,
+                                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                    color: isSelected
+                                        ? theme.colorScheme.primary
+                                        : (isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 8),
-
-                          // Day Label
-                          Text(
-                            stat['label'] as String,
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                              color: isSelected
-                                  ? theme.colorScheme.primary
-                                  : (isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
+                        );
+                      }),
+                    ),
+                  ),
                 ),
               ),
             ],

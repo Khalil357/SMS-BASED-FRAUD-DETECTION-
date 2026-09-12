@@ -40,6 +40,9 @@ class SecureSignalApp extends StatefulWidget {
       context.findAncestorStateOfType<SecureSignalAppState>()!;
 }
 
+typedef MyApp = SecureSignalApp;
+typedef MyAppState = SecureSignalAppState;
+
 class SecureSignalAppState extends State<SecureSignalApp> {
   ThemeMode _themeMode = ThemeMode.system;
 

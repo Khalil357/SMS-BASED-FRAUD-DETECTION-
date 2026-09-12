@@ -810,18 +810,42 @@ class _DashboardPageState extends State<DashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: _currentIndex == 4
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back to Dashboard',
+                onPressed: () => setState(() => _currentIndex = 0),
+              )
+            : null,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.shield, color: theme.colorScheme.primary),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset(
+                'assets/images/sms_fraud_inapp_icon.png',
+                width: 28,
+                height: 28,
+                errorBuilder: (context, error, stackTrace) => Image.asset(
+                  'assets/images/sms_fraud_app_icon.png',
+                  width: 28,
+                  height: 28,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.shield,
+                    color: theme.colorScheme.primary,
+                    size: 28,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
             Text(
               _currentIndex == 0
                   ? 'Argus'
                   : _currentIndex == 1
-                      ? 'Threat Analytics'
+                      ? 'Scan Logs'
                       : _currentIndex == 2
-                          ? 'Scan Logs'
+                          ? 'Blocklist'
                           : _currentIndex == 3
                               ? 'Safety Tips'
                               : 'Profile & Settings',
@@ -838,7 +862,7 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
             onPressed: () {
-              MyApp.of(context).toggleTheme();
+              SecureSignalApp.of(context).toggleTheme();
             },
           ),
           // 2. Profile Avatar Button on the Far Top Right
@@ -881,8 +905,8 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
       body: switch (_currentIndex) {
         0 => _buildHomeTab(fullName, theme, isDark),
-        1 => _buildAnalyticsTab(theme, isDark),
-        2 => _buildLogsTab(theme, isDark),
+        1 => _buildLogsTab(theme, isDark),
+        2 => _buildBlocklistTab(theme, isDark),
         3 => const SafetyTipsPage(),
         4 => _buildProfileTab(fullName, user, theme, isDark),
         _ => const SizedBox(),
@@ -901,14 +925,14 @@ class _DashboardPageState extends State<DashboardPage> {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart_outlined),
-            activeIcon: Icon(Icons.bar_chart),
-            label: 'Analytics',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.history_outlined),
             activeIcon: Icon(Icons.history),
             label: 'Logs',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.block_outlined),
+            activeIcon: Icon(Icons.block),
+            label: 'Blocklist',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.lightbulb_outline),
@@ -1121,10 +1145,10 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(width: 14),
               Expanded(
                 child: _buildMetricCard(
-                  title: 'Threats Blocked',
+                  title: 'Threats Detected',
                   value: _threatsCount.toString(),
                   icon: Icons.gpp_bad_outlined,
-                  iconColor: AppTheme.primaryLight,
+                  iconColor: AppTheme.red,
                   theme: theme,
                   isDark: isDark,
                 ),
@@ -1143,6 +1167,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 ? 'Outstanding security level'
                 : (_safetyIndex > 70 ? 'Moderate security warning' : 'High vulnerability warning'),
           ),
+          const SizedBox(height: 24),
+
+          // Interactive Threat Analysis Chart
+          InteractiveThreatChart(logs: _smsLogs),
           const SizedBox(height: 24),
 
           // Manual Scan Title
@@ -1867,7 +1895,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     value: isDark,
                     activeColor: theme.colorScheme.primary,
                     onChanged: (val) {
-                      MyApp.of(context).toggleTheme();
+                      SecureSignalApp.of(context).toggleTheme();
                     },
                   ),
                 ],

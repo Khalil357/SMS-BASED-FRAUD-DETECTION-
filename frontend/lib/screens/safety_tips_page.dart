@@ -87,23 +87,38 @@ class _SafetyTipsPageState extends State<SafetyTipsPage> with SingleTickerProvid
               color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
             ),
           ),
+          padding: const EdgeInsets.all(4),
           child: TabBar(
             controller: _tabController,
+            indicatorSize: TabBarIndicatorSize.tab,
             indicator: BoxDecoration(
               color: theme.colorScheme.primary,
               borderRadius: BorderRadius.circular(12),
             ),
+            labelPadding: EdgeInsets.zero,
             labelColor: Colors.white,
             unselectedLabelColor: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-            labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+            labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 12),
             tabs: const [
               Tab(
-                icon: Icon(Icons.lightbulb_outline, size: 18),
-                text: 'Safety Advice Catalog',
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.lightbulb_outline, size: 16),
+                    SizedBox(width: 6),
+                    Text('Safety Advice'),
+                  ],
+                ),
               ),
               Tab(
-                icon: Icon(Icons.quiz_outlined, size: 18),
-                text: 'Spot-the-Scam Quiz',
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.quiz_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Spot-the-Scam Quiz'),
+                  ],
+                ),
               ),
             ],
           ),
