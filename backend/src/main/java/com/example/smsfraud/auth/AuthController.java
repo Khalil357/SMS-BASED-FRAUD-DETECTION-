@@ -11,6 +11,8 @@ import com.example.smsfraud.auth.dto.RegisterResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 import com.example.smsfraud.auth.dto.VerifyLoginOtpRequest;
 import com.example.smsfraud.auth.dto.ResendLoginOtpRequest;
+import com.example.smsfraud.auth.dto.RefreshRequest;
+import com.example.smsfraud.auth.dto.RefreshResponse;
 import com.example.smsfraud.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -78,5 +80,16 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> resendLoginOtp(@Valid @RequestBody ResendLoginOtpRequest req) {
         authService.resendLoginOtp(req.email());
         return ResponseEntity.ok(ApiResponse.ok("Login OTP resent successfully"));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<RefreshResponse>> refresh(@Valid @RequestBody RefreshRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Token refreshed successfully", authService.refresh(req.refreshToken())));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(@Valid @RequestBody RefreshRequest req) {
+        authService.logout(req.refreshToken());
+        return ResponseEntity.ok(ApiResponse.ok("Logged out successfully"));
     }
 }

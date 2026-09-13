@@ -8,6 +8,7 @@ import com.example.smsfraud.auth.dto.OtpResponse;
 import com.example.smsfraud.auth.dto.ResetPasswordRequest;
 import com.example.smsfraud.auth.dto.RegisterRequest;
 import com.example.smsfraud.auth.dto.RegisterResponse;
+import com.example.smsfraud.auth.dto.RefreshResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 
 /**
@@ -32,4 +33,8 @@ public interface AuthService {
     void resendLoginOtp(String email);
 
     LoginResponse verifyLoginOtp(String email, String verificationCode);
+
+    RefreshResponse refresh(String refreshToken);
+
+    void logout(String refreshToken);
 }
