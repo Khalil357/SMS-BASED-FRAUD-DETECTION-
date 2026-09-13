@@ -90,7 +90,6 @@ class AuthService {
     }
 
     if (Platform.isAndroid) {
-      // 1. Try 10.0.2.2 (standard for Android Emulator)
       try {
         return await http
             .post(
@@ -100,7 +99,6 @@ class AuthService {
             )
             .timeout(const Duration(seconds: 3));
       } catch (_) {
-        // 2. Fallback to 127.0.0.1 (ADB reverse for physical phone)
         return await http
             .post(
               Uri.parse('http://127.0.0.1:8080$path'),
@@ -310,27 +308,59 @@ class AuthService {
     }
   }
 
-  /// Delete a fraud scan that was reclassified as safe.
-  /// TODO: Confirm the exact endpoint path and backend ID field with the backend team.
+  /// Delete a fraud scan row from the backend after the user reclassifies it as safe.
+  ///
+  /// A message is only treated as "Safe" locally once this call confirms the
+  /// row has actually been deleted from the database — see AuthService docs
+  /// in dashboard_page.dart's _markAsSafe() for how this is consumed.
+  ///
+  /// PLACEHOLDER — confirm with backend team before relying on this in production:
+  ///   1. Exact endpoint path (currently guessing DELETE /api/scans/fraud/{id})
+  ///   2. Whether it's a hard delete or a soft "reclassify" PATCH/PUT instead
+  ///   3. Which field in the fraud-scan JSON is the true row ID (currently
+  ///      assuming `id`, wired up as `backendId` in dashboard_page.dart)
+  ///   4. Expected success status code (200 vs 204 — both handled below for now)
   static Future<Map<String, dynamic>> deleteFraudScan({
     required String id,
   }) async {
+    if (id.trim().isEmpty) {
+      return {
+        'success': false,
+        'message': 'Missing backend record ID — cannot delete.',
+      };
+    }
+
     try {
-      // TODO: Confirm exact endpoint path with backend.
-      final response =
-          await _deleteRequest('/api/scans/fraud/${Uri.encodeComponent(id)}');
+      // TODO(backend): confirm exact path once endpoint is implemented.
+      final path = '/api/scans/fraud/${Uri.encodeComponent(id)}';
+
+      print("[Argus Delete Fraud Scan] DELETE $baseUrl$path");
+      final response = await _deleteRequest(path);
+      print(
+          "[Argus Delete Fraud Scan] Status: ${response.statusCode} | Response: ${response.body}");
+
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 204) {
         return {
           'success': true,
-          'message': decoded['message'] ?? 'Message marked as safe.',
+          'message': decoded['message'] ?? 'Record removed from the database.',
+        };
+      }
+
+      if (response.statusCode == 404) {
+        // Row was already gone (e.g. deleted elsewhere) — treat as success
+        // so local state doesn't get stuck out of sync.
+        return {
+          'success': true,
+          'message': 'Record was already removed.',
         };
       }
 
       return {
         'success': false,
-        'message': decoded['message'] ?? 'Failed to mark message as safe.',
+        'message': decoded['message'] ??
+            'Failed to remove the record (status ${response.statusCode}).',
         'statusCode': response.statusCode,
       };
     } catch (e) {
