@@ -6,10 +6,8 @@ import '../services/auth_service.dart';
 import '../widgets/auth_widgets.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
-  const ForgotPasswordPage(
-      {super.key, required this.onNavigate, required this.onResetRequested});
+  const ForgotPasswordPage({super.key, required this.onNavigate});
   final Navigate onNavigate;
-  final ValueChanged<String> onResetRequested;
 
   @override
   State<ForgotPasswordPage> createState() => _ForgotPasswordPageState();
@@ -52,7 +50,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       setState(() => _successMessage = result['message']);
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted) {
-          widget.onResetRequested(_phoneController.text.trim());
+          widget.onNavigate(AuthPage.verification);
         }
       });
     } else {

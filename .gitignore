@@ -43,3 +43,13 @@ frontend/android/.gradle/
 frontend/ios/Pods/
 
 .env.dev
+# Secret files — never commit credentials
+.env
+backend/.env
+
+# Flutter/Android generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+android/.gradle/

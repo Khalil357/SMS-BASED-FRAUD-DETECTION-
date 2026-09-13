@@ -1,0 +1,54 @@
+.auth-page {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+.hero-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34vh;
+  min-height: 220px;
+  background: linear-gradient(180deg, #ffebee 0%, #f8fafc 100%);
+  pointer-events: none;
+}
+
+html.dark .hero-gradient {
+  background: linear-gradient(180deg, #1a0000 0%, #0f172a 100%);
+}
+
+.theme-toggle {
+  position: absolute;
+  top: 20px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.auth-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+  padding: 40px 24px;
+}
+
+@media (max-width: 480px) {
+  .auth-content {
+    padding: 24px 16px;
+  }
+}
