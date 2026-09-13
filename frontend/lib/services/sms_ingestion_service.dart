@@ -20,6 +20,8 @@ Future<void> backgroundSmsHandler(SmsMessage message) async {
   if (body.isEmpty) return;
 
   try {
+    if (await SmsStorageService.isBlockedSender(sender)) return;
+
     // 0. Ensure session token is loaded in background isolate
     await AuthService.loadSession();
 
@@ -125,6 +127,8 @@ class SmsIngestionService {
           final sender = message.address ?? 'Unknown';
 
           if (body.isEmpty) return;
+
+          if (await SmsStorageService.isBlockedSender(sender)) return;
 
           // Check if ingestion enabled
           final isIngestionEnabled = await SmsStorageService.getBoolSetting(

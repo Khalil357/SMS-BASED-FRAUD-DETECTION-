@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SmsStorageService {
   static const String _keyLogs = 'sms_logs_v1';
   static const String _keyFeedback = 'feedback_logs_v1';
+  static const String _keyBlockedSenders = 'blocked_senders_v1';
   
   // Settings Keys
   static const String keyIngestionEnabled = 'settings_ingestion_enabled';
@@ -125,6 +126,48 @@ class SmsStorageService {
   static Future<void> clearLogs() async {
     final prefs = await _getPrefs();
     await prefs.remove(_keyLogs);
+  }
+
+  /// Blocked senders are persisted locally so the app can still suppress its
+  /// own analysis and alerts when Android-level blocking is unavailable.
+  static Future<List<Map<String, String>>> getBlockedSenders() async {
+    final prefs = await _getPrefs();
+    final jsonStr = prefs.getString(_keyBlockedSenders);
+    if (jsonStr == null) return [];
+    try {
+      final List<dynamic> decoded = jsonDecode(jsonStr);
+      return decoded
+          .map((entry) => Map<String, String>.from(entry as Map))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<bool> addBlockedSender(String sender) async {
+    final blocked = await getBlockedSenders();
+    final normalized = sender.trim();
+    if (blocked.any((entry) => entry['number'] == normalized)) return false;
+    blocked.insert(0, {
+      'number': normalized,
+      'date': DateTime.now().toIso8601String().split('T').first,
+    });
+    final prefs = await _getPrefs();
+    await prefs.setString(_keyBlockedSenders, jsonEncode(blocked));
+    return true;
+  }
+
+  static Future<void> removeBlockedSender(String sender) async {
+    final blocked = await getBlockedSenders();
+    blocked.removeWhere((entry) => entry['number'] == sender.trim());
+    final prefs = await _getPrefs();
+    await prefs.setString(_keyBlockedSenders, jsonEncode(blocked));
+  }
+
+  static Future<bool> isBlockedSender(String sender) async {
+    final normalized = sender.trim();
+    final blocked = await getBlockedSenders();
+    return blocked.any((entry) => entry['number'] == normalized);
   }
 
   /// Save Feedback and update the SMS log item classification

@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/sms_detection_service.dart';
 import '../services/sms_storage_service.dart';
 import '../services/sms_ingestion_service.dart';
+import '../services/native_sms_block_service.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../main.dart';
@@ -50,11 +51,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<Map<String, dynamic>> _smsLogs = [];
 
   // Blocklist state
-  final List<Map<String, String>> _blockedNumbers = [
-    {'number': '+27829876543', 'date': '2026-08-20'},
-    {'number': '+27831112222', 'date': '2026-08-21'},
-    {'number': '+14155552671', 'date': '2026-08-22'},
-  ];
+  List<Map<String, String>> _blockedNumbers = [];
 
   StreamSubscription? _smsStreamSubscription;
 
@@ -274,12 +271,15 @@ class _DashboardPageState extends State<DashboardPage> {
     final ingestion = await SmsStorageService.getBoolSetting(SmsStorageService.keyIngestionEnabled, true);
     final notifications = await SmsStorageService.getBoolSetting(SmsStorageService.keyNotificationsEnabled, true);
     final threshold = await SmsStorageService.getDoubleSetting(SmsStorageService.keyNotificationThreshold, 0.80);
+    final blockedNumbers = await SmsStorageService.getBlockedSenders();
 
+    if (!mounted) return;
     setState(() {
       _smsLogs = logs;
       _isIngestionEnabled = ingestion;
       _isNotificationsEnabled = notifications;
       _notificationThreshold = threshold;
+      _blockedNumbers = blockedNumbers;
     });
 
     // Fetch backend Fraud Scans (GET /api/scans/fraud?page=0&size=20)
@@ -929,6 +929,30 @@ class _DashboardPageState extends State<DashboardPage> {
                     ],
                   ),
                 ),
+                if (type != 'Safe') ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.red,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.block, size: 16),
+                      label: Text('Block ${log['sender']}', style: const TextStyle(fontSize: 12)),
+                      onPressed: () async {
+                        final sender = log['sender']?.toString() ?? '';
+                        final confirmed = await _confirmBlockSender(sender);
+                        if (confirmed != true || !mounted) return;
+                        final added = await _blockSender(sender);
+                        if (!mounted || !added) return;
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -937,7 +961,78 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _handleAddBlockedNumber() {
+  Future<bool?> _confirmBlockSender(String number) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block this sender?'),
+        content: Text('$number will be added to Argus\'s blocklist.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Block')),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _blockSender(String number) async {
+    final alreadyBlocked = _blockedNumbers.any((entry) => entry['number'] == number);
+    if (alreadyBlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$number is already blocked.')),
+      );
+      return false;
+    }
+
+    final added = await SmsStorageService.addBlockedSender(number);
+    if (!added || !mounted) return false;
+    final blocked = await SmsStorageService.getBlockedSenders();
+    if (!mounted) return false;
+    setState(() => _blockedNumbers = blocked);
+
+    var systemBlocked = false;
+    try {
+      var isDefault = await NativeSmsBlockService.isDefaultSmsApp();
+      if (!isDefault && mounted) {
+        final enableSystemBlocking = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Enable phone-wide blocking?'),
+            content: const Text(
+              'To ask Android to block this number outside Argus too, set Argus as the default SMS app. '
+              'You can skip this and keep the sender blocked inside Argus.',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep in Argus')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue')),
+            ],
+          ),
+        );
+        if (enableSystemBlocking == true) {
+          isDefault = await NativeSmsBlockService.requestDefaultSmsRole();
+        }
+      }
+      if (isDefault) {
+        systemBlocked = await NativeSmsBlockService.blockNumberOnDevice(number);
+      }
+    } catch (_) {
+      // The sender remains blocked in Argus even if the device blocklist is unavailable.
+    }
+
+    if (!mounted) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(systemBlocked
+            ? '$number blocked in Argus and Android.'
+            : '$number blocked in Argus.'),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return true;
+  }
+
+  Future<void> _handleAddBlockedNumber() async {
     final number = _blockNumberController.text.trim();
     if (number.isEmpty) return;
     if (number.length < 8) {
@@ -947,28 +1042,26 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
-    setState(() {
-      _blockedNumbers.insert(0, {
-        'number': number,
-        'date': DateTime.now().toString().split(' ')[0],
-      });
+    if (await _confirmBlockSender(number) != true || !mounted) return;
+    if (await _blockSender(number) && mounted) {
       _blockNumberController.clear();
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$number added to blocklist.'),
-        backgroundColor: Colors.green.shade600,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    }
   }
 
-  void _handleRemoveBlockedNumber(int index) {
+  Future<void> _handleRemoveBlockedNumber(int index) async {
     final number = _blockedNumbers[index]['number'];
-    setState(() {
-      _blockedNumbers.removeAt(index);
-    });
+    if (number == null) return;
+    try {
+      if (await NativeSmsBlockService.isDefaultSmsApp()) {
+        await NativeSmsBlockService.unblockNumberOnDevice(number);
+      }
+    } catch (_) {
+      // Remove the local block even if Android's optional system blocklist fails.
+    }
+    await SmsStorageService.removeBlockedSender(number);
+    final blocked = await SmsStorageService.getBlockedSenders();
+    if (!mounted) return;
+    setState(() => _blockedNumbers = blocked);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1809,7 +1902,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            'SMS messages from numbers on this blocklist will be automatically rejected and reported.',
+            'Argus ignores messages from these senders. Enable phone-wide blocking when prompted to add eligible phone numbers to Android\'s blocklist too.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
             ),
