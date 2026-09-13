@@ -26,7 +26,8 @@ class AuthService {
   static const String _keyUser = 'auth_user_v1';
 
   /// Save session to persistent storage
-  static Future<void> saveSession(String tokenStr, Map<String, dynamic> userMap) async {
+  static Future<void> saveSession(
+      String tokenStr, Map<String, dynamic> userMap) async {
     token = tokenStr;
     currentUser = userMap;
     final prefs = await SharedPreferences.getInstance();
@@ -42,7 +43,10 @@ class AuthService {
       final savedToken = prefs.getString(_keyToken);
       final savedUserJson = prefs.getString(_keyUser);
 
-      if (savedToken != null && savedToken.isNotEmpty && savedUserJson != null && savedUserJson.isNotEmpty) {
+      if (savedToken != null &&
+          savedToken.isNotEmpty &&
+          savedUserJson != null &&
+          savedUserJson.isNotEmpty) {
         token = savedToken;
         currentUser = jsonDecode(savedUserJson) as Map<String, dynamic>;
         return true;
@@ -76,36 +80,44 @@ class AuthService {
     final encodedBody = jsonEncode(body);
 
     if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
-      return await http.post(
-        Uri.parse('${customBaseUrl!.trim()}$path'),
-        headers: headers,
-        body: encodedBody,
-      ).timeout(const Duration(seconds: 10));
+      return await http
+          .post(
+            Uri.parse('${customBaseUrl!.trim()}$path'),
+            headers: headers,
+            body: encodedBody,
+          )
+          .timeout(const Duration(seconds: 10));
     }
 
     if (Platform.isAndroid) {
       // 1. Try 10.0.2.2 (standard for Android Emulator)
       try {
-        return await http.post(
-          Uri.parse('http://10.0.2.2:8080$path'),
-          headers: headers,
-          body: encodedBody,
-        ).timeout(const Duration(seconds: 3));
+        return await http
+            .post(
+              Uri.parse('http://10.0.2.2:8080$path'),
+              headers: headers,
+              body: encodedBody,
+            )
+            .timeout(const Duration(seconds: 3));
       } catch (_) {
         // 2. Fallback to 127.0.0.1 (ADB reverse for physical phone)
-        return await http.post(
-          Uri.parse('http://127.0.0.1:8080$path'),
-          headers: headers,
-          body: encodedBody,
-        ).timeout(const Duration(seconds: 6));
+        return await http
+            .post(
+              Uri.parse('http://127.0.0.1:8080$path'),
+              headers: headers,
+              body: encodedBody,
+            )
+            .timeout(const Duration(seconds: 6));
       }
     }
 
-    return await http.post(
-      Uri.parse('http://localhost:8080$path'),
-      headers: headers,
-      body: encodedBody,
-    ).timeout(const Duration(seconds: 10));
+    return await http
+        .post(
+          Uri.parse('http://localhost:8080$path'),
+          headers: headers,
+          body: encodedBody,
+        )
+        .timeout(const Duration(seconds: 10));
   }
 
   /// Helper to send GET requests with automatic fallback for physical phone vs emulator
@@ -120,30 +132,80 @@ class AuthService {
     };
 
     if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
-      return await http.get(
-        Uri.parse('${customBaseUrl!.trim()}$path'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 10));
+      return await http
+          .get(
+            Uri.parse('${customBaseUrl!.trim()}$path'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
     }
 
     if (Platform.isAndroid) {
       try {
-        return await http.get(
-          Uri.parse('http://10.0.2.2:8080$path'),
-          headers: headers,
-        ).timeout(const Duration(seconds: 3));
+        return await http
+            .get(
+              Uri.parse('http://10.0.2.2:8080$path'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 3));
       } catch (_) {
-        return await http.get(
-          Uri.parse('http://127.0.0.1:8080$path'),
-          headers: headers,
-        ).timeout(const Duration(seconds: 6));
+        return await http
+            .get(
+              Uri.parse('http://127.0.0.1:8080$path'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 6));
       }
     }
 
-    return await http.get(
-      Uri.parse('http://localhost:8080$path'),
-      headers: headers,
-    ).timeout(const Duration(seconds: 10));
+    return await http
+        .get(
+          Uri.parse('http://localhost:8080$path'),
+          headers: headers,
+        )
+        .timeout(const Duration(seconds: 10));
+  }
+
+  /// Helper to send DELETE requests with the same host fallback as other calls.
+  static Future<http.Response> _deleteRequest(String path) async {
+    final headers = {
+      'Content-Type': 'application/json',
+      if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+
+    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+      return await http
+          .delete(
+            Uri.parse('${customBaseUrl!.trim()}$path'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+    }
+
+    if (Platform.isAndroid) {
+      try {
+        return await http
+            .delete(
+              Uri.parse('http://10.0.2.2:8080$path'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {
+        return await http
+            .delete(
+              Uri.parse('http://127.0.0.1:8080$path'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 6));
+      }
+    }
+
+    return await http
+        .delete(
+          Uri.parse('http://localhost:8080$path'),
+          headers: headers,
+        )
+        .timeout(const Duration(seconds: 10));
   }
 
   /// Submit SMS scan payload to backend API
@@ -162,9 +224,11 @@ class AuthService {
         'source': source,
       };
 
-      print("[Argus Scan Endpoint] POST $baseUrl/api/scans | sender: $sender, source: $source");
+      print(
+          "[Argus Scan Endpoint] POST $baseUrl/api/scans | sender: $sender, source: $source");
       final response = await _postRequest('/api/scans', body);
-      print("[Argus Scan Endpoint] Status: ${response.statusCode} | Response: ${response.body}");
+      print(
+          "[Argus Scan Endpoint] Status: ${response.statusCode} | Response: ${response.body}");
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -209,14 +273,16 @@ class AuthService {
     int size = 20,
   }) async {
     try {
-      final response = await _getRequest('/api/scans/fraud?page=$page&size=$size');
+      final response =
+          await _getRequest('/api/scans/fraud?page=$page&size=$size');
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200) {
         final data = decoded['data'] is Map<String, dynamic>
             ? (decoded['data'] as Map<String, dynamic>)
             : <String, dynamic>{};
-        final content = data['content'] is List ? (data['content'] as List) : [];
+        final content =
+            data['content'] is List ? (data['content'] as List) : [];
         return {
           'success': true,
           'message': decoded['message'] ?? 'Fraud scans retrieved successfully',
@@ -240,6 +306,38 @@ class AuthService {
         'message': 'Failed to connect to backend server.',
         'error': e,
         'content': [],
+      };
+    }
+  }
+
+  /// Delete a fraud scan that was reclassified as safe.
+  /// TODO: Confirm the exact endpoint path and backend ID field with the backend team.
+  static Future<Map<String, dynamic>> deleteFraudScan({
+    required String id,
+  }) async {
+    try {
+      // TODO: Confirm exact endpoint path with backend.
+      final response =
+          await _deleteRequest('/api/scans/fraud/${Uri.encodeComponent(id)}');
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Message marked as safe.',
+        };
+      }
+
+      return {
+        'success': false,
+        'message': decoded['message'] ?? 'Failed to mark message as safe.',
+        'statusCode': response.statusCode,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server.',
+        'error': e,
       };
     }
   }
@@ -292,7 +390,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -319,7 +418,8 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
-        final tokenStr = decoded['token'] as String? ?? data['token'] as String? ?? '';
+        final tokenStr =
+            decoded['token'] as String? ?? data['token'] as String? ?? '';
 
         await saveSession(tokenStr, data);
 
@@ -339,7 +439,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -373,7 +474,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -407,7 +509,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -443,7 +546,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -481,7 +585,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }

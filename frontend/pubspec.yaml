@@ -15,6 +15,7 @@ dependencies:
   telephony: ^0.2.0
   flutter_local_notifications: ^17.2.2
   permission_handler: ^11.3.1
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

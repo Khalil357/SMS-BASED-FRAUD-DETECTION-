@@ -4,11 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SmsStorageService {
   static const String _keyLogs = 'sms_logs_v1';
   static const String _keyFeedback = 'feedback_logs_v1';
-  
+
   // Settings Keys
   static const String keyIngestionEnabled = 'settings_ingestion_enabled';
-  static const String keyNotificationsEnabled = 'settings_notifications_enabled';
-  static const String keyNotificationThreshold = 'settings_notification_threshold';
+  static const String keyNotificationsEnabled =
+      'settings_notifications_enabled';
+  static const String keyNotificationThreshold =
+      'settings_notification_threshold';
 
   static SharedPreferences? _prefs;
 
@@ -28,9 +30,12 @@ class SmsStorageService {
         {
           'id': 'mock_1',
           'sender': '+27821110000',
-          'message': 'Congratulations! You have won a R5000 voucher from Woolworths. Click http://bit.ly/woolies-win to claim now!',
+          'message':
+              'Congratulations! You have won a R5000 voucher from Woolworths. Click http://bit.ly/woolies-win to claim now!',
           'type': 'Fraud',
-          'time': DateTime.now().subtract(const Duration(minutes: 10)).toIso8601String(),
+          'time': DateTime.now()
+              .subtract(const Duration(minutes: 10))
+              .toIso8601String(),
           'threat': 0.95,
           'matchedReasons': [
             'Contains lottery/financial reward keywords (e.g. win, prize, voucher)',
@@ -42,9 +47,12 @@ class SmsStorageService {
         {
           'id': 'mock_2',
           'sender': '+27832223333',
-          'message': 'FNB Alert: A login attempt was made on your profile. If this was not you, please verify your details here: https://fnb-secure-login.info',
+          'message':
+              'FNB Alert: A login attempt was made on your profile. If this was not you, please verify your details here: https://fnb-secure-login.info',
           'type': 'Fraud',
-          'time': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
+          'time': DateTime.now()
+              .subtract(const Duration(hours: 1))
+              .toIso8601String(),
           'threat': 0.98,
           'matchedReasons': [
             'Account credential update/verification request',
@@ -59,7 +67,9 @@ class SmsStorageService {
           'sender': 'Absa Bank',
           'message': 'Your OTP is 492010. Do not share this code with anyone.',
           'type': 'Safe',
-          'time': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
+          'time': DateTime.now()
+              .subtract(const Duration(hours: 2))
+              .toIso8601String(),
           'threat': 0.02,
           'matchedReasons': ['No suspicious patterns matched'],
           'hasFeedback': false,
@@ -68,9 +78,12 @@ class SmsStorageService {
         {
           'id': 'mock_4',
           'sender': '+14150009999',
-          'message': 'URGENT: Your parcel delivery is pending. Pay outstanding customs fee of \$1.50 immediately to avoid return: http://usps-tracking-fees.com',
+          'message':
+              'URGENT: Your parcel delivery is pending. Pay outstanding customs fee of \$1.50 immediately to avoid return: http://usps-tracking-fees.com',
           'type': 'Spam',
-          'time': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+          'time': DateTime.now()
+              .subtract(const Duration(days: 1))
+              .toIso8601String(),
           'threat': 0.72,
           'matchedReasons': [
             'High urgency indicator ("urgent")',
@@ -82,9 +95,12 @@ class SmsStorageService {
         {
           'id': 'mock_5',
           'sender': '+27829998888',
-          'message': 'Hey, are we still meeting for coffee at 3pm today? Let me know.',
+          'message':
+              'Hey, are we still meeting for coffee at 3pm today? Let me know.',
           'type': 'Safe',
-          'time': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+          'time': DateTime.now()
+              .subtract(const Duration(days: 1))
+              .toIso8601String(),
           'threat': 0.00,
           'matchedReasons': ['No suspicious patterns matched'],
           'hasFeedback': false,
@@ -121,6 +137,13 @@ class SmsStorageService {
     await saveLogs(logs);
   }
 
+  /// Remove a single locally cached SMS log after its backend record is deleted.
+  static Future<void> removeLog(String logId) async {
+    final logs = await getLogs();
+    logs.removeWhere((log) => log['id']?.toString() == logId);
+    await saveLogs(logs);
+  }
+
   /// Clear all logs
   static Future<void> clearLogs() async {
     final prefs = await _getPrefs();
@@ -134,7 +157,7 @@ class SmsStorageService {
   }) async {
     final logs = await getLogs();
     final index = logs.indexWhere((element) => element['id'] == logId);
-    
+
     if (index != -1) {
       final original = Map<String, dynamic>.from(logs[index]);
       final oldType = original['type'];
@@ -142,7 +165,7 @@ class SmsStorageService {
       original['userFeedback'] = feedbackType;
       // Update classification in the logs page too to show user updated assessment
       original['type'] = feedbackType;
-      
+
       logs[index] = original;
       await saveLogs(logs);
 
@@ -168,7 +191,8 @@ class SmsStorageService {
     if (jsonStr != null) {
       try {
         final List<dynamic> decoded = jsonDecode(jsonStr);
-        feedbackLogs = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        feedbackLogs =
+            decoded.map((e) => Map<String, dynamic>.from(e)).toList();
       } catch (_) {}
     }
     feedbackLogs.insert(0, entry);
@@ -200,7 +224,8 @@ class SmsStorageService {
     await prefs.setBool(key, value);
   }
 
-  static Future<double> getDoubleSetting(String key, double defaultValue) async {
+  static Future<double> getDoubleSetting(
+      String key, double defaultValue) async {
     final prefs = await _getPrefs();
     return prefs.getDouble(key) ?? defaultValue;
   }
