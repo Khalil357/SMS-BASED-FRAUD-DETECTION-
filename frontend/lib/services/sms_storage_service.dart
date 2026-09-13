@@ -76,23 +76,6 @@ class SmsStorageService {
           'userFeedback': null
         },
         {
-          'id': 'mock_4',
-          'sender': '+14150009999',
-          'message':
-              'URGENT: Your parcel delivery is pending. Pay outstanding customs fee of \$1.50 immediately to avoid return: http://usps-tracking-fees.com',
-          'type': 'Spam',
-          'time': DateTime.now()
-              .subtract(const Duration(days: 1))
-              .toIso8601String(),
-          'threat': 0.72,
-          'matchedReasons': [
-            'High urgency indicator ("urgent")',
-            'Contains external hyperlink or link call-to-action'
-          ],
-          'hasFeedback': false,
-          'userFeedback': null
-        },
-        {
           'id': 'mock_5',
           'sender': '+27829998888',
           'message':
@@ -153,7 +136,7 @@ class SmsStorageService {
   /// Save Feedback and update the SMS log item classification
   static Future<void> submitFeedback({
     required String logId,
-    required String feedbackType, // 'Safe', 'Spam', 'Fraud'
+    required String feedbackType, // 'Safe' or 'Fraud'
   }) async {
     final logs = await getLogs();
     final index = logs.indexWhere((element) => element['id'] == logId);

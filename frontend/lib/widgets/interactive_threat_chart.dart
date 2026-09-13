@@ -68,8 +68,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
                 children: [
                   _buildLegendItem('Safe', Colors.green, isDark),
                   const SizedBox(width: 16),
-                  _buildLegendItem('Spam', Colors.amber.shade700, isDark),
-                  const SizedBox(width: 16),
                   _buildLegendItem('Fraud', AppTheme.red, isDark),
                 ],
               ),
@@ -94,7 +92,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
 
                         final total = stat['total'] as int;
                         final safeCount = stat['safe'] as int;
-                        final spamCount = stat['spam'] as int;
                         final fraudCount = stat['fraud'] as int;
                         final maxTotal = dailyStats.map((s) => s['total'] as int).fold(1, max);
 
@@ -138,11 +135,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
                                                 Expanded(
                                                   flex: fraudCount,
                                                   child: Container(color: AppTheme.red),
-                                                ),
-                                              if (spamCount > 0)
-                                                Expanded(
-                                                  flex: spamCount,
-                                                  child: Container(color: Colors.amber.shade700),
                                                 ),
                                               if (safeCount > 0)
                                                 Expanded(
@@ -246,7 +238,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
   Widget _buildDayDetailCard(Map<String, dynamic> stat, ThemeData theme, bool isDark) {
     final total = stat['total'] as int;
     final safe = stat['safe'] as int;
-    final spam = stat['spam'] as int;
     final fraud = stat['fraud'] as int;
     final avgThreat = stat['avgThreat'] as double;
 
@@ -294,7 +285,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
             children: [
               _buildDetailStatItem('Scanned', '$total', isDark),
               _buildDetailStatItem('Safe', '$safe (${safePct.toStringAsFixed(0)}%)', isDark, color: Colors.green),
-              _buildDetailStatItem('Spam', '$spam', isDark, color: Colors.amber.shade700),
               _buildDetailStatItem('Fraud', '$fraud (${fraudPct.toStringAsFixed(0)}%)', isDark, color: AppTheme.red),
             ],
           ),
@@ -425,7 +415,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
       }).toList();
 
       final safeCount = dayLogs.where((l) => l['type'] == 'Safe').length;
-      final spamCount = dayLogs.where((l) => l['type'] == 'Spam').length;
       final fraudCount = dayLogs.where((l) => l['type'] == 'Fraud').length;
 
       double avgThreat = 0.0;
@@ -442,7 +431,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
         'fullDate': fullDate,
         'total': dayLogs.length,
         'safe': safeCount,
-        'spam': spamCount,
         'fraud': fraudCount,
         'avgThreat': avgThreat,
       });
@@ -460,7 +448,7 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
     for (final log in widget.logs) {
       final msg = (log['message'] as String? ?? '').toLowerCase();
       final type = log['type'] as String? ?? '';
-      if (type == 'Fraud' || type == 'Spam') {
+      if (type == 'Fraud') {
         if (msg.contains('bank') || msg.contains('account') || msg.contains('otp') || msg.contains('card')) {
           bankCount++;
         } else if (msg.contains('parcel') || msg.contains('delivery') || msg.contains('package') || msg.contains('tracking')) {

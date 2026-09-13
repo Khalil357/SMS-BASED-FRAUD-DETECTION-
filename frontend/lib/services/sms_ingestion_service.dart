@@ -49,7 +49,7 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
       if (backendResult['success'] == true && backendResult['isScam'] != null) {
         final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
         final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
-        final type = isScam ? 'Fraud' : (result.classification == 'Spam' ? 'Spam' : 'Safe');
+        final type = isScam ? 'Fraud' : 'Safe';
         final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
 
         logEntry['type'] = type;
@@ -65,9 +65,9 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
     // 4. Add to local log storage
     await SmsStorageService.addLog(logEntry);
 
-    // 5. Trigger alert notification for Fraud / Spam / Threat Index >= 0.50
+    // 5. Trigger alert notification for Fraud or a high threat index.
     final threatLevel = (logEntry['threat'] as num).toDouble();
-    if (logEntry['type'] == 'Fraud' || logEntry['type'] == 'Spam' || threatLevel >= 0.50) {
+    if (logEntry['type'] == 'Fraud' || threatLevel >= 0.50) {
       await NotificationService.showThreatAlert(
         sender: sender,
         message: body,
@@ -161,7 +161,7 @@ class SmsIngestionService {
             if (backendResult['success'] == true && backendResult['isScam'] != null) {
               final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
               final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
-              final type = isScam ? 'Fraud' : (result.classification == 'Spam' ? 'Spam' : 'Safe');
+              final type = isScam ? 'Fraud' : 'Safe';
               final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
 
               logEntry['type'] = type;

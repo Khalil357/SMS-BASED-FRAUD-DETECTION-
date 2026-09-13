@@ -372,6 +372,41 @@ class AuthService {
     }
   }
 
+  /// Add a user-confirmed fraud scan to the backend database.
+  /// TODO: Confirm the exact endpoint path and payload with the backend team.
+  static Future<Map<String, dynamic>> addFraudScan({
+    required String sender,
+    required String message,
+  }) async {
+    try {
+      // TODO: Confirm exact endpoint path and payload with backend.
+      final response = await _postRequest('/api/scans/fraud', {
+        'sender': sender,
+        'message': message,
+      });
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Message marked as fraud.',
+        };
+      }
+
+      return {
+        'success': false,
+        'message': decoded['message'] ?? 'Failed to mark message as fraud.',
+        'statusCode': response.statusCode,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server.',
+        'error': e,
+      };
+    }
+  }
+
   /// Safely decode JSON — returns empty map on null/empty/malformed body
   static Map<String, dynamic> _safeJsonDecode(String body) {
     if (body.trim().isEmpty) return {};

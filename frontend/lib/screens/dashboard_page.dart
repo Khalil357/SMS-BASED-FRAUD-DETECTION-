@@ -331,9 +331,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   item['isScam'] ??
                   (item['label'] == 'scam' || item['label'] == 'fraud');
               final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
-              final type = (isScam == true)
-                  ? 'Fraud'
-                  : ((item['label'] == 'spam') ? 'Spam' : 'Safe');
+              final type = isScam == true ? 'Fraud' : 'Safe';
               final threatLevel = (type == 'Safe')
                   ? (1.0 - conf).clamp(0.0, 1.0)
                   : conf.clamp(0.0, 1.0);
@@ -407,18 +405,13 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   }
 
   void _showForegroundThreatSnackBar(Map<String, dynamic> log) {
-    if (log['type'] == 'Fraud' || log['type'] == 'Spam') {
+    if (log['type'] == 'Fraud') {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              Icon(
-                log['type'] == 'Fraud'
-                    ? Icons.gpp_bad
-                    : Icons.warning_amber_rounded,
-                color: Colors.white,
-              ),
+              const Icon(Icons.gpp_bad, color: Colors.white),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -428,8 +421,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
               ),
             ],
           ),
-          backgroundColor:
-              log['type'] == 'Fraud' ? AppTheme.red : Colors.amber.shade700,
+          backgroundColor: AppTheme.red,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 4),
           action: SnackBarAction(
@@ -658,9 +650,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       if (result.classification == 'Fraud') {
         _scanResult =
             '🚨 High Risk Alert ($modelTag):\nScam/Phishing detected with $threatPct% Threat Index!\n\n${result.feedback}';
-      } else if (result.classification == 'Spam') {
-        _scanResult =
-            '⚠️ Moderate Risk ($modelTag):\nSpam content detected with $threatPct% Threat Index.\n\n${result.feedback}';
       } else {
         _scanResult =
             '🛡️ Verified Safe ($modelTag):\nMessage evaluated as safe ($safeConfPct% Confidence, $threatPct% Threat Index).\n\n${result.feedback}';
@@ -830,7 +819,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ),
             onPressed: () {
               Navigator.pop(context);
-              _handleFeedbackSubmit(log['id'], 'Fraud');
+              _markAsFraud(log);
             },
             child: Text(
               'Confirm',
@@ -887,6 +876,36 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     _showMessageActionSnackBar('Your response has successfully been updated.');
   }
 
+  Future<void> _markAsFraud(Map<String, dynamic> log) async {
+    final result = await AuthService.addFraudScan(
+      sender: log['sender']?.toString() ?? '',
+      message: log['message']?.toString() ?? '',
+    );
+    if (!mounted) return;
+
+    if (result['success'] != true) {
+      _showMessageActionSnackBar(
+        result['message']?.toString() ?? 'Failed to update on the server.',
+        isError: true,
+      );
+      return;
+    }
+
+    final logId = log['id']?.toString() ?? '';
+    await SmsStorageService.submitFeedback(logId: logId, feedbackType: 'Fraud');
+    final logs = await SmsStorageService.getLogs();
+    if (!mounted) return;
+
+    setState(() {
+      _smsLogs = logs;
+    });
+    Navigator.pop(context);
+    _showMessageActionSnackBar(
+      result['message']?.toString() ??
+          'Your response has successfully been updated.',
+    );
+  }
+
   void _showLogDetail(Map<String, dynamic> log) {
     showModalBottomSheet(
       context: context,
@@ -903,9 +922,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             : rawThreat;
         final matchedReasons = List<String>.from(log['matchedReasons'] ?? []);
 
-        final Color classificationColor = type == 'Safe'
-            ? Colors.green
-            : (type == 'Fraud' ? AppTheme.red : Colors.amber.shade700);
+        final Color classificationColor =
+            type == 'Safe' ? Colors.green : AppTheme.red;
 
         return Container(
           decoration: BoxDecoration(
@@ -1038,11 +1056,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                             color: classificationColor.withOpacity(0.3)),
                       ),
                       child: Icon(
-                        type == 'Safe'
-                            ? Icons.gpp_good
-                            : (type == 'Fraud'
-                                ? Icons.gpp_bad
-                                : Icons.warning_amber),
+                        type == 'Safe' ? Icons.gpp_good : Icons.gpp_bad,
                         color: classificationColor,
                         size: 28,
                       ),
@@ -1190,46 +1204,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                 onPressed: () => _reportToAuthorities(log),
                               ),
                             ],
-                            if (type == 'Spam') ...[
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.green,
-                                  side: const BorderSide(color: Colors.green),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  alignment: Alignment.center,
-                                ),
-                                icon: const Icon(Icons.check, size: 16),
-                                label: const Text('Mark Safe (FP)',
-                                    style: TextStyle(fontSize: 12)),
-                                onPressed: () => _confirmMarkAsSafe(log),
-                              ),
-                              const SizedBox(height: 10),
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppTheme.red,
-                                  side: const BorderSide(color: AppTheme.red),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  alignment: Alignment.center,
-                                ),
-                                icon: const Icon(Icons.gpp_bad, size: 16),
-                                label: const Text('Mark Fraud',
-                                    style: TextStyle(fontSize: 12)),
-                                onPressed: () => _confirmMarkAsFraud(log),
-                              ),
-                            ],
                             if (type == 'Safe')
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
+                              OutlinedButton.icon(
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: AppTheme.red,
                                         side: const BorderSide(
@@ -1240,37 +1216,13 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                         ),
                                         padding: const EdgeInsets.symmetric(
                                             vertical: 12),
+                                        alignment: Alignment.center,
                                       ),
                                       icon: const Icon(Icons.gpp_bad, size: 16),
                                       label: const Text('Mark Fraud',
                                           style: TextStyle(fontSize: 12)),
                                       onPressed: () =>
                                           _confirmMarkAsFraud(log),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor:
-                                            Colors.amber.shade800,
-                                        side: BorderSide(
-                                            color: Colors.amber.shade800),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 12),
-                                      ),
-                                      icon: const Icon(Icons.warning, size: 16),
-                                      label: const Text('Mark Spam',
-                                          style: TextStyle(fontSize: 12)),
-                                      onPressed: () => _handleFeedbackSubmit(
-                                          log['id'], 'Spam'),
-                                    ),
-                                  ),
-                                ],
                               ),
                           ],
                         ),
@@ -2145,7 +2097,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 const SizedBox(width: 8),
                 Wrap(
                   spacing: 6,
-                  children: ['All', 'Safe', 'Spam', 'Fraud'].map((type) {
+                  children: ['All', 'Safe', 'Fraud'].map((type) {
                     final isSelected = _filterThreat == type;
                     return ChoiceChip(
                       label: Text(type),
