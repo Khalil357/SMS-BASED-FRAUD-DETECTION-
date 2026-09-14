@@ -264,6 +264,19 @@ class AuthService {
     }
   }
 
+  static Future<Map<String, dynamic>> addFraudScan({
+    required String sender,
+    required String messageBody,
+    String source = 'MANUAL_QUERY',
+  }) async {
+    // It simply takes the arguments and calls submitScan
+    return await submitScan(
+      sender: sender,
+      messageBody: messageBody,
+      source: source,
+    );
+  }
+
   /// Fetch authenticated user's "FRAUD" messages with pagination
   /// GET /api/scans/fraud?page=0&size=20
   static Future<Map<String, dynamic>> getFraudScans({
@@ -311,15 +324,15 @@ class AuthService {
   /// Delete a fraud scan row from the backend after the user reclassifies it as safe.
   ///
   /// A message is only treated as "Safe" locally once this call confirms the
-  /// row has actually been deleted from the database — see AuthService docs
-  /// in dashboard_page.dart's _markAsSafe() for how this is consumed.
+  /// row has actually been deleted from the database — see
+  /// dashboard_page.dart's _markAsSafe() for how this is consumed.
   ///
-  /// PLACEHOLDER — confirm with backend team before relying on this in production:
-  ///   1. Exact endpoint path (currently guessing DELETE /api/scans/fraud/{id})
-  ///   2. Whether it's a hard delete or a soft "reclassify" PATCH/PUT instead
-  ///   3. Which field in the fraud-scan JSON is the true row ID (currently
-  ///      assuming `id`, wired up as `backendId` in dashboard_page.dart)
-  ///   4. Expected success status code (200 vs 204 — both handled below for now)
+  /// Confirmed against backend: DELETE /api/v1/fraud-records/{recordId}
+  /// (FraudRecordController, feature/fraud_record branch, merged into dev).
+  /// The id passed here must be the SmsScan entity's `scanId` (UUID) — see
+  /// dashboard_page.dart's _fetchBackendFraudScans() where `backendId` is
+  /// set from `item['scanId']`.
+  /// Controller returns 204 No Content on success, no JSON body.
   static Future<Map<String, dynamic>> deleteFraudScan({
     required String id,
   }) async {
@@ -331,20 +344,18 @@ class AuthService {
     }
 
     try {
-      // TODO(backend): confirm exact path once endpoint is implemented.
-      final path = '/api/scans/fraud/${Uri.encodeComponent(id)}';
+      final path = '/api/v1/fraud-records/${Uri.encodeComponent(id)}';
 
       print("[Argus Delete Fraud Scan] DELETE $baseUrl$path");
       final response = await _deleteRequest(path);
       print(
           "[Argus Delete Fraud Scan] Status: ${response.statusCode} | Response: ${response.body}");
 
-      final decoded = _safeJsonDecode(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
+      // Controller returns 204 No Content on success — no JSON body to parse.
+      if (response.statusCode == 204 || response.statusCode == 200) {
         return {
           'success': true,
-          'message': decoded['message'] ?? 'Record removed from the database.',
+          'message': 'Record removed from the database.',
         };
       }
 
@@ -357,45 +368,11 @@ class AuthService {
         };
       }
 
+      final decoded = _safeJsonDecode(response.body);
       return {
         'success': false,
         'message': decoded['message'] ??
             'Failed to remove the record (status ${response.statusCode}).',
-        'statusCode': response.statusCode,
-      };
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Failed to connect to backend server.',
-        'error': e,
-      };
-    }
-  }
-
-  /// Add a user-confirmed fraud scan to the backend database.
-  /// TODO: Confirm the exact endpoint path and payload with the backend team.
-  static Future<Map<String, dynamic>> addFraudScan({
-    required String sender,
-    required String message,
-  }) async {
-    try {
-      // TODO: Confirm exact endpoint path and payload with backend.
-      final response = await _postRequest('/api/scans/fraud', {
-        'sender': sender,
-        'message': message,
-      });
-      final decoded = _safeJsonDecode(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return {
-          'success': true,
-          'message': decoded['message'] ?? 'Message marked as fraud.',
-        };
-      }
-
-      return {
-        'success': false,
-        'message': decoded['message'] ?? 'Failed to mark message as fraud.',
         'statusCode': response.statusCode,
       };
     } catch (e) {
@@ -518,12 +495,12 @@ class AuthService {
   }) async {
     try {
       final response = await _postRequest('/api/auth/password-resets', {
-        'phone_number': phoneNumber.trim(),
+        'phone_number': phoneNumber,
       });
 
       final decoded = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (response.statusCode == 200) {
         return {
           'success': true,
           'message': decoded['message'] ?? 'Reset code sent successfully',
@@ -539,7 +516,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -552,12 +530,12 @@ class AuthService {
   }) async {
     try {
       final response = await _postRequest('/api/auth/password-resets/resend', {
-        'phone_number': phoneNumber.trim(),
+        'phone_number': phoneNumber,
       });
 
       final decoded = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (response.statusCode == 200) {
         return {
           'success': true,
           'message': decoded['message'] ?? 'Code resent successfully',
@@ -573,7 +551,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -587,13 +566,13 @@ class AuthService {
   }) async {
     try {
       final response = await _postRequest('/api/auth/password-resets/verify', {
-        'phone_number': phoneNumber.trim(),
-        'verification_code': verificationCode.trim(),
+        'phone_number': phoneNumber,
+        'verification_code': verificationCode,
       });
 
       final decoded = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (response.statusCode == 200) {
         return {
           'success': true,
           'message': decoded['message'] ?? 'Code verified successfully',
@@ -609,7 +588,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }

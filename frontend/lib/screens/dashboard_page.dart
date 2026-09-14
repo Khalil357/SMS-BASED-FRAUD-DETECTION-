@@ -314,59 +314,62 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     _fetchBackendFraudScans();
   }
 
-  Future<void> _fetchBackendFraudScans() async {
-    try {
-      final res = await AuthService.getFraudScans(page: 0, size: 20);
-      if (res['success'] == true && res['content'] is List) {
-        final List content = res['content'];
-        bool hasNew = false;
-        for (final item in content) {
-          if (item is Map<String, dynamic>) {
-            final msgText = item['message'] ?? item['messageBody'] ?? '';
-            if (msgText.toString().trim().isEmpty) continue;
+Future<void> _fetchBackendFraudScans() async {
+  try {
+    final res = await AuthService.getFraudScans(page: 0, size: 20);
+    if (res['success'] == true && res['content'] is List) {
+      final List content = res['content'];
+      bool hasNew = false;
+      for (final item in content) {
+        if (item is Map<String, dynamic>) {
+          final msgText = item['message'] ?? item['messageBody'] ?? '';
+          if (msgText.toString().trim().isEmpty) continue;
 
-            final exists =
-                _smsLogs.any((l) => l['message'] == msgText.toString());
-            if (!exists) {
-              final isScam = item['is_scam'] ??
-                  item['isScam'] ??
-                  (item['label'] == 'scam' || item['label'] == 'fraud');
-              final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
-              final type = isScam == true ? 'Fraud' : 'Safe';
-              final threatLevel = (type == 'Safe')
-                  ? (1.0 - conf).clamp(0.0, 1.0)
-                  : conf.clamp(0.0, 1.0);
-              final backendScanId = item['id']?.toString();
-              final logEntry = {
-                'id': backendScanId ??
-                    'backend_fraud_${DateTime.now().millisecondsSinceEpoch}_${item.hashCode}',
-                'backendId': backendScanId,
-                'sender': item['sender'] ?? 'Backend Shield Alert',
-                'message': msgText.toString(),
-                'type': type,
-                'time': item['createdAt'] ??
-                    item['time'] ??
-                    DateTime.now().toIso8601String(),
-                'threat': threatLevel,
-                'matchedReasons': [
-                  'Trained Model Label: ${item['label'] ?? (isScam ? 'scam' : 'safe')}',
-                  'Threat Index: ${(threatLevel * 100).toStringAsFixed(1)}%'
-                ],
-                'hasFeedback': false,
-                'userFeedback': null,
-              };
-              _smsLogs.insert(0, logEntry);
-              await SmsStorageService.addLog(logEntry);
-              hasNew = true;
-            }
+          final exists =
+              _smsLogs.any((l) => l['message'] == msgText.toString());
+          if (!exists) {
+            final isScam = item['is_scam'] ?? item['isScam'] ?? true;
+            final verdict = item['verdict']?.toString();
+            final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
+            final type = (isScam == true)
+                ? 'Fraud'
+                : ((verdict == 'spam') ? 'Spam' : 'Safe');
+            final threatLevel = (type == 'Safe')
+                ? (1.0 - conf).clamp(0.0, 1.0)
+                : conf.clamp(0.0, 1.0);
+
+            // FIXED: was item['id'], the entity's real JSON field is "scanId"
+            final backendScanId = item['scanId']?.toString();
+
+            final logEntry = {
+              'id': backendScanId ??
+                  'backend_fraud_${DateTime.now().millisecondsSinceEpoch}_${item.hashCode}',
+              'backendId': backendScanId,
+              'sender': item['sender'] ?? 'Backend Shield Alert',
+              'message': msgText.toString(),
+              'type': type,
+              // FIXED: was item['createdAt'] / item['time'], real field is "scannedAt"
+              'time': item['scannedAt'] ?? DateTime.now().toIso8601String(),
+              'threat': threatLevel,
+              'matchedReasons': [
+                'Trained Model Label: ${verdict ?? (isScam == true ? 'scam' : 'safe')}',
+                'Threat Index: ${(threatLevel * 100).toStringAsFixed(1)}%'
+              ],
+              'hasFeedback': false,
+              'userFeedback': null,
+            };
+            _smsLogs.insert(0, logEntry);
+            await SmsStorageService.addLog(logEntry);
+            hasNew = true;
           }
         }
-        if (hasNew && mounted) {
-          setState(() {});
-        }
       }
-    } catch (_) {}
-  }
+      if (hasNew && mounted) {
+        setState(() {});
+      }
+    }
+  } catch (_) {}
+}
 
   Future<void> _checkPermissions() async {
     final hasPerm = await SmsIngestionService.hasSmsPermission();
@@ -994,7 +997,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   Future<void> _markAsFraud(Map<String, dynamic> log) async {
     final result = await AuthService.addFraudScan(
       sender: log['sender']?.toString() ?? '',
-      message: log['message']?.toString() ?? '',
+      messageBody: log['message']?.toString() ?? '',
     );
     if (!mounted) return;
 
