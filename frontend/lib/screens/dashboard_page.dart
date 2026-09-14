@@ -995,20 +995,6 @@ Future<void> _fetchBackendFraudScans() async {
   }
 
   Future<void> _markAsFraud(Map<String, dynamic> log) async {
-    final result = await AuthService.addFraudScan(
-      sender: log['sender']?.toString() ?? '',
-      messageBody: log['message']?.toString() ?? '',
-    );
-    if (!mounted) return;
-
-    if (result['success'] != true) {
-      _showMessageActionSnackBar(
-        result['message']?.toString() ?? 'Failed to update on the server.',
-        isError: true,
-      );
-      return;
-    }
-
     final logId = log['id']?.toString() ?? '';
     await SmsStorageService.submitFeedback(logId: logId, feedbackType: 'Fraud');
     final logs = await SmsStorageService.getLogs();
@@ -1018,10 +1004,20 @@ Future<void> _fetchBackendFraudScans() async {
       _smsLogs = logs;
     });
     Navigator.pop(context);
-    _showMessageActionSnackBar(
-      result['message']?.toString() ??
-          'Your response has successfully been updated.',
+
+    final result = await AuthService.addFraudScan(
+      sender: log['sender']?.toString() ?? '',
+      messageBody: log['message']?.toString() ?? '',
     );
+
+    if (result['success'] == true) {
+      _showMessageActionSnackBar(result['message']?.toString() ??
+          'Your response has successfully been updated.');
+    } else {
+      _showMessageActionSnackBar(
+        'Saved locally. The server could not be updated yet.',
+      );
+    }
   }
 
   void _showLogDetail(Map<String, dynamic> log) {

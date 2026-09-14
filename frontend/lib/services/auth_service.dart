@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  /// Custom backend URL override (e.g. http://192.168.100.224:8080)
+  /// Custom backend URL override (e.g. http://192.168.100.189:8080)
   static String? customBaseUrl;
 
   /// Dynamic baseUrl getter for logging/debugging
@@ -13,7 +13,8 @@ class AuthService {
       return customBaseUrl!.trim();
     }
     if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8080';
+      // Updated to your Ubuntu machine's local Wi-Fi IP address for physical phone testing
+      return 'http://192.168.100.189:8080';
     }
     return 'http://localhost:8080';
   }
@@ -66,11 +67,12 @@ class AuthService {
     } catch (_) {}
   }
 
-  /// Helper to send POST requests with automatic fallback for physical phone vs emulator
+  /// Helper to send POST requests cleanly without secondary loopback failures
   static Future<http.Response> _postRequest(
     String path,
     Map<String, dynamic> body, {
     Map<String, String>? customHeaders,
+    Duration defaultTimeout = const Duration(seconds: 15),
   }) async {
     final headers = {
       'Content-Type': 'application/json',
@@ -78,132 +80,55 @@ class AuthService {
       ...?customHeaders,
     };
     final encodedBody = jsonEncode(body);
-
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
-      return await http
-          .post(
-            Uri.parse('${customBaseUrl!.trim()}$path'),
-            headers: headers,
-            body: encodedBody,
-          )
-          .timeout(const Duration(seconds: 10));
-    }
-
-    if (Platform.isAndroid) {
-      try {
-        return await http
-            .post(
-              Uri.parse('http://10.0.2.2:8080$path'),
-              headers: headers,
-              body: encodedBody,
-            )
-            .timeout(const Duration(seconds: 3));
-      } catch (_) {
-        return await http
-            .post(
-              Uri.parse('http://127.0.0.1:8080$path'),
-              headers: headers,
-              body: encodedBody,
-            )
-            .timeout(const Duration(seconds: 6));
-      }
-    }
+    final targetUrl = '$baseUrl$path';
 
     return await http
         .post(
-          Uri.parse('http://localhost:8080$path'),
+          Uri.parse(targetUrl),
           headers: headers,
           body: encodedBody,
         )
-        .timeout(const Duration(seconds: 10));
+        .timeout(defaultTimeout);
   }
 
-  /// Helper to send GET requests with automatic fallback for physical phone vs emulator
+  /// Helper to send GET requests
   static Future<http.Response> _getRequest(
     String path, {
     Map<String, String>? customHeaders,
+    Duration defaultTimeout = const Duration(seconds: 15),
   }) async {
     final headers = {
       'Content-Type': 'application/json',
       if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
       ...?customHeaders,
     };
-
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
-      return await http
-          .get(
-            Uri.parse('${customBaseUrl!.trim()}$path'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 10));
-    }
-
-    if (Platform.isAndroid) {
-      try {
-        return await http
-            .get(
-              Uri.parse('http://10.0.2.2:8080$path'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 3));
-      } catch (_) {
-        return await http
-            .get(
-              Uri.parse('http://127.0.0.1:8080$path'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 6));
-      }
-    }
+    final targetUrl = '$baseUrl$path';
 
     return await http
         .get(
-          Uri.parse('http://localhost:8080$path'),
+          Uri.parse(targetUrl),
           headers: headers,
         )
-        .timeout(const Duration(seconds: 10));
+        .timeout(defaultTimeout);
   }
 
-  /// Helper to send DELETE requests with the same host fallback as other calls.
-  static Future<http.Response> _deleteRequest(String path) async {
+  /// Helper to send DELETE requests
+  static Future<http.Response> _deleteRequest(
+    String path, {
+    Duration defaultTimeout = const Duration(seconds: 15),
+  }) async {
     final headers = {
       'Content-Type': 'application/json',
       if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
     };
-
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
-      return await http
-          .delete(
-            Uri.parse('${customBaseUrl!.trim()}$path'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 10));
-    }
-
-    if (Platform.isAndroid) {
-      try {
-        return await http
-            .delete(
-              Uri.parse('http://10.0.2.2:8080$path'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 3));
-      } catch (_) {
-        return await http
-            .delete(
-              Uri.parse('http://127.0.0.1:8080$path'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 6));
-      }
-    }
+    final targetUrl = '$baseUrl$path';
 
     return await http
         .delete(
-          Uri.parse('http://localhost:8080$path'),
+          Uri.parse(targetUrl),
           headers: headers,
         )
-        .timeout(const Duration(seconds: 10));
+        .timeout(defaultTimeout);
   }
 
   /// Submit SMS scan payload to backend API
@@ -214,6 +139,10 @@ class AuthService {
     String source = 'MANUAL_QUERY',
   }) async {
     try {
+      if (token == null || token!.isEmpty) {
+        await loadSession();
+      }
+
       final body = <String, dynamic>{
         'sender': sender,
         'message_body': messageBody,
@@ -224,7 +153,11 @@ class AuthService {
 
       print(
           "[Argus Scan Endpoint] POST $baseUrl/api/scans | sender: $sender, source: $source");
-      final response = await _postRequest('/api/scans', body);
+      final response = await _postRequest(
+        '/api/scans',
+        body,
+        defaultTimeout: const Duration(seconds: 25),
+      );
       print(
           "[Argus Scan Endpoint] Status: ${response.statusCode} | Response: ${response.body}");
       final decoded = _safeJsonDecode(response.body);
@@ -269,7 +202,6 @@ class AuthService {
     required String messageBody,
     String source = 'MANUAL_QUERY',
   }) async {
-    // It simply takes the arguments and calls submitScan
     return await submitScan(
       sender: sender,
       messageBody: messageBody,
@@ -284,6 +216,10 @@ class AuthService {
     int size = 20,
   }) async {
     try {
+      if (token == null || token!.isEmpty) {
+        await loadSession();
+      }
+
       final response =
           await _getRequest('/api/scans/fraud?page=$page&size=$size');
       final decoded = _safeJsonDecode(response.body);
@@ -321,18 +257,7 @@ class AuthService {
     }
   }
 
-  /// Delete a fraud scan row from the backend after the user reclassifies it as safe.
-  ///
-  /// A message is only treated as "Safe" locally once this call confirms the
-  /// row has actually been deleted from the database — see
-  /// dashboard_page.dart's _markAsSafe() for how this is consumed.
-  ///
-  /// Confirmed against backend: DELETE /api/v1/fraud-records/{recordId}
-  /// (FraudRecordController, feature/fraud_record branch, merged into dev).
-  /// The id passed here must be the SmsScan entity's `scanId` (UUID) — see
-  /// dashboard_page.dart's _fetchBackendFraudScans() where `backendId` is
-  /// set from `item['scanId']`.
-  /// Controller returns 204 No Content on success, no JSON body.
+  /// Delete a fraud scan row from backend
   static Future<Map<String, dynamic>> deleteFraudScan({
     required String id,
   }) async {
@@ -344,6 +269,10 @@ class AuthService {
     }
 
     try {
+      if (token == null || token!.isEmpty) {
+        await loadSession();
+      }
+
       final path = '/api/v1/fraud-records/${Uri.encodeComponent(id)}';
 
       print("[Argus Delete Fraud Scan] DELETE $baseUrl$path");
@@ -351,7 +280,6 @@ class AuthService {
       print(
           "[Argus Delete Fraud Scan] Status: ${response.statusCode} | Response: ${response.body}");
 
-      // Controller returns 204 No Content on success — no JSON body to parse.
       if (response.statusCode == 204 || response.statusCode == 200) {
         return {
           'success': true,
@@ -360,8 +288,6 @@ class AuthService {
       }
 
       if (response.statusCode == 404) {
-        // Row was already gone (e.g. deleted elsewhere) — treat as success
-        // so local state doesn't get stuck out of sync.
         return {
           'success': true,
           'message': 'Record was already removed.',
@@ -397,7 +323,6 @@ class AuthService {
   }
 
   /// Register a new user
-  /// POST /api/auth/register
   static Future<Map<String, dynamic>> signUp({
     required String fullName,
     required String email,
@@ -439,8 +364,7 @@ class AuthService {
     }
   }
 
-  /// Login user with Phone Number or Email Address
-  /// POST /api/auth/login
+  /// Login user
   static Future<Map<String, dynamic>> login({
     required String identifier,
     required String password,
@@ -489,7 +413,6 @@ class AuthService {
   }
 
   /// Request password reset code
-  /// POST /api/auth/password-resets
   static Future<Map<String, dynamic>> requestPasswordReset({
     required String phoneNumber,
   }) async {
@@ -524,7 +447,6 @@ class AuthService {
   }
 
   /// Resend verification code
-  /// POST /api/auth/password-resets/resend
   static Future<Map<String, dynamic>> resendCode({
     required String phoneNumber,
   }) async {
@@ -559,7 +481,6 @@ class AuthService {
   }
 
   /// Verify reset code
-  /// POST /api/auth/password-resets/verify
   static Future<Map<String, dynamic>> verifyResetCode({
     required String phoneNumber,
     required String verificationCode,
@@ -596,7 +517,6 @@ class AuthService {
   }
 
   /// Reset password with verification code
-  /// POST /api/auth/password-resets/confirm
   static Future<Map<String, dynamic>> resetPassword({
     required String phoneNumber,
     required String verificationCode,

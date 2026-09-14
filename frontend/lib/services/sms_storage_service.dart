@@ -139,7 +139,8 @@ class SmsStorageService {
     required String feedbackType, // 'Safe' or 'Fraud'
   }) async {
     final logs = await getLogs();
-    final index = logs.indexWhere((element) => element['id'] == logId);
+    final index = logs.indexWhere(
+        (element) => element['id']?.toString() == logId.toString());
 
     if (index != -1) {
       final original = Map<String, dynamic>.from(logs[index]);
