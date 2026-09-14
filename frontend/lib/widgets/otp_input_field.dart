@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../app_theme.dart';
 
 class OtpInputField extends StatefulWidget {
   final int length;
@@ -19,59 +20,40 @@ class OtpInputField extends StatefulWidget {
 }
 
 class _OtpInputFieldState extends State<OtpInputField> {
-  late List<TextEditingController> _controllers;
-  late List<FocusNode> _focusNodes;
-  late List<bool> _isFocusedList;
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    _controllers = List.generate(widget.length, (_) => TextEditingController());
-    _focusNodes = List.generate(widget.length, (_) => FocusNode());
-    _isFocusedList = List.generate(widget.length, (_) => false);
+    _focusNode.addListener(_onFocusChange);
+  }
 
-    for (int i = 0; i < widget.length; i++) {
-      _focusNodes[i].addListener(() {
-        setState(() {
-          _isFocusedList[i] = _focusNodes[i].hasFocus;
-        });
-      });
+  void _onFocusChange() {
+    if (mounted) {
+      setState(() {});
     }
   }
 
   @override
   void dispose() {
-    for (var controller in _controllers) {
-      controller.dispose();
-    }
-    for (var node in _focusNodes) {
-      node.dispose();
-    }
+    _focusNode.removeListener(_onFocusChange);
+    _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  void _onChanged(String value, int index) {
-    if (value.isNotEmpty) {
-      if (value.length > 1) {
-        _controllers[index].text = value.substring(value.length - 1);
-      }
-      
-      if (index < widget.length - 1) {
-        _focusNodes[index + 1].requestFocus();
-      } else {
-        _focusNodes[index].unfocus();
-      }
-    } else {
-      if (index > 0) {
-        _focusNodes[index - 1].requestFocus();
-      }
-    }
+  void _onTextChanged(String val) {
+    setState(() {}); // Instant re-render so typed digits appear immediately
+    widget.onChanged(val);
 
-    final code = _controllers.map((c) => c.text).join();
-    widget.onChanged(code);
-
-    if (code.length == widget.length && widget.onCompleted != null) {
-      widget.onCompleted!(code);
+    if (val.length == widget.length && widget.onCompleted != null) {
+      // Schedule completion callback after frame renders so UI doesn't freeze during typing
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _controller.text.length == widget.length) {
+          widget.onCompleted!(val);
+        }
+      });
     }
   }
 
@@ -80,78 +62,96 @@ class _OtpInputFieldState extends State<OtpInputField> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(widget.length, (index) {
-        final isFocused = _isFocusedList[index];
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 45, // Adjusted slightly smaller to fit devices beautifully
-          height: 55,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: isFocused
-                ? [
-                    BoxShadow(
-                      color: theme.primaryColor.withOpacity(0.15),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    )
-                  ]
-                : [],
-          ),
-          child: CallbackShortcuts(
-            bindings: <ShortcutActivator, VoidCallback>{
-              const SingleActivator(LogicalKeyboardKey.backspace): () {
-                if (_controllers[index].text.isEmpty && index > 0) {
-                  _controllers[index - 1].clear();
-                  _focusNodes[index - 1].requestFocus();
-                  
-                  final code = _controllers.map((c) => c.text).join();
-                  widget.onChanged(code);
-                }
-              },
-            },
-            child: TextFormField(
-              controller: _controllers[index],
-              focusNode: _focusNodes[index],
+    return Stack(
+      children: [
+        // Hidden input field capturing soft-keyboard typing, backspaces, and pastes
+        Positioned(
+          left: 0,
+          top: 0,
+          width: 1,
+          height: 1,
+          child: Opacity(
+            opacity: 0.0,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
               keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              maxLength: 1,
+              maxLength: widget.length,
+              autofocus: true,
+              showCursor: false,
+              enableInteractiveSelection: true,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
               ],
-              style: GoogleFonts.inter(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
-              ),
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 counterText: '',
                 contentPadding: EdgeInsets.zero,
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                    width: 1.5,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: theme.primaryColor,
-                    width: 2.5,
-                  ),
-                ),
+                border: InputBorder.none,
               ),
-              onChanged: (value) => _onChanged(value, index),
+              onChanged: _onTextChanged,
             ),
           ),
-        );
-      }),
-    ),
+        ),
+
+        // Visual OTP Boxes
+        GestureDetector(
+          onTap: () {
+            if (!_focusNode.hasFocus) {
+              _focusNode.requestFocus();
+            }
+          },
+          behavior: HitTestBehavior.opaque,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(widget.length, (index) {
+                final text = _controller.text;
+                final char = index < text.length ? text[index] : '';
+                final isBoxFocused = _focusNode.hasFocus &&
+                    (index == text.length ||
+                        (index == widget.length - 1 && text.length == widget.length));
+
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 5),
+                  width: 45,
+                  height: 55,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+                    border: Border.all(
+                      color: isBoxFocused
+                          ? theme.primaryColor
+                          : (isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFFE2E8F0)),
+                      width: isBoxFocused ? 2.5 : 1.5,
+                    ),
+                    boxShadow: isBoxFocused
+                        ? [
+                            BoxShadow(
+                              color: theme.primaryColor.withValues(alpha: 0.15),
+                              blurRadius: 16,
+                              offset: const Offset(0, 4),
+                            )
+                          ]
+                        : [],
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    char,
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

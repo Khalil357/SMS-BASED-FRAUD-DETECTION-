@@ -23,14 +23,6 @@ void main() {
       expect(result.matchedReasons.any((r) => r.contains('deceptive Sender ID')), isTrue);
     });
 
-    test('Should flag marketing messages as Spam', () {
-      final message = 'Get 50% off on your next purchase! Use code SALE50 at checkout.';
-      final result = SmsDetectionService.analyze(message: message, sender: 'PromoShop');
-
-      expect(result.classification, equals('Spam'));
-      expect(result.threatLevel, isRangeNotifier(0.4, 0.8)); // standard spam threat is ~0.5-0.75
-    });
-
     test('Should class ordinary friendly messages as Safe', () {
       final message = 'Hey, are we still meeting for lunch today?';
       final result = SmsDetectionService.analyze(message: message, sender: 'Mom');
@@ -40,7 +32,3 @@ void main() {
     });
   });
 }
-
-// Helper matcher for range
-Matcher isRangeNotifier(double min, double max) => 
-    allOf(greaterThanOrEqualTo(min), lessThanOrEqualTo(max));

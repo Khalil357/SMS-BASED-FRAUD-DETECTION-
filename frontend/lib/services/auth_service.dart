@@ -26,7 +26,8 @@ class AuthService {
   static const String _keyUser = 'auth_user_v1';
 
   /// Save session to persistent storage
-  static Future<void> saveSession(String tokenStr, Map<String, dynamic> userMap) async {
+  static Future<void> saveSession(
+      String tokenStr, Map<String, dynamic> userMap) async {
     token = tokenStr;
     currentUser = userMap;
     final prefs = await SharedPreferences.getInstance();
@@ -42,7 +43,10 @@ class AuthService {
       final savedToken = prefs.getString(_keyToken);
       final savedUserJson = prefs.getString(_keyUser);
 
-      if (savedToken != null && savedToken.isNotEmpty && savedUserJson != null && savedUserJson.isNotEmpty) {
+      if (savedToken != null &&
+          savedToken.isNotEmpty &&
+          savedUserJson != null &&
+          savedUserJson.isNotEmpty) {
         token = savedToken;
         currentUser = jsonDecode(savedUserJson) as Map<String, dynamic>;
         return true;
@@ -76,36 +80,42 @@ class AuthService {
     final encodedBody = jsonEncode(body);
 
     if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
-      return await http.post(
-        Uri.parse('${customBaseUrl!.trim()}$path'),
-        headers: headers,
-        body: encodedBody,
-      ).timeout(const Duration(seconds: 10));
+      return await http
+          .post(
+            Uri.parse('${customBaseUrl!.trim()}$path'),
+            headers: headers,
+            body: encodedBody,
+          )
+          .timeout(const Duration(seconds: 10));
     }
 
     if (Platform.isAndroid) {
-      // 1. Try 10.0.2.2 (standard for Android Emulator)
       try {
-        return await http.post(
-          Uri.parse('http://10.0.2.2:8080$path'),
-          headers: headers,
-          body: encodedBody,
-        ).timeout(const Duration(seconds: 3));
+        return await http
+            .post(
+              Uri.parse('http://10.0.2.2:8080$path'),
+              headers: headers,
+              body: encodedBody,
+            )
+            .timeout(const Duration(seconds: 3));
       } catch (_) {
-        // 2. Fallback to 127.0.0.1 (ADB reverse for physical phone)
-        return await http.post(
-          Uri.parse('http://127.0.0.1:8080$path'),
-          headers: headers,
-          body: encodedBody,
-        ).timeout(const Duration(seconds: 6));
+        return await http
+            .post(
+              Uri.parse('http://127.0.0.1:8080$path'),
+              headers: headers,
+              body: encodedBody,
+            )
+            .timeout(const Duration(seconds: 6));
       }
     }
 
-    return await http.post(
-      Uri.parse('http://localhost:8080$path'),
-      headers: headers,
-      body: encodedBody,
-    ).timeout(const Duration(seconds: 10));
+    return await http
+        .post(
+          Uri.parse('http://localhost:8080$path'),
+          headers: headers,
+          body: encodedBody,
+        )
+        .timeout(const Duration(seconds: 10));
   }
 
   /// Helper to send GET requests with automatic fallback for physical phone vs emulator
@@ -120,30 +130,80 @@ class AuthService {
     };
 
     if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
-      return await http.get(
-        Uri.parse('${customBaseUrl!.trim()}$path'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 10));
+      return await http
+          .get(
+            Uri.parse('${customBaseUrl!.trim()}$path'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
     }
 
     if (Platform.isAndroid) {
       try {
-        return await http.get(
-          Uri.parse('http://10.0.2.2:8080$path'),
-          headers: headers,
-        ).timeout(const Duration(seconds: 3));
+        return await http
+            .get(
+              Uri.parse('http://10.0.2.2:8080$path'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 3));
       } catch (_) {
-        return await http.get(
-          Uri.parse('http://127.0.0.1:8080$path'),
-          headers: headers,
-        ).timeout(const Duration(seconds: 6));
+        return await http
+            .get(
+              Uri.parse('http://127.0.0.1:8080$path'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 6));
       }
     }
 
-    return await http.get(
-      Uri.parse('http://localhost:8080$path'),
-      headers: headers,
-    ).timeout(const Duration(seconds: 10));
+    return await http
+        .get(
+          Uri.parse('http://localhost:8080$path'),
+          headers: headers,
+        )
+        .timeout(const Duration(seconds: 10));
+  }
+
+  /// Helper to send DELETE requests with the same host fallback as other calls.
+  static Future<http.Response> _deleteRequest(String path) async {
+    final headers = {
+      'Content-Type': 'application/json',
+      if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+
+    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+      return await http
+          .delete(
+            Uri.parse('${customBaseUrl!.trim()}$path'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+    }
+
+    if (Platform.isAndroid) {
+      try {
+        return await http
+            .delete(
+              Uri.parse('http://10.0.2.2:8080$path'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {
+        return await http
+            .delete(
+              Uri.parse('http://127.0.0.1:8080$path'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 6));
+      }
+    }
+
+    return await http
+        .delete(
+          Uri.parse('http://localhost:8080$path'),
+          headers: headers,
+        )
+        .timeout(const Duration(seconds: 10));
   }
 
   /// Submit SMS scan payload to backend API
@@ -162,9 +222,11 @@ class AuthService {
         'source': source,
       };
 
-      print("[Argus Scan Endpoint] POST $baseUrl/api/scans | sender: $sender, source: $source");
+      print(
+          "[Argus Scan Endpoint] POST $baseUrl/api/scans | sender: $sender, source: $source");
       final response = await _postRequest('/api/scans', body);
-      print("[Argus Scan Endpoint] Status: ${response.statusCode} | Response: ${response.body}");
+      print(
+          "[Argus Scan Endpoint] Status: ${response.statusCode} | Response: ${response.body}");
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -209,14 +271,16 @@ class AuthService {
     int size = 20,
   }) async {
     try {
-      final response = await _getRequest('/api/scans/fraud?page=$page&size=$size');
+      final response =
+          await _getRequest('/api/scans/fraud?page=$page&size=$size');
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200) {
         final data = decoded['data'] is Map<String, dynamic>
             ? (decoded['data'] as Map<String, dynamic>)
             : <String, dynamic>{};
-        final content = data['content'] is List ? (data['content'] as List) : [];
+        final content =
+            data['content'] is List ? (data['content'] as List) : [];
         return {
           'success': true,
           'message': decoded['message'] ?? 'Fraud scans retrieved successfully',
@@ -240,6 +304,105 @@ class AuthService {
         'message': 'Failed to connect to backend server.',
         'error': e,
         'content': [],
+      };
+    }
+  }
+
+  /// Delete a fraud scan row from the backend after the user reclassifies it as safe.
+  ///
+  /// A message is only treated as "Safe" locally once this call confirms the
+  /// row has actually been deleted from the database — see AuthService docs
+  /// in dashboard_page.dart's _markAsSafe() for how this is consumed.
+  ///
+  /// PLACEHOLDER — confirm with backend team before relying on this in production:
+  ///   1. Exact endpoint path (currently guessing DELETE /api/scans/fraud/{id})
+  ///   2. Whether it's a hard delete or a soft "reclassify" PATCH/PUT instead
+  ///   3. Which field in the fraud-scan JSON is the true row ID (currently
+  ///      assuming `id`, wired up as `backendId` in dashboard_page.dart)
+  ///   4. Expected success status code (200 vs 204 — both handled below for now)
+  static Future<Map<String, dynamic>> deleteFraudScan({
+    required String id,
+  }) async {
+    if (id.trim().isEmpty) {
+      return {
+        'success': false,
+        'message': 'Missing backend record ID — cannot delete.',
+      };
+    }
+
+    try {
+      // TODO(backend): confirm exact path once endpoint is implemented.
+      final path = '/api/scans/fraud/${Uri.encodeComponent(id)}';
+
+      print("[Argus Delete Fraud Scan] DELETE $baseUrl$path");
+      final response = await _deleteRequest(path);
+      print(
+          "[Argus Delete Fraud Scan] Status: ${response.statusCode} | Response: ${response.body}");
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Record removed from the database.',
+        };
+      }
+
+      if (response.statusCode == 404) {
+        // Row was already gone (e.g. deleted elsewhere) — treat as success
+        // so local state doesn't get stuck out of sync.
+        return {
+          'success': true,
+          'message': 'Record was already removed.',
+        };
+      }
+
+      return {
+        'success': false,
+        'message': decoded['message'] ??
+            'Failed to remove the record (status ${response.statusCode}).',
+        'statusCode': response.statusCode,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server.',
+        'error': e,
+      };
+    }
+  }
+
+  /// Add a user-confirmed fraud scan to the backend database.
+  /// TODO: Confirm the exact endpoint path and payload with the backend team.
+  static Future<Map<String, dynamic>> addFraudScan({
+    required String sender,
+    required String message,
+  }) async {
+    try {
+      // TODO: Confirm exact endpoint path and payload with backend.
+      final response = await _postRequest('/api/scans/fraud', {
+        'sender': sender,
+        'message': message,
+      });
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Message marked as fraud.',
+        };
+      }
+
+      return {
+        'success': false,
+        'message': decoded['message'] ?? 'Failed to mark message as fraud.',
+        'statusCode': response.statusCode,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server.',
+        'error': e,
       };
     }
   }
@@ -292,7 +455,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -319,7 +483,8 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
-        final tokenStr = decoded['token'] as String? ?? data['token'] as String? ?? '';
+        final tokenStr =
+            decoded['token'] as String? ?? data['token'] as String? ?? '';
 
         await saveSession(tokenStr, data);
 
@@ -339,7 +504,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }
@@ -352,12 +518,12 @@ class AuthService {
   }) async {
     try {
       final response = await _postRequest('/api/auth/password-resets', {
-        'phone_number': phoneNumber,
+        'phone_number': phoneNumber.trim(),
       });
 
       final decoded = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return {
           'success': true,
           'message': decoded['message'] ?? 'Reset code sent successfully',
@@ -373,7 +539,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message': 'Failed to connect to backend server.',
         'error': e,
       };
     }
@@ -386,12 +552,12 @@ class AuthService {
   }) async {
     try {
       final response = await _postRequest('/api/auth/password-resets/resend', {
-        'phone_number': phoneNumber,
+        'phone_number': phoneNumber.trim(),
       });
 
       final decoded = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return {
           'success': true,
           'message': decoded['message'] ?? 'Code resent successfully',
@@ -407,7 +573,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message': 'Failed to connect to backend server.',
         'error': e,
       };
     }
@@ -421,13 +587,13 @@ class AuthService {
   }) async {
     try {
       final response = await _postRequest('/api/auth/password-resets/verify', {
-        'phone_number': phoneNumber,
-        'verification_code': verificationCode,
+        'phone_number': phoneNumber.trim(),
+        'verification_code': verificationCode.trim(),
       });
 
       final decoded = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return {
           'success': true,
           'message': decoded['message'] ?? 'Code verified successfully',
@@ -443,7 +609,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message': 'Failed to connect to backend server.',
         'error': e,
       };
     }
@@ -481,7 +647,8 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'message':
+            'Failed to connect to backend server. Please verify the backend is running.',
         'error': e,
       };
     }

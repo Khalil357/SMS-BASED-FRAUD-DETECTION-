@@ -6,6 +6,8 @@ class AppTheme {
   static const Color primaryLight = Color(0xFFD32F2F);
   static const Color primaryDark  = Color(0xFFEF5350);
   static const Color red = primaryLight;
+  static const Color emerald = Color(0xFF10B981);
+  static const Color amber = Color(0xFFF59E0B);
 
   static const Color bgLight  = Color(0xFFF8FAFC);   // Slate-50
   static const Color bgDark   = Color(0xFF0F172A);   // Slate-900

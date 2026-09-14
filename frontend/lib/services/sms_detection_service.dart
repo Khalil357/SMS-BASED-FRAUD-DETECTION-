@@ -1,6 +1,6 @@
 class SmsAnalysisResult {
   final double threatLevel;
-  final String classification; // 'Safe', 'Spam', 'Fraud'
+  final String classification; // 'Safe' or 'Fraud'
   final String feedback;
   final List<String> matchedReasons;
 
@@ -39,7 +39,6 @@ class SmsDetectionService {
     
     List<String> reasons = [];
     bool isFraud = false;
-    bool isSpam = false;
 
     // 1. Check Sender ID reputation
     bool suspiciousSender = false;
@@ -108,31 +107,13 @@ class SmsDetectionService {
       if (hasBankOrLogin) reasons.add('Financial institution or login page reference');
     }
 
-    // 5. Check Unsolicited Promotional / Sales (only if not already fraud)
-    bool hasPromo = lowerText.contains('promo') ||
-        lowerText.contains('offer') ||
-        lowerText.contains('subscribe') ||
-        lowerText.contains('free') ||
-        lowerText.contains('buy') ||
-        lowerText.contains('sale');
-
-    if (hasPromo) {
-      if (!isFraud) {
-        isSpam = true;
-      }
-      reasons.add('Unsolicited promotional keywords detected (e.g. offer, sale, promo, free)');
-    }
-
-    // 6. Calculate Threat Level & Feedback
+    // 5. Calculate Threat Level & Feedback
     double calculatedThreat = 0.0;
     String feedback = '';
 
     if (isFraud) {
       calculatedThreat = 0.92 + (0.07 * (message.length % 10) / 10);
       feedback = 'This message contains high-risk mobile money fraud, payment transfer scam, or phishing triggers.';
-    } else if (isSpam) {
-      calculatedThreat = 0.50 + (0.25 * (message.length % 10) / 10);
-      feedback = 'Unsolicited promotional content patterns detected.';
     } else {
       calculatedThreat = 0.01 + (0.04 * (message.length % 10) / 10);
       feedback = 'No suspicious characteristics detected. This message appears normal.';
@@ -142,14 +123,13 @@ class SmsDetectionService {
     // Boost threat level if sender name is deceptive
     if (suspiciousSender && calculatedThreat < 0.95) {
       calculatedThreat = (calculatedThreat + 0.15).clamp(0.0, 0.99);
-      if (isSpam || !isFraud) {
-        isSpam = false;
+      if (!isFraud) {
         isFraud = true;
       }
       reasons.add('Threat rating increased due to deceptive Sender ID');
     }
 
-    final classification = isFraud ? 'Fraud' : (isSpam ? 'Spam' : 'Safe');
+    final classification = isFraud ? 'Fraud' : 'Safe';
 
     return SmsAnalysisResult(
       threatLevel: calculatedThreat,
@@ -173,7 +153,7 @@ class SmsDetectionService {
 
     final classification = (isScam == true || rawLabel == 'scam' || rawLabel == 'fraud')
         ? 'Fraud'
-        : (rawLabel == 'spam' ? 'Spam' : 'Safe');
+        : 'Safe';
 
     // For Scam/Fraud messages, Threat Index is model confidence (e.g. 0.9564 -> 95.6% Threat Index)
     // For Safe messages, Threat Index is complement of confidence (e.g. 1.0 - 0.9564 = 0.0436 -> 4.4% Threat Index)

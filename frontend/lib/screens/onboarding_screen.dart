@@ -29,7 +29,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
     OnboardingSlideData(
       title: 'Secure Account Vault',
-      description: 'Create your secure account to customize detection settings, view historical spam logs, and manage alerts across your devices.',
+      description: 'Create your secure account to customize detection settings, view historical message logs, and manage alerts across your devices.',
       icon: Icons.vpn_key_outlined,
       color: const Color(0xFF1565C0),
     ),

@@ -1,39 +1,43 @@
 package com.example.smsfraud.common.security;
 
+import com.example.smsfraud.user.User;
+import com.example.smsfraud.user.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.UUID;
+import java.util.List;
 
 /**
- * Reads a {@code Authorization: Bearer <token>} header, validates the JWT, loads the
- * user's authorities from the database, and populates the security context so that
- * role-based access control (RBAC) works. A missing, invalid, or expired token — or a
- * disabled/locked user — leaves the context empty, which the authentication entry
- * point then translates into a 401.
+ * Reads a {@code Authorization: Bearer <token>} header, validates the JWT, and loads
+ * the user's role from the database to populate the security context (so RBAC works).
+ * A token is rejected unless it is an {@code access} token AND its {@code tokenVersion}
+ * still matches the user's current version — the latter is what makes "bump the version"
+ * revoke outstanding tokens instantly. A missing, invalid, expired, or revoked token —
+ * or a disabled/locked user — leaves the context empty, which the authentication entry
+ * point translates into a 401.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String TYPE_ACCESS = "access";
 
     private final TokenProvider tokenProvider;
-    private final UserDetailsService userDetailsService;
+    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(TokenProvider tokenProvider, UserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(TokenProvider tokenProvider, UserRepository userRepository) {
         this.tokenProvider = tokenProvider;
-        this.userDetailsService = userDetailsService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -43,13 +47,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
         if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
-                UUID userId = tokenProvider.validateToken(token);
-                UserDetails userDetails = userDetailsService.loadUserByUsername(userId.toString());
-                if (userDetails.isEnabled() && userDetails.isAccountNonLocked()) {
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                TokenClaims claims = tokenProvider.validateToken(token);
+                if (TYPE_ACCESS.equals(claims.type())) {
+                    User user = userRepository.findByIdWithRole(claims.userId()).orElse(null);
+                    if (user != null
+                            && user.isActive()
+                            && !user.isLocked()
+                            && claims.tokenVersion() != null
+                            && claims.tokenVersion() == user.getTokenVersion()) {
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(
+                                        user.getUserId().toString(),
+                                        null,
+                                        List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().getRoleName())));
+                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    }
                 }
             } catch (RuntimeException e) {
                 // Invalid, expired, or malformed token — treat as unauthenticated.
