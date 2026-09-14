@@ -16,6 +16,7 @@ import '../widgets/interactive_threat_chart.dart';
 import '../widgets/security_illustrations.dart';
 import '../services/safety_tips_service.dart';
 import 'safety_tips_page.dart';
+import 'terms_and_conditions_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final Navigate onNavigate;
@@ -450,6 +451,120 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       if (_hasSmsPermission) {
         await SmsIngestionService.startListening();
       }
+    }
+  }
+
+  /// Shows a custom confirmation dialog when the user tries to turn OFF
+  /// auto-ingestion. If confirmed, calls [_updateIngestion(false)].
+  Future<void> _showTurnOffIngestionDialog() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.25),
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 36),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.cardDark : Colors.white,
+              borderRadius: BorderRadius.circular(42),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Turn Off Automatic\nIngestion',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark
+                        ? const Color(0xFFF1F5F9)
+                        : const Color(0xFF1E293B),
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Are you sure you want\nto turn off automatic ingestion',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w400,
+                    color: isDark
+                        ? AppTheme.subtleDark
+                        : AppTheme.subtleLight,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Cancel button
+                    GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(false),
+                      child: Container(
+                        width: 103,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(34),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 19),
+                    // Turn Off button
+                    GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(true),
+                      child: Container(
+                        width: 103,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppTheme.primaryDark
+                              : AppTheme.primaryLight,
+                          borderRadius: BorderRadius.circular(34),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Turn Off',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await _updateIngestion(false);
     }
   }
 
@@ -2545,7 +2660,15 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         value: _isIngestionEnabled,
                         activeThumbColor: theme.colorScheme.primary,
                         onChanged: Platform.isAndroid
-                            ? (val) => _updateIngestion(val)
+                            ? (val) {
+                                if (val) {
+                                  // Turning ON: no confirmation needed
+                                  _updateIngestion(true);
+                                } else {
+                                  // Turning OFF: show confirmation dialog
+                                  _showTurnOffIngestionDialog();
+                                }
+                              }
                             : null,
                       ),
                     ],
@@ -2689,6 +2812,50 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ),
           ),
           const SizedBox(height: 30),
+
+          // ── LEGAL DOCUMENTS section ──────────────────────────
+          Text(
+            'LEGAL',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => showTermsAndConditionsPage(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+                child: Row(
+                  children: [
+                    Icon(Icons.description_outlined,
+                        color: theme.colorScheme.primary, size: 22),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Terms & Conditions & Privacy Policy',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
 
           CustomButton(
             text: 'Logout from System',

@@ -518,12 +518,12 @@ class AuthService {
   }) async {
     try {
       final response = await _postRequest('/api/auth/password-resets', {
-        'phone_number': phoneNumber,
+        'phone_number': phoneNumber.trim(),
       });
 
       final decoded = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return {
           'success': true,
           'message': decoded['message'] ?? 'Reset code sent successfully',
@@ -539,8 +539,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message':
-            'Failed to connect to backend server. Please verify the backend is running.',
+        'message': 'Failed to connect to backend server.',
         'error': e,
       };
     }
@@ -553,12 +552,12 @@ class AuthService {
   }) async {
     try {
       final response = await _postRequest('/api/auth/password-resets/resend', {
-        'phone_number': phoneNumber,
+        'phone_number': phoneNumber.trim(),
       });
 
       final decoded = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return {
           'success': true,
           'message': decoded['message'] ?? 'Code resent successfully',
@@ -574,8 +573,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message':
-            'Failed to connect to backend server. Please verify the backend is running.',
+        'message': 'Failed to connect to backend server.',
         'error': e,
       };
     }
@@ -589,13 +587,13 @@ class AuthService {
   }) async {
     try {
       final response = await _postRequest('/api/auth/password-resets/verify', {
-        'phone_number': phoneNumber,
-        'verification_code': verificationCode,
+        'phone_number': phoneNumber.trim(),
+        'verification_code': verificationCode.trim(),
       });
 
       final decoded = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return {
           'success': true,
           'message': decoded['message'] ?? 'Code verified successfully',
@@ -611,8 +609,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-        'message':
-            'Failed to connect to backend server. Please verify the backend is running.',
+        'message': 'Failed to connect to backend server.',
         'error': e,
       };
     }

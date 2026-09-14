@@ -63,7 +63,7 @@ class _VerificationPageState extends State<VerificationPage> {
 
     if (!mounted) return;
 
-    if (result['success']) {
+    if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result['message'] ?? 'Code verified successfully!'),
@@ -75,7 +75,7 @@ class _VerificationPageState extends State<VerificationPage> {
       widget.onVerified(_otpCode);
     } else {
       setState(() {
-        _errorMessage = result['message'] ?? 'Invalid verification code';
+        _errorMessage = result['message'] ?? 'Invalid verification code. Please try again.';
       });
     }
   }
@@ -156,13 +156,30 @@ class _VerificationPageState extends State<VerificationPage> {
                     delay: const Duration(milliseconds: 100),
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.all(22),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: theme.primaryColor.withOpacity(0.08),
+                          color: theme.primaryColor.withValues(alpha: 0.08),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: theme.primaryColor.withOpacity(0.15),
+                            color: theme.primaryColor.withValues(alpha: 0.15),
                             width: 2,
+                          ),
+                        ),
+                        child: Image.asset(
+                          'assets/images/sms_fraud_inapp_icon.png',
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.contain,
+                          errorBuilder: (ctx, err, stack) => Image.asset(
+                            'assets/images/sms_fraud_app_icon.png',
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.contain,
+                            errorBuilder: (ctx, err, stack) => Icon(
+                              Icons.shield,
+                              size: 48,
+                              color: theme.colorScheme.primary,
+                            ),
                           ),
                         ),
                       ),

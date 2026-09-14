@@ -130,7 +130,13 @@ class _LoginPageState extends State<LoginPage> {
               result['statusCode'] == 403;
 
           if (isUnverified) {
-            _showUnverifiedAccountDialog(_identifierController.text.trim());
+            final data = result['data'] is Map<String, dynamic>
+                ? result['data'] as Map<String, dynamic>
+                : null;
+            final userEmail = data?['email'] ??
+                data?['user']?['email'] ??
+                _identifierController.text.trim();
+            _showUnverifiedAccountDialog(userEmail);
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
