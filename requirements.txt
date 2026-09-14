@@ -2,5 +2,5 @@ fastapi
 uvicorn[standard]
 pydantic>=2
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.13.0+cpu
+torch==2.13.0
 transformers

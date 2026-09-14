@@ -1,9 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
 import 'auth_service.dart';
-import 'token_storage.dart';
 
 class ScanService {
   static String _apiErrorMessage(String body, String fallback) {
@@ -32,22 +29,8 @@ class ScanService {
     int page = 0,
     int size = 20,
   }) async {
-    final token = await TokenStorage.read();
-    if (token == null) {
-      return {
-        'success': false,
-        'message': 'No login token is available. Sign in again before scanning.',
-      };
-    }
-
     try {
-      final response = await http.get(
-        Uri.parse('${AuthService.baseUrl}/api/scans?page=$page&size=$size'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token,
-        },
-      );
+      final response = await AuthService.get('/api/scans?page=$page&size=$size');
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -65,7 +48,7 @@ class ScanService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Could not reach the scan backend at ${AuthService.baseUrl}: $e',
+        'message': 'Could not reach the scan backend: $e',
       };
     }
   }
@@ -75,27 +58,12 @@ class ScanService {
     String? sender,
     String source = 'MANUAL_QUERY',
   }) async {
-    final token = await TokenStorage.read();
-    if (token == null) {
-      return {
-        'success': false,
-        'message': 'No login token is available. Sign in again before scanning.',
-      };
-    }
-
     try {
-      final response = await http.post(
-        Uri.parse('${AuthService.baseUrl}/api/scans'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token,
-        },
-        body: jsonEncode({
-          'messageBody': messageBody,
-          if (sender != null && sender.isNotEmpty) 'sender': sender,
-          'source': source,
-        }),
-      );
+      final response = await AuthService.post('/api/scans', {
+        'messageBody': messageBody,
+        if (sender != null && sender.isNotEmpty) 'sender': sender,
+        'source': source,
+      });
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -114,7 +82,7 @@ class ScanService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Could not reach the scan backend at ${AuthService.baseUrl}: $e',
+        'message': 'Could not reach the scan backend: $e',
       };
     }
   }

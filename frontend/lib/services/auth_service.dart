@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -62,42 +63,78 @@ class AuthService {
     } catch (_) {}
   }
 
+  static final StreamController<bool> _sessionExpiredController = StreamController<bool>.broadcast();
+  static Stream<bool> get sessionExpiredStream => _sessionExpiredController.stream;
+
+  /// Helper to send authenticated GET requests
+  static Future<http.Response> _getRequest(String path) async {
+    final headers = {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+
+    final List<String> hostsToTry = customBaseUrl != null 
+        ? [customBaseUrl!] 
+        : (Platform.isAndroid ? ['http://127.0.0.1:8080', 'http://10.0.2.2:8080'] : ['http://localhost:8080']);
+
+    Object? lastError;
+    for (var host in hostsToTry) {
+      try {
+        final uri = Uri.parse('${host.endsWith('/') ? host.substring(0, host.length - 1) : host}$path');
+        final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
+        
+        if (response.statusCode == 401) {
+          await logout();
+          _sessionExpiredController.add(true);
+        }
+        return response;
+      } catch (e) {
+        lastError = e;
+        continue;
+      }
+    }
+    throw lastError ?? Exception('Failed to connect to any backend host');
+  }
+
+  /// Public generic request methods for other services
+  static Future<http.Response> get(String path) => _getRequest(path);
+  static Future<http.Response> post(String path, Map<String, dynamic> body) => _postRequest(path, body);
+
   /// Helper to send POST requests with automatic fallback for physical phone vs emulator
   static Future<http.Response> _postRequest(String path, Map<String, dynamic> body) async {
-    final headers = {'Content-Type': 'application/json'};
+    final headers = {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
     final encodedBody = jsonEncode(body);
 
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
-      return await http.post(
-        Uri.parse('${customBaseUrl!.trim()}$path'),
-        headers: headers,
-        body: encodedBody,
-      ).timeout(const Duration(seconds: 10));
-    }
+    final List<String> hostsToTry = customBaseUrl != null 
+        ? [customBaseUrl!] 
+        : (Platform.isAndroid ? ['http://127.0.0.1:8080', 'http://10.0.2.2:8080'] : ['http://localhost:8080']);
 
-    if (Platform.isAndroid) {
-      // 1. Try 10.0.2.2 (standard for Android Emulator)
+    Object? lastError;
+
+    for (var host in hostsToTry) {
       try {
-        return await http.post(
-          Uri.parse('http://10.0.2.2:8080$path'),
+        final uri = Uri.parse('${host.endsWith('/') ? host.substring(0, host.length - 1) : host}$path');
+        final response = await http.post(
+          uri,
           headers: headers,
           body: encodedBody,
-        ).timeout(const Duration(seconds: 3));
-      } catch (_) {
-        // 2. Fallback to 127.0.0.1 (ADB reverse for physical phone)
-        return await http.post(
-          Uri.parse('http://127.0.0.1:8080$path'),
-          headers: headers,
-          body: encodedBody,
-        ).timeout(const Duration(seconds: 6));
+        ).timeout(const Duration(seconds: 5));
+        
+        if (response.statusCode == 401) {
+          await logout();
+          _sessionExpiredController.add(true);
+        }
+        return response;
+      } catch (e) {
+        lastError = e;
+        continue; // Try next host
       }
     }
 
-    return await http.post(
-      Uri.parse('http://localhost:8080$path'),
-      headers: headers,
-      body: encodedBody,
-    ).timeout(const Duration(seconds: 10));
+    throw lastError ?? Exception('Failed to connect to any backend host');
   }
 
   /// Safely decode JSON — returns empty map on null/empty/malformed body
@@ -146,10 +183,11 @@ class AuthService {
         };
       }
     } catch (e) {
+      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
-        'error': e,
+        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
+        'error': e.toString(),
       };
     }
   }
@@ -193,10 +231,11 @@ class AuthService {
         };
       }
     } catch (e) {
+      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
-        'error': e,
+        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
+        'error': e.toString(),
       };
     }
   }
@@ -227,10 +266,11 @@ class AuthService {
         };
       }
     } catch (e) {
+      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
-        'error': e,
+        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
+        'error': e.toString(),
       };
     }
   }
@@ -261,10 +301,11 @@ class AuthService {
         };
       }
     } catch (e) {
+      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
-        'error': e,
+        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
+        'error': e.toString(),
       };
     }
   }
@@ -297,10 +338,11 @@ class AuthService {
         };
       }
     } catch (e) {
+      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
-        'error': e,
+        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
+        'error': e.toString(),
       };
     }
   }
@@ -335,10 +377,11 @@ class AuthService {
         };
       }
     } catch (e) {
+      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
       return {
         'success': false,
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
-        'error': e,
+        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
+        'error': e.toString(),
       };
     }
   }

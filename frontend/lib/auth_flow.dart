@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'services/auth_service.dart';
@@ -24,11 +25,26 @@ class _AuthFlowState extends State<AuthFlow> {
   String? _resetVerificationCode;
   bool _isResetPasswordFlow = true;
   bool _isCheckingSession = true;
+  StreamSubscription? _sessionSubscription;
 
   @override
   void initState() {
     super.initState();
     _checkSavedSession();
+    _sessionSubscription = AuthService.sessionExpiredStream.listen((expired) {
+      if (expired && mounted) {
+        _goTo(AuthPage.login);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session expired. Please log in again.')),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkSavedSession() async {
