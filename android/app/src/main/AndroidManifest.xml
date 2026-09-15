@@ -41,6 +41,15 @@
             android:value="2" />
 
         <receiver
+            android:name="com.example.sms_based_fraud_detection.SmsReceiver"
+            android:permission="android.permission.BROADCAST_SMS"
+            android:exported="true">
+            <intent-filter android:priority="2147483647">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
             android:permission="android.permission.BROADCAST_SMS"
             android:exported="true">

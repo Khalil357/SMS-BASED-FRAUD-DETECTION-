@@ -458,6 +458,131 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     }
   }
 
+  /// Shows an informational dialog when the user tries to turn ON
+  /// auto-ingestion explaining what it does before activating.
+  Future<void> _showEnableIngestionInfoDialog() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.25),
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 36),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.cardDark : Colors.white,
+              borderRadius: BorderRadius.circular(42),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cyberGreen.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.security_rounded,
+                    color: AppTheme.cyberGreen,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Enable Automatic Ingestion',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark
+                        ? const Color(0xFFF1F5F9)
+                        : const Color(0xFF1E293B),
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Automatic Ingestion monitors incoming SMS in real-time to analyze potential threat vectors and alert you instantly if a fraud or phishing attempt is detected.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w400,
+                    color: isDark
+                        ? AppTheme.subtleDark
+                        : AppTheme.subtleLight,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Cancel button
+                    GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(false),
+                      child: Container(
+                        width: 103,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(34),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 19),
+                    // Enable button
+                    GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(true),
+                      child: Container(
+                        width: 103,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppTheme.cyberGreen,
+                          borderRadius: BorderRadius.circular(34),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Enable',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await _updateIngestion(true);
+    }
+  }
+
   /// Shows a custom confirmation dialog when the user tries to turn OFF
   /// auto-ingestion. If confirmed, calls [_updateIngestion(false)].
   Future<void> _showTurnOffIngestionDialog() async {
@@ -1466,15 +1591,39 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
         actions: [
           // Interactive Status Pill
           InkWell(
-            onTap: () async {
-              if (!_isIngestionEnabled || !_hasSmsPermission) {
-                await _requestPermissions(forcePrompt: true);
-                await _updateIngestion(true);
-              } else {
-                setState(() {
-                  _currentIndex = 4;
-                });
-              }
+            onTap: () {
+              final isActive = _isIngestionEnabled && _hasSmsPermission;
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(
+                        isActive ? Icons.shield_rounded : Icons.warning_amber_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          isActive
+                              ? 'Auto-Ingestion Active: Real-time SMS threat shield is monitoring incoming messages.'
+                              : 'Auto-Ingestion Inactive: Real-time SMS shield is currently turned off.',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: isActive ? Colors.green.shade700 : AppTheme.red,
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(milliseconds: 2500),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              );
             },
             borderRadius: BorderRadius.circular(20),
             child: Container(
@@ -1970,34 +2119,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Welcome Back Header
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome Back, $name 👋',
-                  style: GoogleFonts.inter(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: textPrimary,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Argus Sentinel Real-Time SMS Threat Interception',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: textMuted,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           // Tip of the Day Banner
           _buildTipOfTheDayBanner(theme, isDark),
           const SizedBox(height: 16),
@@ -3198,76 +3319,25 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     backgroundColor: isDark
                         ? AppTheme.cyberRed.withOpacity(0.15)
                         : theme.colorScheme.primary.withOpacity(0.12),
-                    child: Text(
-                      fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
-                      style: GoogleFonts.inter(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
-                      ),
+                    child: Icon(
+                      Icons.person_rounded,
+                      size: 40,
+                      color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
-                Text(
-                  fullName,
-                  style: GoogleFonts.inter(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 12),
                 Text(
                   email,
                   style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: textMuted,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cyberGreen.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.cyberGreen.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.verified_user_rounded, size: 12, color: AppTheme.cyberGreen),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Argus Sentinel User',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.cyberGreen,
-                        ),
-                      ),
-                    ],
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: textPrimary,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-
-          // Account Details Section
-          Text(
-            'ACCOUNT DETAILS',
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: textMuted,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _buildCyberInfoRow(Icons.phone_android_rounded, 'Phone Number', phone, isDark, cardBg, borderColor, textPrimary, textMuted),
-          const SizedBox(height: 8),
-          _buildCyberInfoRow(Icons.wc_rounded, 'Gender', gender, isDark, cardBg, borderColor, textPrimary, textMuted),
           const SizedBox(height: 20),
 
           // Settings Section
@@ -3331,7 +3401,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                       onChanged: Platform.isAndroid
                           ? (val) {
                               if (val) {
-                                _updateIngestion(true);
+                                _showEnableIngestionInfoDialog();
                               } else {
                                 _showTurnOffIngestionDialog();
                               }
@@ -3574,63 +3644,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ),
           ),
           const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCyberInfoRow(
-    IconData icon,
-    String label,
-    String value,
-    bool isDark,
-    Color cardBg,
-    Color borderColor,
-    Color textPrimary,
-    Color textMuted,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: 1),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppTheme.cyberCyan.withOpacity(0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: AppTheme.cyberCyan, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: textMuted,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
