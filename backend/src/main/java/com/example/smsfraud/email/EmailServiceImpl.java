@@ -17,13 +17,16 @@ public class EmailServiceImpl implements EmailService {
     private final Resend resend;
     private final String fromEmail;
     private final String appName;
+    private final String webUrl;
 
     public EmailServiceImpl(@Value("${resend.api-key:}") String apiKey,
                             @Value("${email.from:noreply@smsfraud.com}") String fromEmail,
-                            @Value("${app.name:SMS Fraud Detection}") String appName) {
+                            @Value("${app.name:SMS Fraud Detection}") String appName,
+                            @Value("${app.web-url:http://localhost:5173}") String webUrl) {
         this.resend = new Resend(apiKey);
         this.fromEmail = fromEmail;
         this.appName = appName;
+        this.webUrl = webUrl;
     }
 
     @Override
@@ -38,6 +41,44 @@ public class EmailServiceImpl implements EmailService {
             resend.emails().send(request);
         } catch (Exception e) {
             log.warn("Could not email verification code to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    @Override
+    public void sendWelcomeEmail(String toEmail, String fullName, String role) {
+        try {
+            SendEmailRequest request = SendEmailRequest.builder()
+                    .from(fromEmail)
+                    .to(toEmail)
+                    .subject("Welcome to " + appName)
+                    .text("Hello " + (fullName == null || fullName.isBlank() ? "" : fullName + ", ") + "\n\n"
+                            + "An administrator has created an account for you on " + appName
+                            + " with the role " + role + ".\n\n"
+                            + "Sign in to the Argus Admin Portal here:\n" + webUrl + "\n\n"
+                            + "The first time you sign in, you will verify this email with a one-time code.\n\n"
+                            + "If you did not expect this, please contact your administrator.")
+                    .build();
+            resend.emails().send(request);
+        } catch (Exception e) {
+            log.warn("Could not email welcome message to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    @Override
+    public void sendAccountUpdatedEmail(String toEmail, String fullName) {
+        try {
+            SendEmailRequest request = SendEmailRequest.builder()
+                    .from(fromEmail)
+                    .to(toEmail)
+                    .subject("Your " + appName + " account was updated")
+                    .text("Hello " + (fullName == null || fullName.isBlank() ? "" : fullName + ", ") + "\n\n"
+                            + "An administrator has updated your account on " + appName + ".\n\n"
+                            + "Please sign in to review your details. If you did not expect this change, "
+                            + "please contact your administrator.")
+                    .build();
+            resend.emails().send(request);
+        } catch (Exception e) {
+            log.warn("Could not email account-update message to {}: {}", toEmail, e.getMessage());
         }
     }
 }

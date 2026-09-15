@@ -6,9 +6,10 @@ import 'screens/login_page.dart';
 import 'screens/reset_password_page.dart';
 import 'screens/create_account_page.dart';
 import 'screens/verification_page.dart';
+import 'screens/login_otp_page.dart';
 import 'screens/dashboard_page.dart';
 
-enum AuthPage { login, signUp, forgotPassword, verification, resetPassword, dashboard }
+enum AuthPage { login, signUp, forgotPassword, verification, resetPassword, loginOtp, dashboard }
 
 typedef Navigate = void Function(AuthPage page);
 
@@ -24,6 +25,7 @@ class _AuthFlowState extends State<AuthFlow> {
   String? _resetVerificationCode;
   bool _isResetPasswordFlow = true;
   bool _isCheckingSession = true;
+  String? _loginEmail;
 
   @override
   void initState() {
@@ -70,6 +72,13 @@ class _AuthFlowState extends State<AuthFlow> {
     });
   }
 
+  void _beginLoginOtp(String email) {
+    setState(() {
+      _loginEmail = email;
+      _page = AuthPage.loginOtp;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isCheckingSession) {
@@ -88,6 +97,7 @@ class _AuthFlowState extends State<AuthFlow> {
       AuthPage.login => LoginPage(
           onNavigate: _goTo,
           onUnverifiedAccount: _beginSignUpVerification,
+          onLoginOtp: _beginLoginOtp,
         ),
       AuthPage.signUp => SignUpPage(
           onNavigate: _goTo,
@@ -111,6 +121,10 @@ class _AuthFlowState extends State<AuthFlow> {
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
           verificationCode: _resetVerificationCode ?? ''),
+      AuthPage.loginOtp => LoginOtpPage(
+          onNavigate: _goTo,
+          email: _loginEmail ?? '',
+        ),
       AuthPage.dashboard => throw StateError('Handled above'),
     };
     return Scaffold(body: SafeArea(child: page));

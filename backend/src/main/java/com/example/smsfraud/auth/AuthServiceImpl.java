@@ -1,18 +1,21 @@
 package com.example.smsfraud.auth;
 
 import com.example.smsfraud.auth.dto.LoginRequest;
+import com.example.smsfraud.auth.dto.LoginPendingResponse;
 import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
 import com.example.smsfraud.auth.dto.ResetPasswordRequest;
 import com.example.smsfraud.auth.dto.RegisterRequest;
 import com.example.smsfraud.auth.dto.RegisterResponse;
+import com.example.smsfraud.auth.dto.RefreshResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 import com.example.smsfraud.common.exception.BadRequestException;
 import com.example.smsfraud.common.exception.ConflictException;
 import com.example.smsfraud.common.exception.ForbiddenException;
 import com.example.smsfraud.common.exception.NotFoundException;
 import com.example.smsfraud.common.exception.UnauthorizedException;
+import com.example.smsfraud.common.security.TokenClaims;
 import com.example.smsfraud.common.security.TokenProvider;
 import com.example.smsfraud.email.EmailService;
 import com.example.smsfraud.otp.OtpService;
@@ -88,7 +91,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public LoginResponse login(LoginRequest req) {
+    public LoginPendingResponse login(LoginRequest req) {
         User user;
         if (req.email() != null && !req.email().isBlank()) {
             user = userRepository.findByEmail(req.email())
@@ -97,7 +100,7 @@ public class AuthServiceImpl implements AuthService {
             user = userRepository.findByPhone(req.phoneNumber())
                     .orElseThrow(() -> new UnauthorizedException("Invalid phone number or password"));
         }
-        
+
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
             throw new UnauthorizedException("Invalid phone number or password");
         }
@@ -107,21 +110,20 @@ public class AuthServiceImpl implements AuthService {
         if (user.isLocked()) {
             throw new ForbiddenException("Account is locked");
         }
-        if (!user.isVerified()) {
-            throw new ForbiddenException("Email not verified. Please verify your email before logging in.");
-        }
+        // Unverified accounts proceed to the OTP step; entering the emailed code both
+        // proves email ownership and (in verifyLoginOtp) marks the account verified.
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
-        // Web/admin flow: issue + email the OTP so the code arrives right after login,
-        // instead of only on "Resend". Best-effort — a mail hiccup won't block login.
+        // Two-step login: credentials are valid, so issue + email the OTP.
+        // No token is returned here — the client must verify the OTP via
+        // verifyLoginOtp() to receive the JWT.
         if (user.getEmail() != null && !user.getEmail().isBlank()) {
             String otp = otpService.issueCode(user.getEmail());
             emailService.sendVerificationCode(user.getEmail(), otp);
         }
 
-        String token = tokenProvider.generateToken(user.getUserId());
-        return new LoginResponse(token, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
+        return new LoginPendingResponse(user.getEmail(), "OTP sent; verify to complete login");
     }
 
     @Override
@@ -160,6 +162,8 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByPhone(req.phoneNumber())
                 .orElseThrow(() -> new NotFoundException("No account found for that phone number"));
         user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        user.setUpdatedAt(Instant.now());
         userRepository.save(user);
         otpService.invalidate(req.phoneNumber());
     }
@@ -182,9 +186,49 @@ public class AuthServiceImpl implements AuthService {
         
         otpService.invalidate(email);
         user.setLastLoginAt(Instant.now());
+        // The OTP was delivered to this email and matched, so the account is now
+        // genuinely verified.
+        user.setVerified(true);
         userRepository.save(user);
 
-        String token = tokenProvider.generateToken(user.getUserId());
-        return new LoginResponse(token, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
+        String accessToken = tokenProvider.generateAccessToken(user.getUserId(), user.getTokenVersion());
+        String refreshToken = tokenProvider.generateRefreshToken(user.getUserId(), user.getTokenVersion());
+        return new LoginResponse(accessToken, refreshToken, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
+    }
+
+    @Override
+    public RefreshResponse refresh(String refreshToken) {
+        TokenClaims claims = tokenProvider.validateToken(refreshToken);
+        if (!"refresh".equals(claims.type())) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+        User user = userRepository.findByIdWithRole(claims.userId())
+                .orElseThrow(() -> new UnauthorizedException("Session is no longer valid"));
+        if (!user.isActive() || user.isLocked()) {
+            throw new UnauthorizedException("Account is disabled");
+        }
+        if (claims.tokenVersion() == null || claims.tokenVersion() != user.getTokenVersion()) {
+            throw new UnauthorizedException("Session has been revoked");
+        }
+        String accessToken = tokenProvider.generateAccessToken(user.getUserId(), user.getTokenVersion());
+        return new RefreshResponse(accessToken, refreshToken);
+    }
+
+    @Override
+    public void logout(String refreshToken) {
+        TokenClaims claims;
+        try {
+            claims = tokenProvider.validateToken(refreshToken);
+        } catch (RuntimeException e) {
+            return; // already invalid/expired — nothing to revoke
+        }
+        if (!"refresh".equals(claims.type())) {
+            return;
+        }
+        userRepository.findById(claims.userId()).ifPresent(user -> {
+            user.setTokenVersion(user.getTokenVersion() + 1);
+            user.setUpdatedAt(Instant.now());
+            userRepository.save(user);
+        });
     }
 }
