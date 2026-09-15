@@ -32,7 +32,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import inAppIcon from "../assets/images/in_app_icon.png";
-import { getUsers, createUser, updateUser, resetUserPassword, deleteUser, getCurrentUserId } from "../services/adminService";
+import { getUsers, createUser, updateUser, resetUserPassword, deleteUser, getCurrentUserId, getAdminStats, getFraudTrend, getSmsScans } from "../services/adminService";
 import type { AdminUser } from "../services/adminService";
 
 interface DashboardPageProps {
@@ -167,11 +167,30 @@ const initialRules: DetectionRule[] = [
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const { isDark, toggleTheme } = useTheme();
 
+
+  // ── URL ↔ Tab sync ──────────────────────────────────────────────
+  const TAB_SLUGS: Record<string, string> = {
+    "Overview":              "/",
+    "SMS Ingestion Logs":    "/logs",
+    "Rules & Threat Engine": "/rules",
+    "Team":                  "/team",
+    "Users":                 "/users",
+  };
+  const SLUG_TABS: Record<string, string> = Object.fromEntries(
+    Object.entries(TAB_SLUGS).map(([tab, slug]) => [slug, tab])
+  );
+
+  function tabFromPath(): string {
+    const slug = window.location.pathname;
+    return SLUG_TABS[slug] ?? "Overview";
+  }
+
   // Active Tab
-  const [activeTab, setActiveTab] = useState<string>("Overview");
+  const [activeTab, setActiveTab] = useState<string>(() => tabFromPath());
 
   // Main Data States
-  const [smsList] = useState<SmsRecord[]>(initialSmsRecords);
+  const [statsCards, setStatsCards] = useState<StatCardData[]>(mockStats);
+  const [smsList, setSmsList] = useState<SmsRecord[]>(initialSmsRecords);
   const [rulesList, setRulesList] = useState<DetectionRule[]>(initialRules);
   const [usersList, setUsersList] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -289,6 +308,69 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     window.setTimeout(() => setToast(null), 3500);
   }
 
+  async function loadDashboardStats() {
+    const res = await getAdminStats();
+    if (res.success && res.data) {
+      setStatsCards([
+        {
+          id: "1",
+          title: "Total SMS Scanned",
+          value: Number(res.data.totalSms).toLocaleString(),
+          change: "Database total",
+          type: "positive",
+          category: "total",
+        },
+        {
+          id: "2",
+          title: "Fraud & Scams Detected",
+          value: Number(res.data.fraudDetected).toLocaleString(),
+          change: `${res.data.totalSms > 0 ? ((res.data.fraudDetected / res.data.totalSms) * 100).toFixed(1) : "100"}% detection rate`,
+          type: "negative",
+          category: "fraud",
+        },
+      ]);
+    }
+  }
+
+  async function loadFraudTrends() {
+    await getFraudTrend(7);
+  }
+
+  async function loadSmsAuditScans() {
+    const res = await getSmsScans("Fraud", 0, 100);
+    if (res.success && res.data) {
+      const records = Array.isArray(res.data) ? res.data : (res.data as any)?.content || [];
+      if (records.length > 0) {
+        const mapped: SmsRecord[] = records.map((item: any, idx: number) => {
+          let dateStr = "Recently";
+          if (item.timestamp) {
+            try {
+              dateStr = new Date(item.timestamp).toLocaleString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+            } catch {
+              dateStr = item.timestamp;
+            }
+          }
+          return {
+            id: item.id ? `SMS-${String(item.id).substring(0, 6).toUpperCase()}` : `SMS-${8910 - idx}`,
+            sender: item.sender || "+255746046202",
+            message: item.message || "",
+            fraudType: (item.fraudType || "Phishing") as SmsRecord["fraudType"],
+            riskScore: Math.round(item.riskScore || 90),
+            date: dateStr,
+            status: "Fraud",
+          };
+        });
+        setSmsList(mapped);
+      }
+    }
+  }
+
   async function loadUsers() {
     setUsersLoading(true);
     setUsersError(null);
@@ -314,11 +396,28 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   useEffect(() => {
     void loadUsers();
+    void loadDashboardStats();
+    void loadFraudTrends();
+    void loadSmsAuditScans();
   }, []);
 
   useEffect(() => {
-    if (activeTab === "Team" || activeTab === "Users") {
+    if (activeTab === "Overview") {
+      void loadDashboardStats();
+      void loadFraudTrends();
+      void loadSmsAuditScans();
+    } else if (activeTab === "SMS Ingestion Logs") {
+      void loadSmsAuditScans();
+    } else if (activeTab === "Team" || activeTab === "Users") {
       void loadUsers();
+    }
+  }, [activeTab]);
+
+  // ── Keep browser URL in sync with active tab ─────────────────────
+  useEffect(() => {
+    const slug = TAB_SLUGS[activeTab] ?? "/";
+    if (window.location.pathname !== slug) {
+      window.history.pushState(null, "", slug);
     }
   }, [activeTab]);
 
@@ -807,7 +906,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           <div className="tab-content fade-slide">
             {/* STATS GRID */}
             <section className="stats-cards-grid">
-              {mockStats.map((stat) => (
+              {statsCards.map((stat) => (
                 <div key={stat.id} className={`stat-card-box category-${stat.category}`}>
                   <div className="stat-header">
                     <span className="stat-title">{stat.title}</span>

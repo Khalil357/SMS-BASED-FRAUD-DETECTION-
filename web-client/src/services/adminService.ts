@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8080';
 const TOKEN_KEY = 'argus_admin_token';
 
 /** Admin-visible user view, matching the backend `UserResponse` (snake_case). */
@@ -10,6 +10,38 @@ export interface AdminUser {
   role: 'ADMIN' | 'USER';
   verified: boolean;
   active: boolean;
+}
+
+/** Backend Admin Stats DTO */
+export interface AdminStatsResponse {
+  totalSms: number;
+  fraudDetected: number;
+  safeSms: number;
+  pendingReview: number;
+}
+
+/** Backend Fraud Trend DTO */
+export interface FraudTrendPoint {
+  day: string;
+  count: number;
+}
+
+/** Backend Admin SMS Scan DTO */
+export interface AdminSmsScanResponse {
+  id: string;
+  sender: string;
+  message: string;
+  fraudType: string;
+  riskScore: number;
+  timestamp: string;
+}
+
+/** Spring Boot Page wrapper */
+export interface PageResponse<T> {
+  content: T[];
+  totalElements?: number;
+  totalPages?: number;
+  number?: number;
 }
 
 export interface ApiResult<T> {
@@ -69,6 +101,26 @@ async function authFetchJson<T>(path: string, init?: RequestInit): Promise<ApiRe
   } catch {
     return { success: false, message: 'Unable to reach the server' };
   }
+}
+
+/** Get dashboard system stats (Total SMS, Fraud Detected, Safe SMS, etc.). */
+export function getAdminStats(): Promise<ApiResult<AdminStatsResponse>> {
+  return authFetchJson<AdminStatsResponse>('/api/admin/stats');
+}
+
+/** Get live fraud trend points for the telemetry chart. */
+export function getFraudTrend(period: number = 7): Promise<ApiResult<FraudTrendPoint[]>> {
+  return authFetchJson<FraudTrendPoint[]>(`/api/admin/fraud-trend?period=${period}`);
+}
+
+/** Get SMS audit scans from the database (`sms_scans` table). */
+export function getSmsScans(
+  status?: string,
+  page: number = 0,
+  size: number = 100,
+): Promise<ApiResult<PageResponse<AdminSmsScanResponse> | AdminSmsScanResponse[]>> {
+  const query = status ? `?status=${encodeURIComponent(status)}&page=${page}&size=${size}` : `?page=${page}&size=${size}`;
+  return authFetchJson<PageResponse<AdminSmsScanResponse> | AdminSmsScanResponse[]>(`/api/admin/scans${query}`);
 }
 
 /** List all users (admin only). */
