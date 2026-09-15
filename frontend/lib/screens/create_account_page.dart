@@ -126,8 +126,11 @@ class _SignUpPageState extends State<SignUpPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+    final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
           // Background Gradient accent at the top
@@ -135,7 +138,7 @@ class _SignUpPageState extends State<SignUpPage> {
             top: 0,
             left: 0,
             right: 0,
-            height: MediaQuery.of(context).size.height * 0.32,
+            height: MediaQuery.of(context).size.height * 0.35,
             child: Container(
               decoration: BoxDecoration(
                 gradient: isDark
@@ -160,31 +163,74 @@ class _SignUpPageState extends State<SignUpPage> {
                       delay: const Duration(milliseconds: 50),
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: theme.primaryColor.withOpacity(0.08),
+                            color: isDark ? AppTheme.cyberCard : Colors.white,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: theme.primaryColor.withOpacity(0.15),
-                              width: 2,
+                              color: isDark ? AppTheme.cyberRed.withOpacity(0.4) : theme.colorScheme.primary.withOpacity(0.3),
+                              width: 2.5,
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (isDark ? AppTheme.cyberRed : theme.colorScheme.primary).withOpacity(0.15),
+                                blurRadius: 20,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
                           child: Image.asset(
                             'assets/images/sms_fraud_inapp_icon.png',
-                            width: 80,
-                            height: 80,
+                            width: 72,
+                            height: 72,
                             fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.shield_outlined,
+                              size: 64,
+                              color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
 
-                    // Title
+                    // Cyber Badge & Title
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 100),
                       child: Column(
                         children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppTheme.cyberGreen.withOpacity(0.12) : theme.colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark ? AppTheme.cyberGreen.withOpacity(0.3) : theme.colorScheme.primary.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.security_rounded,
+                                  size: 13,
+                                  color: isDark ? AppTheme.cyberGreen : theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'ARGUS SENTINEL • REGISTRATION',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                    color: isDark ? AppTheme.cyberGreen : theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           Text(
                             'Create Account',
                             textAlign: TextAlign.center,
@@ -192,9 +238,11 @@ class _SignUpPageState extends State<SignUpPage> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Join Secure Signal to protect your messages from fraud',
+                            'Join Argus Sentinel to protect your messages from scam & fraud',
                             textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
+                            ),
                           ),
                         ],
                       ),
@@ -207,10 +255,10 @@ class _SignUpPageState extends State<SignUpPage> {
                       child: Container(
                         padding: const EdgeInsets.all(22),
                         decoration: BoxDecoration(
-                          color: theme.cardTheme.color,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            color: borderColor,
                             width: 1,
                           ),
                           boxShadow: AppTheme.cardShadow(isDark),
@@ -280,13 +328,13 @@ class _SignUpPageState extends State<SignUpPage> {
                                 fontWeight: FontWeight.w500,
                                 color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
                               ),
-                              dropdownColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+                              dropdownColor: isDark ? AppTheme.cyberCard : AppTheme.cardLight,
                               decoration: InputDecoration(
                                 labelText: 'Gender',
                                 prefixIcon: Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 14),
                                   child: Icon(
-                                    Icons.face_outlined,
+                                    Icons.wc_rounded,
                                     size: 20,
                                     color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                                   ),
@@ -363,7 +411,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             ),
                             const SizedBox(height: 16),
 
-                             // Terms & Conditions Checkbox
+                            // Terms & Conditions Checkbox
                             Row(
                               children: [
                                 Checkbox(
@@ -386,6 +434,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                         style: theme.textTheme.bodyMedium?.copyWith(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w500,
+                                          color: isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
                                         ),
                                       ),
                                       GestureDetector(
@@ -412,7 +461,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                           style: theme.textTheme.bodyMedium?.copyWith(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w700,
-                                            color: theme.colorScheme.primary,
+                                            color: isDark ? AppTheme.cyberCyan : theme.colorScheme.primary,
                                             decoration: TextDecoration.underline,
                                           ),
                                         ),
@@ -442,7 +491,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
                             // Register Button
                             CustomButton(
-                              text: 'Create Account',
+                              text: 'Create Argus Account',
                               isLoading: _isLoading,
                               onPressed: _handleSignUp,
                             ),
@@ -460,13 +509,21 @@ class _SignUpPageState extends State<SignUpPage> {
                         children: [
                           Text(
                             'Already have an account? ',
-                            style: theme.textTheme.bodyMedium,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
+                            ),
                           ),
                           TextButton(
                             onPressed: () {
                               widget.onNavigate(AuthPage.login);
                             },
-                            child: const Text('Login'),
+                            child: Text(
+                              'Login',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? AppTheme.cyberCyan : theme.colorScheme.primary,
+                              ),
+                            ),
                           ),
                         ],
                       ),

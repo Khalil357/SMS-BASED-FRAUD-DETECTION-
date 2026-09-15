@@ -176,11 +176,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
           const SizedBox(height: 12),
           _buildDayDetailCard(dailyStats[_selectedDayIndex!], theme, isDark),
         ],
-
-        const SizedBox(height: 20),
-
-        // Category Breakdown Card
-        _buildCategoryBreakdownCard(theme, isDark),
       ],
     );
   }

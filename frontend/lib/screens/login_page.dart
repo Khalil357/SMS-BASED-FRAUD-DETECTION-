@@ -113,7 +113,7 @@ class _LoginPageState extends State<LoginPage> {
           _isLoading = false;
         });
 
-        if (result['success']) {
+        if (result['success'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(result['message'] ?? 'Login successful!'),
@@ -124,10 +124,7 @@ class _LoginPageState extends State<LoginPage> {
           );
           widget.onNavigate(AuthPage.dashboard);
         } else {
-          final msg = (result['message'] ?? '').toString();
-          final isUnverified = msg.toLowerCase().contains('not verified') ||
-              msg.toLowerCase().contains('verify your email') ||
-              result['statusCode'] == 403;
+          final isUnverified = result['isUnverified'] == true;
 
           if (isUnverified) {
             final data = result['data'] is Map<String, dynamic>
@@ -156,8 +153,11 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+    final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
           // Background Gradient accent at the top
@@ -165,7 +165,7 @@ class _LoginPageState extends State<LoginPage> {
             top: 0,
             left: 0,
             right: 0,
-            height: MediaQuery.of(context).size.height * 0.32,
+            height: MediaQuery.of(context).size.height * 0.35,
             child: Container(
               decoration: BoxDecoration(
                 gradient: isDark
@@ -183,53 +183,98 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 20),
 
                     // Logo Icon with entrance animation
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 100),
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: theme.primaryColor.withOpacity(0.08),
+                            color: isDark ? AppTheme.cyberCard : Colors.white,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: theme.primaryColor.withOpacity(0.15),
-                              width: 2,
+                              color: isDark ? AppTheme.cyberRed.withOpacity(0.4) : theme.colorScheme.primary.withOpacity(0.3),
+                              width: 2.5,
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (isDark ? AppTheme.cyberRed : theme.colorScheme.primary).withOpacity(0.15),
+                                blurRadius: 20,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
                           child: Image.asset(
                             'assets/images/sms_fraud_inapp_icon.png',
-                            width: 80,
-                            height: 80,
+                            width: 72,
+                            height: 72,
                             fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.shield_outlined,
+                              size: 64,
+                              color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
-                    // Titles
+                    // Cyber Sentinel Pill & Titles
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 200),
                       child: Column(
                         children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppTheme.cyberGreen.withOpacity(0.12) : theme.colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark ? AppTheme.cyberGreen.withOpacity(0.3) : theme.colorScheme.primary.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.security_rounded,
+                                  size: 13,
+                                  color: isDark ? AppTheme.cyberGreen : theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'ARGUS SENTINEL • SMS FRAUD SHIELD',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                    color: isDark ? AppTheme.cyberGreen : theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           Text(
-                            'Welcome Back!',
+                            'Welcome Back',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.headlineLarge,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Text(
-                            'Secure your inbox and detect fraud SMS messages',
+                            'Sign in to protect your inbox & detect fraudulent SMS messages',
                             textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 28),
 
                     // Login Card Containing Inputs
                     FadeSlideTransition(
@@ -237,10 +282,10 @@ class _LoginPageState extends State<LoginPage> {
                       child: Container(
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: theme.cardTheme.color,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            color: borderColor,
                             width: 1,
                           ),
                           boxShadow: AppTheme.cardShadow(isDark),
@@ -273,7 +318,7 @@ class _LoginPageState extends State<LoginPage> {
                                 return null;
                               },
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 18),
 
                             // Password input field
                             CustomTextField(
@@ -308,14 +353,21 @@ class _LoginPageState extends State<LoginPage> {
                                   minimumSize: Size.zero,
                                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                child: const Text('Forgot Password?'),
+                                child: Text(
+                                  'Forgot Password?',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: isDark ? AppTheme.cyberCyan : theme.colorScheme.primary,
+                                  ),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 28),
+                            const SizedBox(height: 24),
 
                             // Login Button
                             CustomButton(
-                              text: 'Login',
+                              text: 'Sign In to Argus',
                               isLoading: _isLoading,
                               onPressed: _handleLogin,
                             ),
@@ -323,7 +375,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
 
                     // Create Account text
                     FadeSlideTransition(
@@ -333,13 +385,21 @@ class _LoginPageState extends State<LoginPage> {
                         children: [
                           Text(
                             "Don't have an account? ",
-                            style: theme.textTheme.bodyMedium,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
+                            ),
                           ),
                           TextButton(
                             onPressed: () {
                               widget.onNavigate(AuthPage.signUp);
                             },
-                            child: const Text('Create an account'),
+                            child: Text(
+                              'Create an account',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? AppTheme.cyberCyan : theme.colorScheme.primary,
+                              ),
+                            ),
                           ),
                         ],
                       ),

@@ -10,10 +10,9 @@ import '../services/sms_ingestion_service.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../main.dart';
-import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/interactive_threat_chart.dart';
-import '../widgets/security_illustrations.dart';
+import '../widgets/message_classification_chart.dart';
 import '../services/safety_tips_service.dart';
 import 'safety_tips_page.dart';
 import 'terms_and_conditions_page.dart';
@@ -51,6 +50,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   bool _isNotificationsEnabled = true;
   double _notificationThreshold = 0.80;
   bool _hasSmsPermission = false;
+  bool _isTipDismissed = false;
 
   // Logs list
   List<Map<String, dynamic>> _smsLogs = [];
@@ -312,6 +312,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     });
 
     _fetchBackendFraudScans();
+    AuthService.fetchUserProfile().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _fetchBackendFraudScans() async {
@@ -375,8 +378,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     });
   }
 
-  Future<void> _requestPermissions() async {
-    final granted = await SmsIngestionService.requestSmsPermission();
+  Future<void> _requestPermissions({bool forcePrompt = false}) async {
+    final granted = await SmsIngestionService.requestSmsPermission(forcePrompt: forcePrompt);
     setState(() {
       _hasSmsPermission = granted;
     });
@@ -448,6 +451,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       _isIngestionEnabled = val;
     });
     if (val) {
+      await _requestPermissions(forcePrompt: true);
       if (_hasSmsPermission) {
         await SmsIngestionService.startListening();
       }
@@ -954,9 +958,13 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   /// the backend call and just updates locally, same as before.
   Future<void> _markAsSafe(Map<String, dynamic> log) async {
     final logId = log['id']?.toString() ?? '';
-    final backendId = log['backendId']?.toString();
+    final backendId = log['backendId']?.toString() ?? log['scanId']?.toString() ?? log['id']?.toString();
 
-    if (backendId != null && backendId.isNotEmpty) {
+    if (backendId != null &&
+        backendId.isNotEmpty &&
+        !backendId.startsWith('manual_') &&
+        !backendId.startsWith('auto_') &&
+        !backendId.startsWith('mock_')) {
       setState(() {
         _markingSafeLogId = logId;
       });
@@ -971,16 +979,17 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
       if (result['success'] != true) {
         _showMessageActionSnackBar(
-          result['message'] ?? 'Failed to update on the server.',
+          result['message'] ?? 'Failed to delete record on the server.',
           isError: true,
         );
-        return; // Stop here — do NOT change local state if the backend didn't confirm deletion.
+        return; // Stop here — do NOT remove local record if authenticated backend DELETE call failed!
       }
     }
 
-    // Reaches here only if: there was no backendId to check (manual scan),
+    // Reaches here only if: there was no backendId to check,
     // OR the backend confirmed the row was deleted.
     await SmsStorageService.submitFeedback(logId: logId, feedbackType: 'Safe');
+    await SmsStorageService.removeLog(logId);
     final logs = await SmsStorageService.getLogs();
     if (!mounted) return;
 
@@ -988,7 +997,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       _smsLogs = logs;
     });
     Navigator.pop(context);
-    _showMessageActionSnackBar('Your response has successfully been updated.');
+    _showMessageActionSnackBar('Record marked as safe and updated successfully.');
   }
 
   Future<void> _markAsFraud(Map<String, dynamic> log) async {
@@ -1398,39 +1407,44 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final user = AuthService.currentUser ?? {};
-    final fullName = user['full_name'] ?? 'Demo User';
+    final fullName = user['full_name'] ?? user['fullName'] ?? user['name'] ?? 'User';
 
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: _currentIndex == 4 ? 0 : 16,
         leading: _currentIndex == 4
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
-                tooltip: 'Back to Dashboard',
+                tooltip: 'Back to Home',
                 onPressed: () => setState(() => _currentIndex = 0),
               )
             : null,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Image.asset(
-                'assets/images/sms_fraud_inapp_icon.png',
-                width: 28,
-                height: 28,
-                errorBuilder: (context, error, stackTrace) => Image.asset(
-                  'assets/images/sms_fraud_app_icon.png',
+            if (_currentIndex != 4) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(
+                  'assets/images/sms_fraud_inapp_icon.png',
                   width: 28,
                   height: 28,
-                  errorBuilder: (context, error, stackTrace) => Icon(
-                    Icons.shield,
-                    color: theme.colorScheme.primary,
-                    size: 28,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Image.asset(
+                    'assets/images/sms_fraud_app_icon.png',
+                    width: 28,
+                    height: 28,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.shield,
+                      color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                      size: 28,
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
+            ],
             Text(
               _currentIndex == 0
                   ? 'Argus'
@@ -1441,20 +1455,69 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                           : _currentIndex == 3
                               ? 'Safety Tips'
                               : 'Profile & Settings',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+                color: isDark ? AppTheme.cyberTextPrimary : null,
+              ),
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: Icon(
-              isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-              color: isDark ? Colors.amber : theme.colorScheme.primary,
-            ),
-            tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-            onPressed: () {
-              SecureSignalApp.of(context).toggleTheme();
+          // Interactive Status Pill
+          InkWell(
+            onTap: () async {
+              if (!_isIngestionEnabled || !_hasSmsPermission) {
+                await _requestPermissions(forcePrompt: true);
+                await _updateIngestion(true);
+              } else {
+                setState(() {
+                  _currentIndex = 4;
+                });
+              }
             },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: (_isIngestionEnabled && _hasSmsPermission)
+                    ? AppTheme.cyberGreen.withOpacity(0.12)
+                    : AppTheme.cyberRed.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: (_isIngestionEnabled && _hasSmsPermission)
+                      ? AppTheme.cyberGreen.withOpacity(0.4)
+                      : AppTheme.cyberRed.withOpacity(0.4),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: (_isIngestionEnabled && _hasSmsPermission)
+                          ? AppTheme.cyberGreen
+                          : AppTheme.cyberRed,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    (_isIngestionEnabled && _hasSmsPermission) ? 'Active' : 'Inactive',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: (_isIngestionEnabled && _hasSmsPermission)
+                          ? AppTheme.cyberGreen
+                          : AppTheme.cyberRed,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 12.0),
@@ -1471,20 +1534,22 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: _currentIndex == 4
-                        ? theme.colorScheme.primary
-                        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                        ? (isDark ? AppTheme.cyberRed : theme.colorScheme.primary)
+                        : (isDark ? AppTheme.cyberBorder : const Color(0xFFE2E8F0)),
                     width: 2,
                   ),
                 ),
                 child: CircleAvatar(
                   radius: 15,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+                  backgroundColor: isDark
+                      ? AppTheme.cyberRed.withOpacity(0.15)
+                      : theme.colorScheme.primary.withOpacity(0.15),
                   child: Text(
                     fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w800,
                       fontSize: 13,
-                      color: theme.colorScheme.primary,
+                      color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                     ),
                   ),
                 ),
@@ -1526,9 +1591,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           children: [
             _buildNavItem(
               index: 0,
-              icon: Icons.grid_view_outlined,
-              activeIcon: Icons.grid_view_rounded,
-              label: 'Dashboard',
+              icon: Icons.home_outlined,
+              activeIcon: Icons.home_rounded,
+              label: 'Home',
               theme: theme,
               isDark: isDark,
             ),
@@ -1661,21 +1726,336 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   }
 
   Widget _buildTipOfTheDayBanner(ThemeData theme, bool isDark) {
+    if (_isTipDismissed) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.cyberCard : AppTheme.cardLight,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.amber.shade600.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.lightbulb_outline_rounded, color: Colors.amber.shade500, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  'Safety Tip of the Day Hidden',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
+                  ),
+                ),
+              ],
+            ),
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _isTipDismissed = false;
+                });
+              },
+              child: Text(
+                'Restore Card',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.amber.shade500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final tip = SafetyTipsService.getTipOfTheDay();
+    final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+    final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+    final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        color: cardBg,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.amber.shade700.withOpacity(0.3),
+          color: Colors.amber.shade600.withOpacity(0.4),
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.amber.shade700.withOpacity(0.05),
-            blurRadius: 10,
+            color: Colors.amber.shade600.withOpacity(isDark ? 0.12 : 0.06),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.amber.shade700.withOpacity(0.2),
+                    Colors.amber.shade900.withOpacity(0.08),
+                  ],
+                ),
+                border: Border(
+                  bottom: BorderSide(color: Colors.amber.shade700.withOpacity(0.2)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade600.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.security_rounded, color: Colors.amber.shade500, size: 14),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'SAFETY TIP • [${tip.category.toUpperCase()}]',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.amber.shade500,
+                              letterSpacing: 0.6,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _currentIndex = 3;
+                          });
+                        },
+                        child: Row(
+                          children: [
+                            Text(
+                              'View All',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.cyberCyan,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(Icons.arrow_forward_rounded, size: 12, color: AppTheme.cyberCyan),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _isTipDismissed = true;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade700.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close_rounded, size: 14, color: Colors.amber),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Tip Content
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tip.title,
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: textPrimary,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    tip.summary,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: textMuted,
+                    ),
+                  ),
+                  if (tip.actionSteps.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.shield_outlined, size: 14, color: AppTheme.cyberGreen),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Action: ${tip.actionSteps.first}',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? AppTheme.cyberGreen : Colors.green.shade800,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeTab(String name, ThemeData theme, bool isDark) {
+    final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+    final cardSecBg = isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF8FAFC);
+    final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
+    final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+    final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Welcome Back Header
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome Back, $name 👋',
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: textPrimary,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Argus Sentinel Real-Time SMS Threat Interception',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: textMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Tip of the Day Banner
+          _buildTipOfTheDayBanner(theme, isDark),
+          const SizedBox(height: 16),
+
+          // Security Status Card
+          _buildCyberSecurityStatusCard(theme, isDark, cardBg, borderColor, textPrimary, textMuted),
+          const SizedBox(height: 16),
+
+          // Statistics Cards Row (SMS Scanned / Threats Blocked)
+          _buildCyberStatsRow(theme, isDark, cardBg, cardSecBg, borderColor, textPrimary, textMuted),
+          const SizedBox(height: 16),
+
+          // Analyze SMS & Links Section (MOVED ABOVE Message Classification)
+          _buildCyberAnalyzeSection(theme, isDark, cardBg, borderColor, textPrimary, textMuted),
+          const SizedBox(height: 16),
+
+          // Message Classification Distribution Chart
+          MessageClassificationChart(logs: _smsLogs),
+          const SizedBox(height: 16),
+
+          // Daily Threat Analysis Trend Bar Chart
+          InteractiveThreatChart(logs: _smsLogs),
+          const SizedBox(height: 16),
+
+          // Recent Activity Section
+          _buildCyberRecentActivitySection(theme, isDark, cardBg, borderColor, textPrimary, textMuted),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCyberSecurityStatusCard(
+    ThemeData theme,
+    bool isDark,
+    Color cardBg,
+    Color borderColor,
+    Color textPrimary,
+    Color textMuted,
+  ) {
+    final isProtected = _isIngestionEnabled && _hasSmsPermission;
+    final statusTitle = isProtected ? 'System Protected' : 'Action Required';
+    final statusDesc = isProtected
+        ? 'Argus AI sentinel is monitoring incoming communications.'
+        : 'Enable auto-ingestion & SMS permissions to activate real-time shield.';
+    final percentageText = '${_safetyIndex.toStringAsFixed(1)}%';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.cyberRed.withOpacity(isDark ? 0.08 : 0.04),
+            blurRadius: 20,
+            spreadRadius: 0,
             offset: const Offset(0, 4),
           ),
         ],
@@ -1684,81 +2064,165 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.lightbulb_rounded, color: Colors.amber.shade700, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'FRAUD SAFETY TIP OF THE DAY',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.amber.shade800,
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SECURITY STATUS',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.cyberRed,
+                        letterSpacing: 1.2,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      statusTitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      statusDesc,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: textMuted,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _currentIndex = 3;
-                  });
-                },
-                child: Text(
-                  'View All',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.primary,
-                  ),
+              const SizedBox(width: 14),
+
+              // Circular progress indicator with red glow ring
+              Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF1F5F9),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.cyberRed.withOpacity(0.35),
+                      blurRadius: 14,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                  border: Border.all(color: AppTheme.cyberRed, width: 3),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      percentageText,
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      'SECURE',
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.cyberGreen,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            tip.title,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-            ),
+          const SizedBox(height: 16),
+          Container(
+            height: 1,
+            color: borderColor,
           ),
-          const SizedBox(height: 6),
-          Text(
-            tip.summary,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontSize: 12,
-              height: 1.3,
-              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-            ),
+          const SizedBox(height: 12),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: _threatsCount == 0 ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _threatsCount == 0
+                        ? 'Zero critical exploits detected'
+                        : '$_threatsCount threat alerts detected',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _currentIndex = 1;
+                  });
+                },
+                child: Row(
+                  children: [
+                    Text(
+                      'Scan Details',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.cyberCyan,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    const Icon(Icons.arrow_forward_rounded, size: 14, color: AppTheme.cyberCyan),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHomeTab(String name, ThemeData theme, bool isDark) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildTipOfTheDayBanner(theme, isDark),
-
-          Container(
-            padding: const EdgeInsets.all(20.0),
+  Widget _buildCyberStatsRow(
+    ThemeData theme,
+    bool isDark,
+    Color cardBg,
+    Color cardSecBg,
+    Color borderColor,
+    Color textPrimary,
+    Color textMuted,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: isDark
-                  ? AppTheme.heroBgGradientDark
-                  : AppTheme.heroBgGradientLight,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color:
-                    isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-              ),
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 1),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1766,68 +2230,37 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Welcome back,',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: isDark
-                                  ? AppTheme.subtleDark
-                                  : AppTheme.subtleLight,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            name,
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
+                    Text(
+                      'SMS Scanned',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: textMuted,
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _isIngestionEnabled && _hasSmsPermission
-                            ? Colors.green.withOpacity(0.12)
-                            : Colors.orange.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: _isIngestionEnabled && _hasSmsPermission
-                              ? Colors.green.withOpacity(0.3)
-                              : Colors.orange.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _isIngestionEnabled && _hasSmsPermission
-                                ? Icons.gpp_good
-                                : Icons.gpp_maybe,
-                            color: _isIngestionEnabled && _hasSmsPermission
-                                ? Colors.green
-                                : Colors.orange,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _isIngestionEnabled && _hasSmsPermission
-                                ? 'Auto Ingestion Active'
-                                : 'Auto Ingestion Inactive',
-                            style: GoogleFonts.inter(
-                              color: _isIngestionEnabled && _hasSmsPermission
-                                  ? Colors.green
-                                  : Colors.orange,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
+                    const Icon(Icons.mark_chat_read_outlined, size: 18, color: AppTheme.cyberCyan),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '$_scannedCount',
+                  style: GoogleFonts.inter(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.trending_up_rounded, size: 13, color: AppTheme.cyberGreen),
+                    const SizedBox(width: 4),
+                    Text(
+                      '↑ 12% this week',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.cyberGreen,
                       ),
                     ),
                   ],
@@ -1835,268 +2268,396 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
               ],
             ),
           ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Threats Detected',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: textMuted,
+                      ),
+                    ),
+                    const Icon(Icons.gpp_bad_outlined, size: 18, color: AppTheme.cyberRed),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '$_threatsCount',
+                  style: GoogleFonts.inter(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.cyberRed,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Real-time shield',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.cyberRed,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
-          if (!_isIngestionEnabled || !_hasSmsPermission)
+  Widget _buildCyberAnalyzeSection(
+    ThemeData theme,
+    bool isDark,
+    Color cardBg,
+    Color borderColor,
+    Color textPrimary,
+    Color textMuted,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Analyze SMS & Links',
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Paste suspicious messages or URLs to verify legitimacy through the Argus heuristic shield.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: textMuted,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          TextField(
+            controller: _scanController,
+            maxLines: 3,
+            minLines: 1,
+            style: GoogleFonts.inter(fontSize: 13, color: textPrimary),
+            decoration: InputDecoration(
+              hintText: 'Paste suspicious SMS or message link...',
+              hintStyle: GoogleFonts.inter(fontSize: 13, color: textMuted),
+              prefixIcon: const Icon(Icons.sms_outlined, color: AppTheme.cyberCyan, size: 20),
+              filled: true,
+              fillColor: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF1F5F9),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: borderColor, width: 1),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: borderColor, width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppTheme.cyberCyan, width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.cyberRed,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 0,
+              ),
+              icon: _isScanning
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.security_rounded, size: 18),
+              label: Text(
+                _isScanning ? 'Analyzing Heuristics...' : '● Analyze Message',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              onPressed: _isScanning ? null : _handleManualScan,
+            ),
+          ),
+
+          if (_scanResult != null) ...[
+            const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(top: 16),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [const Color(0xFF451A03), const Color(0xFF78350F)]
-                      : [const Color(0xFFFEF3C7), const Color(0xFFFDE68A)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                color: _scanIsSafe == true
+                    ? AppTheme.cyberGreen.withOpacity(0.1)
+                    : AppTheme.cyberRed.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _scanIsSafe == true ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                  width: 1,
                 ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.amber.shade600),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade700.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.security_update_warning_rounded,
-                        color: Colors.amber.shade900, size: 28),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _scanIsSafe == true ? Icons.gpp_good_rounded : Icons.gpp_bad_rounded,
+                            color: _scanIsSafe == true ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Threat Level: ${(_threatLevel * 100).toStringAsFixed(1)}%',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: _scanIsSafe == true ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.close, size: 18),
+                        color: textMuted,
+                        tooltip: 'Dismiss result',
+                        onPressed: () {
+                          setState(() {
+                            _scanResult = null;
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Auto Ingestion is Disabled',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                            color: isDark
-                                ? Colors.amber.shade200
-                                : Colors.amber.shade900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Grant SMS permission & turn on auto-ingestion to scan incoming texts automatically.',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.amber.shade300
-                                : Colors.amber.shade900,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.red,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          icon: const Icon(Icons.bolt, size: 16),
-                          label: const Text('Enable Protection Now',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 12)),
-                          onPressed: () async {
-                            await _requestPermissions();
-                            await _updateIngestion(true);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.all(14),
-              margin: const EdgeInsets.only(top: 16),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF064E3B).withOpacity(0.4)
-                    : const Color(0xFFD1FAE5),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.green.shade400),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.verified_user_rounded,
-                      color: Colors.green, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Real-Time Fraud Shield Active',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13,
-                            color: isDark
-                                ? Colors.green.shade200
-                                : Colors.green.shade900,
-                          ),
-                        ),
-                        Text(
-                          'Argus is monitoring incoming SMS for scam links and fake alerts.',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: isDark
-                                ? Colors.green.shade300
-                                : Colors.green.shade800,
-                          ),
-                        ),
-                      ],
+                  const SizedBox(height: 6),
+                  Text(
+                    _scanResult!,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: textPrimary,
+                      height: 1.4,
                     ),
                   ),
                 ],
               ),
             ),
-          const SizedBox(height: 20),
+          ],
+        ],
+      ),
+    );
+  }
 
+  Widget _buildCyberRecentActivitySection(
+    ThemeData theme,
+    bool isDark,
+    Color cardBg,
+    Color borderColor,
+    Color textPrimary,
+    Color textMuted,
+  ) {
+    final recentLogs = _smsLogs.take(4).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'SMS Scanned',
-                  value: _scannedCount.toString(),
-                  icon: Icons.mark_chat_read_outlined,
-                  iconColor: theme.colorScheme.primary,
-                  theme: theme,
-                  isDark: isDark,
+              Text(
+                'RECENT ACTIVITY',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: textMuted,
+                  letterSpacing: 1.2,
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Threats Detected',
-                  value: _threatsCount.toString(),
-                  icon: Icons.gpp_bad_outlined,
-                  iconColor: AppTheme.red,
-                  theme: theme,
-                  isDark: isDark,
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _currentIndex = 1;
+                  });
+                },
+                child: Text(
+                  'View all',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.cyberCyan,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _buildMetricCard(
-            title: 'System Safety Index',
-            value: '${_safetyIndex.toStringAsFixed(1)}% Secure',
-            icon: Icons.insights,
-            iconColor: Colors.teal,
-            theme: theme,
-            isDark: isDark,
-            subtitle: _safetyIndex > 90
-                ? 'Outstanding security level'
-                : (_safetyIndex > 70
-                    ? 'Moderate security warning'
-                    : 'High vulnerability warning'),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
-          InteractiveThreatChart(logs: _smsLogs),
-          const SizedBox(height: 24),
-
-          Text(
-            'Analyze SMS Content',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Paste a message below to analyze it for phishing attempts or malware distribution.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          Container(
-            padding: const EdgeInsets.all(20.0),
-            decoration: BoxDecoration(
-              color: theme.cardTheme.color,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color:
-                    isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          if (recentLogs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  'No recent activity logged yet.',
+                  style: GoogleFonts.inter(fontSize: 12, color: textMuted),
+                ),
               ),
-              boxShadow: AppTheme.cardShadow(isDark),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                CustomTextField(
-                  controller: _scanController,
-                  labelText: 'Suspicious SMS Text',
-                  hintText: 'e.g. You have won a parcel, claim here http://...',
-                  prefixIcon: Icons.sms_outlined,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.done,
-                ),
-                const SizedBox(height: 16),
-                CustomButton(
-                  text: 'Analyze SMS',
-                  isLoading: _isScanning,
-                  icon: Icons.security_outlined,
-                  onPressed: _handleManualScan,
-                ),
-                if (_scanResult != null) ...[
-                  const SizedBox(height: 20),
-                  const Divider(),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(16.0),
+            )
+          else
+            ...List.generate(recentLogs.length, (idx) {
+              final log = recentLogs[idx];
+              final type = log['type'] as String? ?? 'Safe';
+              final isSafe = type == 'Safe';
+              final sender = log['sender'] as String? ?? 'Unknown';
+              final msg = log['message'] as String? ?? '';
+              final timeStr = _formatLogTime(log['time'] as String? ?? '');
+
+              return Padding(
+                padding: EdgeInsets.only(bottom: idx == recentLogs.length - 1 ? 0 : 12.0),
+                child: InkWell(
+                  onTap: () => _showLogDetail(log),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: _scanIsSafe == true
-                          ? Colors.green.withOpacity(0.08)
-                          : (_threatLevel > 0.8
-                              ? Colors.red.withOpacity(0.08)
-                              : Colors.amber.withOpacity(0.08)),
+                      color: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _scanIsSafe == true
-                            ? Colors.green.withOpacity(0.2)
-                            : (_threatLevel > 0.8
-                                ? Colors.red.withOpacity(0.2)
-                                : Colors.amber.withOpacity(0.2)),
-                      ),
+                      border: Border.all(color: borderColor, width: 1),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          'Threat Level: ${(_threatLevel * 100).toStringAsFixed(1)}%',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w700,
-                            color: _scanIsSafe == true
-                                ? Colors.green.shade700
-                                : (_threatLevel > 0.8
-                                    ? Colors.red.shade700
-                                    : Colors.amber.shade700),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isSafe
+                                ? AppTheme.cyberGreen.withOpacity(0.12)
+                                : AppTheme.cyberRed.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isSafe ? Icons.shield_outlined : Icons.warning_amber_rounded,
+                            color: isSafe ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                            size: 18,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _scanResult!,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            height: 1.4,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isSafe ? 'Message Verified Safe' : 'Suspicious Message Detected',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$sender • $msg',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: textMuted,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isSafe
+                                    ? AppTheme.cyberGreen.withOpacity(0.15)
+                                    : AppTheme.cyberRed.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                isSafe ? 'Safe' : 'Scam',
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: isSafe ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              timeStr,
+                              style: GoogleFonts.inter(fontSize: 9, color: textMuted),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -2319,15 +2880,38 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                       itemCount: filtered.length,
                       itemBuilder: (context, index) {
                         final log = filtered[index];
-                        final type = log['type'];
-                        final Color statusColor = type == 'Safe'
-                            ? Colors.green
-                            : (type == 'Fraud'
-                                ? AppTheme.red
-                                : Colors.amber.shade700);
+                        final type = log['type'] ?? 'Safe';
+                        final isSafe = type == 'Safe';
+                        final isFraud = type == 'Fraud';
+                        final Color statusColor = isSafe
+                            ? AppTheme.cyberGreen
+                            : (isFraud ? AppTheme.cyberRed : AppTheme.cyberCyan);
 
-                        return Card(
+                        final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+                        final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
+                        final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+                        final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
+
+                        final rawThreat = (log['threat'] as num?)?.toDouble() ?? 0.0;
+                        final displayThreat = (isSafe && rawThreat > 0.50)
+                            ? (1.0 - rawThreat)
+                            : rawThreat;
+
+                        return Container(
                           margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: cardBg,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: borderColor, width: 1),
+                            boxShadow: [
+                              BoxShadow(
+                                color: statusColor.withOpacity(isDark ? 0.08 : 0.04),
+                                blurRadius: 12,
+                                spreadRadius: 0,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
                           child: InkWell(
                             onTap: () => _showLogDetail(log),
                             borderRadius: BorderRadius.circular(16),
@@ -2337,96 +2921,115 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(
-                                        'Sender: ${log['sender']}',
-                                        style: theme.textTheme.titleSmall
-                                            ?.copyWith(
-                                          fontWeight: FontWeight.w700,
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(6),
+                                              decoration: BoxDecoration(
+                                                color: statusColor.withOpacity(0.12),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                isSafe
+                                                    ? Icons.mark_email_read_rounded
+                                                    : (isFraud ? Icons.gpp_bad_rounded : Icons.campaign_rounded),
+                                                color: statusColor,
+                                                size: 16,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                log['sender']?.toString() ?? 'Unknown Sender',
+                                                style: GoogleFonts.inter(
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 14,
+                                                  color: textPrimary,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
+                                      const SizedBox(width: 8),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
                                           color: statusColor.withOpacity(0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          border: Border.all(
-                                              color:
-                                                  statusColor.withOpacity(0.2)),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: statusColor.withOpacity(0.3)),
                                         ),
                                         child: Text(
-                                          type,
+                                          isSafe ? 'SAFE' : (isFraud ? 'FRAUD THREAT' : 'SPAM PROMO'),
                                           style: GoogleFonts.inter(
                                             color: statusColor,
                                             fontSize: 10,
-                                            fontWeight: FontWeight.w800,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.5,
                                           ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    log['message'],
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: isDark
-                                          ? Colors.grey.shade300
-                                          : Colors.grey.shade800,
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      log['message']?.toString() ?? '',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        height: 1.4,
+                                        color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
                                   Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         _formatLogTime(log['time']),
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                          color: isDark
-                                              ? AppTheme.subtleDark
-                                              : AppTheme.subtleLight,
+                                        style: GoogleFonts.inter(
+                                          color: textMuted,
                                           fontSize: 11,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                       Row(
-                                        children: (() {
-                                          final logType = log['type'] ?? 'Safe';
-                                          final rawThreat =
-                                              (log['threat'] as num?)
-                                                      ?.toDouble() ??
-                                                  0.0;
-                                          final displayThreat =
-                                              (logType == 'Safe' &&
-                                                      rawThreat > 0.50)
-                                                  ? (1.0 - rawThreat)
-                                                  : rawThreat;
-                                          return [
-                                            Text(
-                                              'Threat: ${(displayThreat * 100).toStringAsFixed(0)}%',
-                                              style: theme.textTheme.bodyMedium
-                                                  ?.copyWith(
-                                                color: isDark
-                                                    ? AppTheme.subtleDark
-                                                    : AppTheme.subtleLight,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: (displayThreat > 0.60 ? AppTheme.cyberRed : AppTheme.cyberGreen).withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              'Threat Index: ${(displayThreat * 100).toStringAsFixed(0)}%',
+                                              style: GoogleFonts.inter(
+                                                color: displayThreat > 0.60 ? AppTheme.cyberRed : AppTheme.cyberGreen,
                                                 fontSize: 11,
-                                                fontWeight: FontWeight.w600,
+                                                fontWeight: FontWeight.w700,
                                               ),
                                             ),
-                                            const SizedBox(width: 4),
-                                            Icon(Icons.chevron_right,
-                                                size: 14,
-                                                color: isDark
-                                                    ? AppTheme.subtleDark
-                                                    : AppTheme.subtleLight),
-                                          ];
-                                        })(),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Icon(Icons.chevron_right_rounded, size: 16, color: textMuted),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -2548,357 +3151,487 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   Widget _buildProfileTab(
       String name, Map<String, dynamic> user, ThemeData theme, bool isDark) {
-    final email = user['email'] ?? 'demo@securesignal.com';
-    final phone = user['phone_number'] ?? '+27820000000';
-    final gender = user['gender'] ?? 'Male';
+    final fullName = user['full_name'] ?? user['fullName'] ?? user['name'] ?? user['username'] ?? (name.isNotEmpty ? name : 'User');
+    final rawEmail = user['email'] ?? user['email_address'] ?? user['emailAddress'] ?? user['gmail'] ?? user['user_email'];
+    final email = (rawEmail != null && rawEmail.toString().isNotEmpty) ? rawEmail.toString() : 'Not Provided';
+    final rawPhone = user['phone_number'] ?? user['phoneNumber'] ?? user['phone'] ?? user['mobile'] ?? user['phone_no'];
+    final phone = (rawPhone != null && rawPhone.toString().isNotEmpty) ? rawPhone.toString() : 'Not Provided';
+    final rawGender = user['gender'] ?? user['sex'];
+    final gender = (rawGender != null && rawGender.toString().isNotEmpty) ? rawGender.toString() : 'Not Specified';
+
+    final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+    final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
+    final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+    final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20.0),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 40.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
+          // Profile Header Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: borderColor, width: 1),
+            ),
             child: Column(
               children: [
-                const SizedBox(height: 10),
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-                  child: Text(
-                    name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'U',
-                    style: GoogleFonts.inter(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w800,
-                      color: theme.colorScheme.primary,
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.cyberRed, width: 2.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.cyberRed.withOpacity(0.3),
+                        blurRadius: 12,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 38,
+                    backgroundColor: isDark
+                        ? AppTheme.cyberRed.withOpacity(0.15)
+                        : theme.colorScheme.primary.withOpacity(0.12),
+                    child: Text(
+                      fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
+                      style: GoogleFonts.inter(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 Text(
-                  name,
-                  style: theme.textTheme.headlineMedium?.copyWith(
+                  fullName,
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
                     fontWeight: FontWeight.w800,
+                    color: textPrimary,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   email,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: textMuted,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cyberGreen.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.cyberGreen.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.verified_user_rounded, size: 12, color: AppTheme.cyberGreen),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Argus Sentinel User',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.cyberGreen,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 20),
 
+          // Account Details Section
           Text(
             'ACCOUNT DETAILS',
             style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: FontWeight.w800,
-              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-              letterSpacing: 1.0,
+              color: textMuted,
+              letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(height: 12),
-          _buildInfoRow(
-              Icons.phone_android, 'Phone Number', phone, theme, isDark),
-          _buildInfoRow(Icons.face_outlined, 'Gender', gender, theme, isDark),
-          const SizedBox(height: 24),
+          const SizedBox(height: 10),
+          _buildCyberInfoRow(Icons.phone_android_rounded, 'Phone Number', phone, isDark, cardBg, borderColor, textPrimary, textMuted),
+          const SizedBox(height: 8),
+          _buildCyberInfoRow(Icons.wc_rounded, 'Gender', gender, isDark, cardBg, borderColor, textPrimary, textMuted),
+          const SizedBox(height: 20),
 
+          // Settings Section
           Text(
-            'SETTINGS & PREFERENCES',
+            'SECURITY & SYSTEM PREFERENCES',
             style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: FontWeight.w800,
-              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-              letterSpacing: 1.0,
+              color: textMuted,
+              letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-              child: Column(
-                children: [
+          // Auto Ingestion Switch Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cyberCyan.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.mark_chat_unread_outlined, color: AppTheme.cyberCyan, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Auto SMS Ingestion',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: textPrimary,
+                              ),
+                            ),
+                            Text(
+                              Platform.isAndroid ? 'Real-time background shield' : 'Unsupported on iOS',
+                              style: GoogleFonts.inter(fontSize: 11, color: textMuted),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Switch(
+                      value: _isIngestionEnabled && _hasSmsPermission,
+                      activeColor: AppTheme.cyberGreen,
+                      onChanged: Platform.isAndroid
+                          ? (val) {
+                              if (val) {
+                                _updateIngestion(true);
+                              } else {
+                                _showTurnOffIngestionDialog();
+                              }
+                            }
+                          : null,
+                    ),
+                  ],
+                ),
+                if (Platform.isAndroid && !_hasSmsPermission) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    height: 1,
+                    color: borderColor,
+                  ),
+                  const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.mark_chat_unread_outlined,
-                              color: theme.colorScheme.primary),
-                          const SizedBox(width: 14),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Auto SMS Ingestion',
-                                style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                Platform.isAndroid
-                                    ? 'Background listen'
-                                    : 'Unsupported on iOS',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: isDark
-                                      ? AppTheme.subtleDark
-                                      : AppTheme.subtleLight,
-                                ),
-                              ),
-                            ],
+                      Expanded(
+                        child: Text(
+                          'SMS Permission required to run background shield.',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: AppTheme.cyberRed,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
+                        ),
                       ),
-                      Switch(
-                        value: _isIngestionEnabled,
-                        activeThumbColor: theme.colorScheme.primary,
-                        onChanged: Platform.isAndroid
-                            ? (val) {
-                                if (val) {
-                                  // Turning ON: no confirmation needed
-                                  _updateIngestion(true);
-                                } else {
-                                  // Turning OFF: show confirmation dialog
-                                  _showTurnOffIngestionDialog();
-                                }
-                              }
-                            : null,
+                      TextButton(
+                        onPressed: _requestPermissions,
+                        child: const Text('Grant Now'),
                       ),
                     ],
                   ),
-                  if (Platform.isAndroid && !_hasSmsPermission) ...[
-                    const Divider(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'SMS Permission required to run background interception.',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: Colors.amber.shade800,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: _requestPermissions,
-                          child: const Text('Grant'),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
           ),
+          const SizedBox(height: 10),
 
-          Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.notifications_active_outlined,
-                          color: theme.colorScheme.primary),
-                      const SizedBox(width: 14),
-                      Text(
-                        'High Threat Notifications',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                  Switch(
-                    value: _isNotificationsEnabled,
-                    activeThumbColor: theme.colorScheme.primary,
-                    onChanged: (val) => _updateNotifications(val),
-                  ),
-                ],
-              ),
+          // High Threat Notifications Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 1),
             ),
-          ),
-
-          if (_isNotificationsEnabled)
-            Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Notification Alert Threshold',
-                          style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w600, fontSize: 13),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cyberRed.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.notifications_active_outlined, color: AppTheme.cyberRed, size: 20),
                         ),
+                        const SizedBox(width: 12),
                         Text(
-                          '${(_notificationThreshold * 100).toStringAsFixed(0)}% Threat',
+                          'Live Threat Alerts',
                           style: GoogleFonts.inter(
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
                             fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: textPrimary,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Slider(
-                      value: _notificationThreshold,
-                      min: 0.1,
-                      max: 0.95,
-                      divisions: 17,
-                      activeColor: theme.colorScheme.primary,
-                      onChanged: (val) => _updateThreshold(val),
+                    Switch(
+                      value: _isNotificationsEnabled,
+                      activeColor: AppTheme.cyberRed,
+                      onChanged: (val) => _updateNotifications(val),
                     ),
+                  ],
+                ),
+                if (_isNotificationsEnabled) ...[
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Notification Threshold',
+                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: textMuted),
+                      ),
+                      Text(
+                        '${(_notificationThreshold * 100).toStringAsFixed(0)}% Threat',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.cyberRed,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Slider(
+                    value: _notificationThreshold,
+                    min: 0.1,
+                    max: 0.95,
+                    divisions: 17,
+                    activeColor: AppTheme.cyberRed,
+                    inactiveColor: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFE2E8F0),
+                    onChanged: (val) => _updateThreshold(val),
+                  ),
+                  Text(
+                    'Receive live alerts for incoming SMS rated above this threat index.',
+                    style: GoogleFonts.inter(fontSize: 10, color: textMuted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Dark Theme Toggle Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                        color: Colors.amber.shade700,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     Text(
-                      'You will only receive local device notifications for SMS messages rated above this threat index.',
+                      'Dark Mode Theme',
                       style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color:
-                            isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: textPrimary,
                       ),
                     ),
                   ],
                 ),
-              ),
-            ),
-
-          Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        isDark
-                            ? Icons.dark_mode_outlined
-                            : Icons.light_mode_outlined,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 14),
-                      Text(
-                        'Dark Theme',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                  Switch(
-                    value: isDark,
-                    activeThumbColor: theme.colorScheme.primary,
-                    onChanged: (val) {
-                      SecureSignalApp.of(context).toggleTheme();
-                    },
-                  ),
-                ],
-              ),
+                Switch(
+                  value: isDark,
+                  activeColor: Colors.amber.shade700,
+                  onChanged: (val) {
+                    SecureSignalApp.of(context).toggleTheme();
+                  },
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
 
-          // ── LEGAL DOCUMENTS section ──────────────────────────
+          // Legal Section
           Text(
-            'LEGAL',
+            'LEGAL & POLICIES',
             style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: FontWeight.w800,
-              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-              letterSpacing: 1.0,
+              color: textMuted,
+              letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(height: 12),
-          Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () => showTermsAndConditionsPage(context),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
-                child: Row(
-                  children: [
-                    Icon(Icons.description_outlined,
-                        color: theme.colorScheme.primary, size: 22),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        'Terms & Conditions & Privacy Policy',
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: () => showTermsAndConditionsPage(context),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor, width: 1),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cyberCyan.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.description_outlined, color: AppTheme.cyberCyan, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Terms of Service & Privacy Policy',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: textPrimary,
                       ),
                     ),
-                    Icon(
-                      Icons.chevron_right,
-                      color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                      size: 20,
-                    ),
-                  ],
-                ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: textMuted, size: 20),
+                ],
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          CustomButton(
-            text: 'Logout from System',
-            type: ButtonType.ghost,
-            icon: Icons.logout,
-            onPressed: _confirmLogout,
+          // Logout Button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.cyberRed,
+                side: const BorderSide(color: AppTheme.cyberRed, width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              icon: const Icon(Icons.logout_rounded, size: 18),
+              label: Text(
+                'Logout from Argus Sentinel',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+              onPressed: _confirmLogout,
+            ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(
-      IconData icon, String title, String value, ThemeData theme, bool isDark) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
-        child: Row(
-          children: [
-            Icon(icon, color: theme.colorScheme.primary, size: 22),
-            const SizedBox(width: 14),
-            Column(
+  Widget _buildCyberInfoRow(
+    IconData icon,
+    String label,
+    String value,
+    bool isDark,
+    Color cardBg,
+    Color borderColor,
+    Color textPrimary,
+    Color textMuted,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.cyberCyan.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppTheme.cyberCyan, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                  label,
+                  style: GoogleFonts.inter(
                     fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: textMuted,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 14),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: textPrimary,
+                  ),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

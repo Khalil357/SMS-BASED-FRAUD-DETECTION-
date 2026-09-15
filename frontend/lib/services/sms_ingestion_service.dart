@@ -20,8 +20,16 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
   if (body.isEmpty) return;
 
   try {
-    // 0. Ensure session token is loaded in background isolate
+    // Initialize notification service in background isolate
+    await NotificationService.init();
+
+    // Ensure session token is loaded in background isolate
     await AuthService.loadSession();
+
+    // Check if ingestion enabled
+    final isIngestionEnabled = await SmsStorageService.getBoolSetting(
+        SmsStorageService.keyIngestionEnabled, true);
+    if (!isIngestionEnabled) return;
 
     // 1. Perform rule-based threat analysis
     final result = SmsDetectionService.analyze(message: body, sender: sender);
@@ -54,6 +62,10 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
 
         logEntry['type'] = type;
         logEntry['threat'] = threatLevel;
+        if (backendResult['data']?['id'] != null) {
+          logEntry['backendId'] = backendResult['data']['id'].toString();
+          logEntry['scanId'] = backendResult['data']['id'].toString();
+        }
         if (backendResult['label'] != null) {
           final confPct = (conf * 100).toStringAsFixed(1);
           final threatPct = (threatLevel * 100).toStringAsFixed(1);
@@ -67,7 +79,12 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
 
     // 5. Trigger alert notification for Fraud or a high threat index.
     final threatLevel = (logEntry['threat'] as num).toDouble();
-    if (logEntry['type'] == 'Fraud' || threatLevel >= 0.50) {
+    final isAlertEnabled = await SmsStorageService.getBoolSetting(
+        SmsStorageService.keyNotificationsEnabled, true);
+    final alertThreshold = await SmsStorageService.getDoubleSetting(
+        SmsStorageService.keyNotificationThreshold, 0.80);
+
+    if (isAlertEnabled && (logEntry['type'] == 'Fraud' || threatLevel >= alertThreshold)) {
       await NotificationService.showThreatAlert(
         sender: sender,
         message: body,
@@ -89,13 +106,16 @@ class SmsIngestionService {
   static Stream<Map<String, dynamic>> get smsStream => _smsStreamController.stream;
 
   /// Request SMS read and receive permissions (Android Only)
-  static Future<bool> requestSmsPermission() async {
+  static Future<bool> requestSmsPermission({bool forcePrompt = false}) async {
     if (!Platform.isAndroid) return false;
     
-    // We request RECEIVE_SMS and READ_SMS
     final statusReceive = await Permission.sms.status;
-    if (statusReceive.isDenied) {
+    if (forcePrompt || statusReceive.isDenied || statusReceive.isPermanentlyDenied) {
       final result = await Permission.sms.request();
+      if (result.isPermanentlyDenied) {
+        await openAppSettings();
+        return false;
+      }
       return result.isGranted;
     }
     return statusReceive.isGranted;
