@@ -26,6 +26,16 @@ class AuthService {
   static const String _keyToken = 'auth_token_v1';
   static const String _keyUser = 'auth_user_v1';
 
+  static bool _isUsableAccessToken(String? value) {
+    final candidate = value?.trim() ?? '';
+    return candidate.isNotEmpty && candidate.split('.').length == 3;
+  }
+
+  static Future<bool> _ensureAuthenticated() async {
+    if (_isUsableAccessToken(token)) return true;
+    return loadSession();
+  }
+
   /// Save session to persistent storage
   static Future<void> saveSession(
       String tokenStr, Map<String, dynamic> userMap) async {
@@ -44,8 +54,7 @@ class AuthService {
       final savedToken = prefs.getString(_keyToken);
       final savedUserJson = prefs.getString(_keyUser);
 
-      if (savedToken != null &&
-          savedToken.isNotEmpty &&
+      if (_isUsableAccessToken(savedToken) &&
           savedUserJson != null &&
           savedUserJson.isNotEmpty) {
         token = savedToken;
@@ -76,7 +85,7 @@ class AuthService {
   }) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (_isUsableAccessToken(token)) 'Authorization': 'Bearer $token',
       ...?customHeaders,
     };
     final encodedBody = jsonEncode(body);
@@ -99,7 +108,7 @@ class AuthService {
   }) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (_isUsableAccessToken(token)) 'Authorization': 'Bearer $token',
       ...?customHeaders,
     };
     final targetUrl = '$baseUrl$path';
@@ -119,7 +128,7 @@ class AuthService {
   }) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (_isUsableAccessToken(token)) 'Authorization': 'Bearer $token',
     };
     final targetUrl = '$baseUrl$path';
 
@@ -139,8 +148,12 @@ class AuthService {
     String source = 'MANUAL_QUERY',
   }) async {
     try {
-      if (token == null || token!.isEmpty) {
-        await loadSession();
+      if (!await _ensureAuthenticated()) {
+        return {
+          'success': false,
+          'message': 'Authentication required. Please log in again.',
+          'statusCode': 401,
+        };
       }
 
       final body = <String, dynamic>{
@@ -216,8 +229,13 @@ class AuthService {
     int size = 20,
   }) async {
     try {
-      if (token == null || token!.isEmpty) {
-        await loadSession();
+      if (!await _ensureAuthenticated()) {
+        return {
+          'success': false,
+          'message': 'Authentication required. Please log in again.',
+          'statusCode': 401,
+          'content': [],
+        };
       }
 
       final response =
@@ -269,8 +287,12 @@ class AuthService {
     }
 
     try {
-      if (token == null || token!.isEmpty) {
-        await loadSession();
+      if (!await _ensureAuthenticated()) {
+        return {
+          'success': false,
+          'message': 'Authentication required. Please log in again.',
+          'statusCode': 401,
+        };
       }
 
       final path = '/api/v1/fraud-records/${Uri.encodeComponent(id)}';
@@ -284,13 +306,6 @@ class AuthService {
         return {
           'success': true,
           'message': 'Record removed from the database.',
-        };
-      }
-
-      if (response.statusCode == 404) {
-        return {
-          'success': true,
-          'message': 'Record was already removed.',
         };
       }
 
@@ -384,16 +399,12 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
-        final tokenStr =
-            decoded['token'] as String? ?? data['token'] as String? ?? '';
-
-        await saveSession(tokenStr, data);
-
         return {
           'success': true,
-          'message': decoded['message'] ?? 'Login successful',
-          'data': decoded,
-          'token': tokenStr,
+          'requiresOtp': true,
+          'message': decoded['message'] ?? 'OTP sent for verification',
+          'email': data['email']?.toString() ?? '',
+          'data': data,
         };
       } else {
         return {
@@ -407,6 +418,75 @@ class AuthService {
         'success': false,
         'message':
             'Failed to connect to backend server. Please verify the backend is running.',
+        'error': e,
+      };
+    }
+  }
+
+  /// Complete the two-step login and persist the access token returned by the backend.
+  static Future<Map<String, dynamic>> verifyLoginOtp({
+    required String email,
+    required String verificationCode,
+  }) async {
+    try {
+      final response = await _postRequest('/api/auth/verify-login-otp', {
+        'email': email,
+        'verificationCode': verificationCode,
+      });
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final data =
+            decoded['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+        final tokenStr = data['token']?.toString() ?? '';
+        if (tokenStr.isEmpty) {
+          return {
+            'success': false,
+            'message': 'The server did not return an access token.',
+          };
+        }
+
+        await saveSession(tokenStr, data);
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Login successful',
+          'data': data,
+        };
+      }
+
+      return {
+        'success': false,
+        'message': decoded['message'] ?? 'Invalid verification code',
+        'statusCode': response.statusCode,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to verify the login code.',
+        'error': e,
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> resendLoginOtp(
+      {required String email}) async {
+    try {
+      final response = await _postRequest('/api/auth/resend-login-otp', {
+        'email': email,
+      });
+      final decoded = _safeJsonDecode(response.body);
+      return {
+        'success': response.statusCode == 200,
+        'message': decoded['message'] ??
+            (response.statusCode == 200
+                ? 'Login code resent successfully'
+                : 'Failed to resend login code'),
+        'statusCode': response.statusCode,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to resend the login code.',
         'error': e,
       };
     }

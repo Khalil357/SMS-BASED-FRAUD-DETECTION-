@@ -9,10 +9,12 @@ import '../services/auth_service.dart';
 class LoginPage extends StatefulWidget {
   final Navigate onNavigate;
   final ValueChanged<String>? onUnverifiedAccount;
+  final ValueChanged<String> onLoginOtpRequired;
 
   const LoginPage({
     super.key,
     required this.onNavigate,
+    required this.onLoginOtpRequired,
     this.onUnverifiedAccount,
   });
 
@@ -53,7 +55,9 @@ class _LoginPageState extends State<LoginPage> {
         content: SingleChildScrollView(
           child: Text(
             'Your account has been created but is not verified yet. Would you like to receive a verification code to complete setup?',
-            style: TextStyle(fontSize: 14, color: Theme.of(context).textTheme.bodyMedium?.color),
+            style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).textTheme.bodyMedium?.color),
           ),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -64,7 +68,8 @@ class _LoginPageState extends State<LoginPage> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.red,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 onPressed: () async {
@@ -82,7 +87,9 @@ class _LoginPageState extends State<LoginPage> {
                 },
                 child: const FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text('Verify Account Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: Text('Verify Account Now',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 6),
@@ -113,16 +120,29 @@ class _LoginPageState extends State<LoginPage> {
           _isLoading = false;
         });
 
-        if (result['success']) {
+        if (result['success'] == true && result['requiresOtp'] == true) {
+          final email = result['email']?.toString() ?? '';
+          if (email.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                    'The server did not return the email needed for OTP verification.'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+            );
+            return;
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['message'] ?? 'Login successful!'),
+              content: Text(
+                  result['message'] ?? 'Enter the OTP sent to your email.'),
               backgroundColor: Colors.green.shade600,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
           );
-          widget.onNavigate(AuthPage.dashboard);
+          widget.onLoginOtpRequired(email);
         } else {
           final msg = (result['message'] ?? '').toString();
           final isUnverified = msg.toLowerCase().contains('not verified') ||
@@ -143,7 +163,8 @@ class _LoginPageState extends State<LoginPage> {
                 content: Text(result['message'] ?? 'Login failed'),
                 backgroundColor: Theme.of(context).colorScheme.error,
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             );
           }
@@ -177,7 +198,8 @@ class _LoginPageState extends State<LoginPage> {
 
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -240,7 +262,9 @@ class _LoginPageState extends State<LoginPage> {
                           color: theme.cardTheme.color,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            color: isDark
+                                ? const Color(0xFF334155)
+                                : const Color(0xFFE2E8F0),
                             width: 1,
                           ),
                           boxShadow: AppTheme.cardShadow(isDark),
@@ -261,7 +285,8 @@ class _LoginPageState extends State<LoginPage> {
                                 }
                                 final val = value.trim();
                                 if (val.contains('@')) {
-                                  final emailRegExp = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                                  final emailRegExp = RegExp(
+                                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
                                   if (!emailRegExp.hasMatch(val)) {
                                     return 'Please enter a valid email';
                                   }
@@ -306,7 +331,8 @@ class _LoginPageState extends State<LoginPage> {
                                 style: TextButton.styleFrom(
                                   padding: EdgeInsets.zero,
                                   minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
                                 child: const Text('Forgot Password?'),
                               ),

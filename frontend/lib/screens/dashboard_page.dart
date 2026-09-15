@@ -27,7 +27,8 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
+class _DashboardPageState extends State<DashboardPage>
+    with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   // Controllers
@@ -314,62 +315,80 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     _fetchBackendFraudScans();
   }
 
-Future<void> _fetchBackendFraudScans() async {
-  try {
-    final res = await AuthService.getFraudScans(page: 0, size: 20);
-    if (res['success'] == true && res['content'] is List) {
-      final List content = res['content'];
-      bool hasNew = false;
-      for (final item in content) {
-        if (item is Map<String, dynamic>) {
-          final msgText = item['message'] ?? item['messageBody'] ?? '';
-          if (msgText.toString().trim().isEmpty) continue;
+  Future<void> _fetchBackendFraudScans() async {
+    try {
+      final res = await AuthService.getFraudScans(page: 0, size: 20);
+      if (res['success'] == true && res['content'] is List) {
+        final List content = res['content'];
+        bool hasNew = false;
+        for (final item in content) {
+          if (item is Map<String, dynamic>) {
+            final msgText = item['message'] ?? item['messageBody'] ?? '';
+            if (msgText.toString().trim().isEmpty) continue;
 
-          final exists =
-              _smsLogs.any((l) => l['message'] == msgText.toString());
-          if (!exists) {
-            final isScam = item['is_scam'] ?? item['isScam'] ?? true;
-            final verdict = item['verdict']?.toString();
-            final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
-            final type = (isScam == true)
-                ? 'Fraud'
-                : ((verdict == 'spam') ? 'Spam' : 'Safe');
-            final threatLevel = (type == 'Safe')
-                ? (1.0 - conf).clamp(0.0, 1.0)
-                : conf.clamp(0.0, 1.0);
-
-            // FIXED: was item['id'], the entity's real JSON field is "scanId"
             final backendScanId = item['scanId']?.toString();
+            final exactBackendMatch = backendScanId == null
+                ? -1
+                : _smsLogs.indexWhere((log) =>
+                    (log['scanId'] ?? log['backendId'])?.toString() ==
+                    backendScanId);
+            if (exactBackendMatch >= 0) continue;
 
-            final logEntry = {
-              'id': backendScanId ??
-                  'backend_fraud_${DateTime.now().millisecondsSinceEpoch}_${item.hashCode}',
-              'backendId': backendScanId,
-              'sender': item['sender'] ?? 'Backend Shield Alert',
-              'message': msgText.toString(),
-              'type': type,
-              // FIXED: was item['createdAt'] / item['time'], real field is "scannedAt"
-              'time': item['scannedAt'] ?? DateTime.now().toIso8601String(),
-              'threat': threatLevel,
-              'matchedReasons': [
-                'Trained Model Label: ${verdict ?? (isScam == true ? 'scam' : 'safe')}',
-                'Threat Index: ${(threatLevel * 100).toStringAsFixed(1)}%'
-              ],
-              'hasFeedback': false,
-              'userFeedback': null,
-            };
-            _smsLogs.insert(0, logEntry);
-            await SmsStorageService.addLog(logEntry);
-            hasNew = true;
+            final cachedMatchWithoutId = _smsLogs.indexWhere((log) =>
+                log['message'] == msgText.toString() &&
+                ((log['scanId'] ?? log['backendId']) == null ||
+                    (log['scanId'] ?? log['backendId']).toString().isEmpty));
+            if (cachedMatchWithoutId >= 0 && backendScanId != null) {
+              _smsLogs[cachedMatchWithoutId] = {
+                ..._smsLogs[cachedMatchWithoutId],
+                'scanId': backendScanId,
+                'backendId': backendScanId,
+              };
+              await SmsStorageService.saveLogs(_smsLogs);
+              hasNew = true;
+              continue;
+            }
+
+            if (backendScanId != null) {
+              final isScam = item['is_scam'] ?? item['isScam'] ?? true;
+              final verdict = item['verdict']?.toString();
+              final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
+              final type = (isScam == true)
+                  ? 'Fraud'
+                  : ((verdict == 'spam') ? 'Spam' : 'Safe');
+              final threatLevel = (type == 'Safe')
+                  ? (1.0 - conf).clamp(0.0, 1.0)
+                  : conf.clamp(0.0, 1.0);
+
+              final logEntry = {
+                'id': backendScanId,
+                'scanId': backendScanId,
+                'backendId': backendScanId,
+                'sender': item['sender'] ?? 'Backend Shield Alert',
+                'message': msgText.toString(),
+                'type': type,
+                // FIXED: was item['createdAt'] / item['time'], real field is "scannedAt"
+                'time': item['scannedAt'] ?? DateTime.now().toIso8601String(),
+                'threat': threatLevel,
+                'matchedReasons': [
+                  'Trained Model Label: ${verdict ?? (isScam == true ? 'scam' : 'safe')}',
+                  'Threat Index: ${(threatLevel * 100).toStringAsFixed(1)}%'
+                ],
+                'hasFeedback': false,
+                'userFeedback': null,
+              };
+              _smsLogs.insert(0, logEntry);
+              await SmsStorageService.addLog(logEntry);
+              hasNew = true;
+            }
           }
         }
+        if (hasNew && mounted) {
+          setState(() {});
+        }
       }
-      if (hasNew && mounted) {
-        setState(() {});
-      }
-    }
-  } catch (_) {}
-}
+    } catch (_) {}
+  }
 
   Future<void> _checkPermissions() async {
     final hasPerm = await SmsIngestionService.hasSmsPermission();
@@ -500,9 +519,7 @@ Future<void> _fetchBackendFraudScans() async {
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w400,
-                    color: isDark
-                        ? AppTheme.subtleDark
-                        : AppTheme.subtleLight,
+                    color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                     height: 1.5,
                   ),
                 ),
@@ -741,6 +758,14 @@ Future<void> _fetchBackendFraudScans() async {
 
     final logEntry = {
       'id': 'manual_${DateTime.now().millisecondsSinceEpoch}',
+      'backendId': backendResponse['data'] is Map<String, dynamic>
+          ? (backendResponse['data'] as Map<String, dynamic>)['scanId']
+              ?.toString()
+          : null,
+      'scanId': backendResponse['data'] is Map<String, dynamic>
+          ? (backendResponse['data'] as Map<String, dynamic>)['scanId']
+              ?.toString()
+          : null,
       'sender': 'Manual Scan',
       'message': text,
       'type': result.classification,
@@ -950,40 +975,42 @@ Future<void> _fetchBackendFraudScans() async {
     );
   }
 
-  /// CHANGED: now calls the backend to delete the fraud row first.
-  /// Local state (and the "Safe" reclassification) is only applied once
-  /// the backend confirms the row is gone. If there's no backendId (e.g.
-  /// this was a manual scan, never stored server-side as fraud), it skips
-  /// the backend call and just updates locally, same as before.
+  /// Delete the backend fraud row first, then remove its cached local log.
+  /// A server-backed fraud item is never changed locally if authentication or
+  /// deletion fails.
   Future<void> _markAsSafe(Map<String, dynamic> log) async {
     final logId = log['id']?.toString() ?? '';
-    final backendId = log['backendId']?.toString();
+    final backendId = (log['scanId'] ?? log['backendId'])?.toString();
 
-    if (backendId != null && backendId.isNotEmpty) {
-      setState(() {
-        _markingSafeLogId = logId;
-      });
-
-      final result = await AuthService.deleteFraudScan(id: backendId);
-
-      if (!mounted) return;
-
-      setState(() {
-        _markingSafeLogId = null;
-      });
-
-      if (result['success'] != true) {
-        _showMessageActionSnackBar(
-          result['message'] ?? 'Failed to update on the server.',
-          isError: true,
-        );
-        return; // Stop here — do NOT change local state if the backend didn't confirm deletion.
-      }
+    if (backendId == null || backendId.isEmpty) {
+      _showMessageActionSnackBar(
+        'This message has no backend scan ID and cannot be removed safely.',
+        isError: true,
+      );
+      return;
     }
 
-    // Reaches here only if: there was no backendId to check (manual scan),
-    // OR the backend confirmed the row was deleted.
-    await SmsStorageService.submitFeedback(logId: logId, feedbackType: 'Safe');
+    setState(() {
+      _markingSafeLogId = logId;
+    });
+
+    final result = await AuthService.deleteFraudScan(id: backendId);
+
+    if (!mounted) return;
+
+    setState(() {
+      _markingSafeLogId = null;
+    });
+
+    if (result['success'] != true) {
+      _showMessageActionSnackBar(
+        result['message'] ?? 'Failed to update on the server.',
+        isError: true,
+      );
+      return;
+    }
+
+    await SmsStorageService.removeLog(logId);
     final logs = await SmsStorageService.getLogs();
     if (!mounted) return;
 
@@ -991,7 +1018,8 @@ Future<void> _fetchBackendFraudScans() async {
       _smsLogs = logs;
     });
     Navigator.pop(context);
-    _showMessageActionSnackBar('Your response has successfully been updated.');
+    _showMessageActionSnackBar(
+        'Message marked safe and removed from fraud records.');
   }
 
   Future<void> _markAsFraud(Map<String, dynamic> log) async {
@@ -1086,7 +1114,6 @@ Future<void> _fetchBackendFraudScans() async {
                 ),
                 const Divider(),
                 const SizedBox(height: 12),
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -1108,7 +1135,6 @@ Future<void> _fetchBackendFraudScans() async {
                   ],
                 ),
                 const SizedBox(height: 14),
-
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1131,7 +1157,6 @@ Future<void> _fetchBackendFraudScans() async {
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 Row(
                   children: [
                     Expanded(
@@ -1191,7 +1216,6 @@ Future<void> _fetchBackendFraudScans() async {
                   ),
                 ),
                 const SizedBox(height: 24),
-
                 Text(
                   'ANALYSIS DETECTOR CHECKS',
                   style: GoogleFonts.inter(
@@ -1232,7 +1256,6 @@ Future<void> _fetchBackendFraudScans() async {
                         ),
                       )),
                 const SizedBox(height: 28),
-
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1275,7 +1298,8 @@ Future<void> _fetchBackendFraudScans() async {
                             child: SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2.4),
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2.4),
                             ),
                           ),
                         )
@@ -1320,23 +1344,20 @@ Future<void> _fetchBackendFraudScans() async {
                             ],
                             if (type == 'Safe')
                               OutlinedButton.icon(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: AppTheme.red,
-                                        side: const BorderSide(
-                                            color: AppTheme.red),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 12),
-                                        alignment: Alignment.center,
-                                      ),
-                                      icon: const Icon(Icons.gpp_bad, size: 16),
-                                      label: const Text('Mark Fraud',
-                                          style: TextStyle(fontSize: 12)),
-                                      onPressed: () =>
-                                          _confirmMarkAsFraud(log),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppTheme.red,
+                                  side: const BorderSide(color: AppTheme.red),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  alignment: Alignment.center,
+                                ),
+                                icon: const Icon(Icons.gpp_bad, size: 16),
+                                label: const Text('Mark Fraud',
+                                    style: TextStyle(fontSize: 12)),
+                                onPressed: () => _confirmMarkAsFraud(log),
                               ),
                           ],
                         ),
@@ -1471,7 +1492,9 @@ Future<void> _fetchBackendFraudScans() async {
                   border: Border.all(
                     color: _currentIndex == 4
                         ? theme.colorScheme.primary
-                        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                        : (isDark
+                            ? const Color(0xFF334155)
+                            : const Color(0xFFE2E8F0)),
                     width: 2,
                   ),
                 ),
@@ -1687,7 +1710,8 @@ Future<void> _fetchBackendFraudScans() async {
             children: [
               Row(
                 children: [
-                  Icon(Icons.lightbulb_rounded, color: Colors.amber.shade700, size: 20),
+                  Icon(Icons.lightbulb_rounded,
+                      color: Colors.amber.shade700, size: 20),
                   const SizedBox(width: 8),
                   Text(
                     'FRAUD SAFETY TIP OF THE DAY',
@@ -1746,7 +1770,6 @@ Future<void> _fetchBackendFraudScans() async {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildTipOfTheDayBanner(theme, isDark),
-
           Container(
             padding: const EdgeInsets.all(20.0),
             decoration: BoxDecoration(
@@ -1834,7 +1857,6 @@ Future<void> _fetchBackendFraudScans() async {
               ],
             ),
           ),
-
           if (!_isIngestionEnabled || !_hasSmsPermission)
             Container(
               padding: const EdgeInsets.all(16),
@@ -1957,7 +1979,6 @@ Future<void> _fetchBackendFraudScans() async {
               ),
             ),
           const SizedBox(height: 20),
-
           Row(
             children: [
               Expanded(
@@ -1998,10 +2019,8 @@ Future<void> _fetchBackendFraudScans() async {
                     : 'High vulnerability warning'),
           ),
           const SizedBox(height: 24),
-
           InteractiveThreatChart(logs: _smsLogs),
           const SizedBox(height: 24),
-
           Text(
             'Analyze SMS Content',
             style: theme.textTheme.titleMedium?.copyWith(
@@ -2016,7 +2035,6 @@ Future<void> _fetchBackendFraudScans() async {
             ),
           ),
           const SizedBox(height: 14),
-
           Container(
             padding: const EdgeInsets.all(20.0),
             decoration: BoxDecoration(
@@ -2198,7 +2216,6 @@ Future<void> _fetchBackendFraudScans() async {
             ),
           ),
           const SizedBox(height: 12),
-
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -2235,7 +2252,6 @@ Future<void> _fetchBackendFraudScans() async {
                   }).toList(),
                 ),
                 const SizedBox(width: 16),
-
                 Text(
                   'Time:',
                   style: GoogleFonts.inter(
@@ -2271,7 +2287,6 @@ Future<void> _fetchBackendFraudScans() async {
             ),
           ),
           const SizedBox(height: 12),
-
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
@@ -2462,7 +2477,6 @@ Future<void> _fetchBackendFraudScans() async {
             ),
           ),
           const SizedBox(height: 16),
-
           Row(
             children: [
               Expanded(
@@ -2491,7 +2505,6 @@ Future<void> _fetchBackendFraudScans() async {
             ],
           ),
           const SizedBox(height: 24),
-
           Expanded(
             child: _blockedNumbers.isEmpty
                 ? Center(
@@ -2829,7 +2842,8 @@ Future<void> _fetchBackendFraudScans() async {
               borderRadius: BorderRadius.circular(20),
               onTap: () => showTermsAndConditionsPage(context),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 14.0),
                 child: Row(
                   children: [
                     Icon(Icons.description_outlined,
@@ -2846,7 +2860,8 @@ Future<void> _fetchBackendFraudScans() async {
                     ),
                     Icon(
                       Icons.chevron_right,
-                      color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                      color:
+                          isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                       size: 20,
                     ),
                   ],

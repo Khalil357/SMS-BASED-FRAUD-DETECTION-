@@ -13,7 +13,7 @@ import 'auth_service.dart';
 @pragma('vm:entry-point')
 Future<void> handleBackgroundSms(SmsMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   final body = message.body ?? '';
   final sender = message.address ?? 'Unknown';
 
@@ -47,17 +47,28 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
         source: 'AUTO_LISTENER',
       );
       if (backendResult['success'] == true && backendResult['isScam'] != null) {
-        final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
-        final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
+        final backendData = backendResult['data'];
+        if (backendData is Map<String, dynamic>) {
+          final scanId = backendData['scanId']?.toString();
+          logEntry['scanId'] = scanId;
+          logEntry['backendId'] = scanId;
+        }
+        final isScam =
+            backendResult['isScam'] == true || backendResult['is_scam'] == true;
+        final conf = (backendResult['confidence'] as num?)?.toDouble() ??
+            result.threatLevel;
         final type = isScam ? 'Fraud' : 'Safe';
-        final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
+        final threatLevel = (type == 'Safe')
+            ? (1.0 - conf).clamp(0.0, 1.0)
+            : conf.clamp(0.0, 1.0);
 
         logEntry['type'] = type;
         logEntry['threat'] = threatLevel;
         if (backendResult['label'] != null) {
           final confPct = (conf * 100).toStringAsFixed(1);
           final threatPct = (threatLevel * 100).toStringAsFixed(1);
-          (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
+          (logEntry['matchedReasons'] as List).add(
+              'Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
         }
       }
     } catch (_) {}
@@ -81,17 +92,18 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
 
 class SmsIngestionService {
   static final Telephony _telephony = Telephony.instance;
-  
+
   // Stream to notify UI components of newly ingested foreground messages
   static final StreamController<Map<String, dynamic>> _smsStreamController =
       StreamController<Map<String, dynamic>>.broadcast();
-  
-  static Stream<Map<String, dynamic>> get smsStream => _smsStreamController.stream;
+
+  static Stream<Map<String, dynamic>> get smsStream =>
+      _smsStreamController.stream;
 
   /// Request SMS read and receive permissions (Android Only)
   static Future<bool> requestSmsPermission() async {
     if (!Platform.isAndroid) return false;
-    
+
     // We request RECEIVE_SMS and READ_SMS
     final statusReceive = await Permission.sms.status;
     if (statusReceive.isDenied) {
@@ -110,13 +122,15 @@ class SmsIngestionService {
   /// Initialize and start the Telephony SMS Listener
   static Future<void> startListening() async {
     if (!Platform.isAndroid) {
-      debugPrint("SMS Ingestion: Not supported on this platform (Android Only).");
+      debugPrint(
+          "SMS Ingestion: Not supported on this platform (Android Only).");
       return;
     }
 
     final hasPerm = await hasSmsPermission();
     if (!hasPerm) {
-      debugPrint("SMS Ingestion: Cannot start listening, permission not granted.");
+      debugPrint(
+          "SMS Ingestion: Cannot start listening, permission not granted.");
       return;
     }
 
@@ -125,7 +139,7 @@ class SmsIngestionService {
       _telephony.listenIncomingSms(
         onNewMessage: (SmsMessage message) async {
           debugPrint("Foreground SMS received: ${message.body}");
-          
+
           final body = message.body ?? '';
           final sender = message.address ?? 'Unknown';
 
@@ -137,7 +151,8 @@ class SmsIngestionService {
           if (!isIngestionEnabled) return;
 
           // Analyze
-          final result = SmsDetectionService.analyze(message: body, sender: sender);
+          final result =
+              SmsDetectionService.analyze(message: body, sender: sender);
 
           // Save
           final logEntry = {
@@ -158,18 +173,30 @@ class SmsIngestionService {
               messageBody: body,
               source: 'AUTO_LISTENER',
             );
-            if (backendResult['success'] == true && backendResult['isScam'] != null) {
-              final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
-              final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
+            if (backendResult['success'] == true &&
+                backendResult['isScam'] != null) {
+              final backendData = backendResult['data'];
+              if (backendData is Map<String, dynamic>) {
+                final scanId = backendData['scanId']?.toString();
+                logEntry['scanId'] = scanId;
+                logEntry['backendId'] = scanId;
+              }
+              final isScam = backendResult['isScam'] == true ||
+                  backendResult['is_scam'] == true;
+              final conf = (backendResult['confidence'] as num?)?.toDouble() ??
+                  result.threatLevel;
               final type = isScam ? 'Fraud' : 'Safe';
-              final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
+              final threatLevel = (type == 'Safe')
+                  ? (1.0 - conf).clamp(0.0, 1.0)
+                  : conf.clamp(0.0, 1.0);
 
               logEntry['type'] = type;
               logEntry['threat'] = threatLevel;
               if (backendResult['label'] != null) {
                 final confPct = (conf * 100).toStringAsFixed(1);
                 final threatPct = (threatLevel * 100).toStringAsFixed(1);
-                (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
+                (logEntry['matchedReasons'] as List).add(
+                    'Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
               }
             }
           } catch (_) {}
@@ -196,7 +223,8 @@ class SmsIngestionService {
         },
         onBackgroundMessage: handleBackgroundSms,
       );
-      debugPrint("SMS Ingestion: Background & Foreground listeners registered.");
+      debugPrint(
+          "SMS Ingestion: Background & Foreground listeners registered.");
     } catch (e) {
       debugPrint("SMS Ingestion Error: $e");
     }

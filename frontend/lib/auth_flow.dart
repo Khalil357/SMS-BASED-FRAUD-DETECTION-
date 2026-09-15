@@ -8,7 +8,14 @@ import 'screens/create_account_page.dart';
 import 'screens/verification_page.dart';
 import 'screens/dashboard_page.dart';
 
-enum AuthPage { login, signUp, forgotPassword, verification, resetPassword, dashboard }
+enum AuthPage {
+  login,
+  signUp,
+  forgotPassword,
+  verification,
+  resetPassword,
+  dashboard
+}
 
 typedef Navigate = void Function(AuthPage page);
 
@@ -23,6 +30,8 @@ class _AuthFlowState extends State<AuthFlow> {
   String? _resetPhoneNumber;
   String? _resetVerificationCode;
   bool _isResetPasswordFlow = true;
+  bool _isLoginFlow = false;
+  String? _loginEmail;
   bool _isCheckingSession = true;
 
   @override
@@ -50,6 +59,7 @@ class _AuthFlowState extends State<AuthFlow> {
       _resetPhoneNumber = phoneNumber;
       _resetVerificationCode = null;
       _isResetPasswordFlow = true;
+      _isLoginFlow = false;
       _page = AuthPage.verification;
     });
   }
@@ -59,6 +69,17 @@ class _AuthFlowState extends State<AuthFlow> {
       _resetPhoneNumber = phoneNumber;
       _resetVerificationCode = null;
       _isResetPasswordFlow = false;
+      _isLoginFlow = false;
+      _page = AuthPage.verification;
+    });
+  }
+
+  void _beginLoginVerification(String email) {
+    setState(() {
+      _loginEmail = email;
+      _resetPhoneNumber = null;
+      _isResetPasswordFlow = false;
+      _isLoginFlow = true;
       _page = AuthPage.verification;
     });
   }
@@ -87,6 +108,7 @@ class _AuthFlowState extends State<AuthFlow> {
     final page = switch (_page) {
       AuthPage.login => LoginPage(
           onNavigate: _goTo,
+          onLoginOtpRequired: _beginLoginVerification,
           onUnverifiedAccount: _beginSignUpVerification,
         ),
       AuthPage.signUp => SignUpPage(
@@ -99,8 +121,12 @@ class _AuthFlowState extends State<AuthFlow> {
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
           isResetPasswordFlow: _isResetPasswordFlow,
+          isLoginFlow: _isLoginFlow,
+          loginEmail: _loginEmail,
           onVerified: (code) {
-            if (_isResetPasswordFlow) {
+            if (_isLoginFlow) {
+              _goTo(AuthPage.dashboard);
+            } else if (_isResetPasswordFlow) {
               _verifyPasswordReset(code);
             } else {
               _goTo(AuthPage.login);
