@@ -11,6 +11,7 @@ class SmsStorageService {
   static const String keySource = 'source';
   static const String keyIsTrainedModel = 'is_trained_model';
   static const String keyScanVerdict = 'scan_verdict';
+  static const String keyBlockedNumbers = 'argus_blocked_numbers';
 
   /// Helper to get the SharedPreferences instance and force a disk reload
   /// to sync background process writes with the foreground memory cache.
@@ -92,5 +93,41 @@ class SmsStorageService {
   static Future<void> saveDoubleSetting(String key, double value) async {
     final prefs = await _getPrefs();
     await prefs.setDouble(key, value);
+  }
+
+  /// Get locally stored blocked phone numbers
+  static Future<List<String>> getBlockedNumbers() async {
+    final prefs = await _getPrefs();
+    final jsonStr = prefs.getString(keyBlockedNumbers);
+    if (jsonStr == null || jsonStr.isEmpty) return [];
+    try {
+      final List<dynamic> decoded = jsonDecode(jsonStr);
+      return decoded.map((item) => item.toString()).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Add a blocked phone number locally
+  static Future<void> addBlockedNumber(String phoneNumber) async {
+    final blocked = await getBlockedNumbers();
+    if (blocked.contains(phoneNumber)) return;
+    blocked.add(phoneNumber);
+    final prefs = await _getPrefs();
+    await prefs.setString(keyBlockedNumbers, jsonEncode(blocked));
+  }
+
+  /// Remove a blocked phone number locally
+  static Future<void> removeBlockedNumber(String phoneNumber) async {
+    final blocked = await getBlockedNumbers();
+    blocked.remove(phoneNumber);
+    final prefs = await _getPrefs();
+    await prefs.setString(keyBlockedNumbers, jsonEncode(blocked));
+  }
+
+  /// Check if a number is locally blocked
+  static Future<bool> isNumberBlocked(String phoneNumber) async {
+    final blocked = await getBlockedNumbers();
+    return blocked.contains(phoneNumber);
   }
 }

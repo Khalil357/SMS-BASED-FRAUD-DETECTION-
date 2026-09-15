@@ -62,45 +62,6 @@ class _OtpInputFieldState extends State<OtpInputField> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-<<<<<<< HEAD
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(widget.length, (index) {
-        final isFocused = _isFocusedList[index];
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 45, // Adjusted slightly smaller to fit devices beautifully
-          height: 55,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: isFocused
-                ? [
-                    BoxShadow(
-                      color: theme.primaryColor.withOpacity(0.15),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    )
-                  ]
-                : [],
-          ),
-          child: CallbackShortcuts(
-            bindings: <ShortcutActivator, VoidCallback>{
-              const SingleActivator(LogicalKeyboardKey.backspace): () {
-                if (_controllers[index].text.isEmpty && index > 0) {
-                  _controllers[index - 1].clear();
-                  _focusNodes[index - 1].requestFocus();
-                  
-                  final code = _controllers.map((c) => c.text).join();
-                  widget.onChanged(code);
-                }
-              },
-            },
-            child: TextFormField(
-              controller: _controllers[index],
-              focusNode: _focusNodes[index],
-=======
     return Stack(
       children: [
         // Hidden input field capturing soft-keyboard typing, backspaces, and pastes
@@ -114,7 +75,6 @@ class _OtpInputFieldState extends State<OtpInputField> {
             child: TextField(
               controller: _controller,
               focusNode: _focusNode,
->>>>>>> origin/front_end
               keyboardType: TextInputType.number,
               maxLength: widget.length,
               autofocus: true,
@@ -131,11 +91,6 @@ class _OtpInputFieldState extends State<OtpInputField> {
               onChanged: _onTextChanged,
             ),
           ),
-<<<<<<< HEAD
-        );
-      }),
-    ),
-=======
         ),
 
         // Visual OTP Boxes
@@ -197,7 +152,6 @@ class _OtpInputFieldState extends State<OtpInputField> {
           ),
         ),
       ],
->>>>>>> origin/front_end
     );
   }
 }

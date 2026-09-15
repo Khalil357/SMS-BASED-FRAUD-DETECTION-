@@ -1,7 +1,5 @@
 package com.example.smsfraud.scan;
 
-import com.example.smsfraud.sender.BlockedSender;
-import com.example.smsfraud.sender.BlockedSenderRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -36,11 +34,8 @@ class SmsScanServiceTest {
     void savesAMessageWhenTheModelDetectsAScam() {
         UUID userId = UUID.randomUUID();
         String message = "Hela Nitumie kwenye Airtelmoney hii 0680214294 jina FREDI SANGA.";
-        String mlServiceUrl = "http://ml-service:8000";
 
-        // Since mlServiceUrl is injected via @Value, we need to test via the
-        // blocked sender path or test classification directly.
-        // For this test, we'll simulate via blocked sender (always FRAUD).
+        // Simulate via blocked sender (always FRAUD).
         when(blockedSenderRepository.existsByPhoneNumber("+255680214294")).thenReturn(true);
         when(smsScanRepository.save(any(SmsScan.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

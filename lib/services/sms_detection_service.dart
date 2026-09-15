@@ -111,6 +111,15 @@ class SmsDetectionService {
     );
   }
 
+  static SmsDetectionResult blockedResult({required String sender}) {
+    return SmsDetectionResult(
+      classification: 'Blocked',
+      threatLevel: 1.0,
+      matchedReasons: ['Number is on user blocklist - SMS intercepted by Argus'],
+      feedback: 'BLOCKED: Sender is on your blocklist. This message has been intercepted.',
+    );
+  }
+
   /// Parse response from backend ML model evaluation (POST /api/scans)
   static SmsDetectionResult parseBackendResult({
     required Map<String, dynamic> backendData,

@@ -423,4 +423,134 @@ class AuthService {
       };
     }
   }
+
+  /// Block a phone number
+  /// POST /api/block
+  static Future<Map<String, dynamic>> blockNumber({
+    required String phoneNumber,
+    String? reason,
+  }) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+      final body = jsonEncode({
+        'phoneNumber': phoneNumber,
+        if (reason != null) 'reason': reason,
+      });
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/block'),
+        headers: headers,
+        body: body,
+      );
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Number blocked successfully',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Failed to block number',
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': _connectionErrorMessage(),
+        'error': e,
+      };
+    }
+  }
+
+  /// Unblock a phone number
+  /// DELETE /api/block
+  static Future<Map<String, dynamic>> unblockNumber({
+    required String phoneNumber,
+  }) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/block?phoneNumber=$phoneNumber'),
+        headers: headers,
+      );
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Number unblocked successfully',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Failed to unblock number',
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': _connectionErrorMessage(),
+        'error': e,
+      };
+    }
+  }
+
+  /// Fetch user's blocked numbers
+  /// GET /api/block
+  static Future<Map<String, dynamic>> getBlockedNumbers() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/block'),
+        headers: headers,
+      );
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final data = decoded['data'] is Map<String, dynamic>
+            ? (decoded['data'] as Map<String, dynamic>)
+            : <String, dynamic>{};
+        final blocked = data['blockedNumbers'] is List
+            ? (data['blockedNumbers'] as List).cast<String>()
+            : <String>[];
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Blocked numbers retrieved',
+          'blockedNumbers': blocked,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Failed to fetch blocked numbers',
+          'statusCode': response.statusCode,
+          'blockedNumbers': [],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': _connectionErrorMessage(),
+        'error': e,
+        'blockedNumbers': [],
+      };
+    }
+  }
 }
