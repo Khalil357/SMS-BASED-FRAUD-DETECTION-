@@ -27,9 +27,9 @@ Android SMS ingestion (`telephony` / `SmsIngestionService`) is unchanged.
 These require an Apple Developer account, physical device, and Xcode UI:
 
 1. **Signing** — select your Team on `Runner` and `MessageFilterExtension`.
-2. **Associated Domains capability** — already listed in `Runner/Runner.entitlements`; confirm it appears under Signing & Capabilities and replace placeholder hosts.
+2. **Associated Domains capability** — intentionally not enabled on the Runner target while using a Personal Team. Revisit it only for the production Message Filter server-backed flow with an Apple Developer account and real HTTPS host.
 3. **HTTPS host with a real domain** — Message Filter forbids `http://` and cannot use ATS exceptions. `localhost` will not work on a physical iPhone unless you tunnel (e.g. ngrok) to HTTPS.
-4. **AASA file** — served by the backend at `/.well-known/apple-app-site-association` once `APPLE_TEAM_ID` is set; the file must be reachable over HTTPS **without redirects**.
+4. **AASA file** — served by the backend at `/.well-known/apple-app-site-association` once `APPLE_TEAM_ID` is set; the file must be reachable over HTTPS **without redirects**. This is not part of the Personal Team smoke test.
 5. **Enable on device** — Settings → Messages → Unknown & Spam → SMS Filtering → enable **Argus SMS Filter**.
 6. **App Store / provisioning** — Message Filter extensions need proper App ID + provisioning profiles that include the extension.
 
@@ -42,6 +42,17 @@ Edit:
 - `frontend/ios/Runner/Runner.entitlements`
 
 Replace `YOUR_DEV_HTTPS_HOST` / `YOUR_PROD_HTTPS_HOST` with the same host used in `ILMessageFilterExtensionNetworkURL` (path `/api/message-filter`).
+
+For the Flutter Runner app’s authentication and manual-scan API calls, provide the
+backend URL at build/run time instead of using `localhost` on a physical iPhone:
+
+```bash
+flutter run --dart-define=ARGUS_API_BASE_URL=https://api.example.com
+```
+
+The URL must be reachable from the iPhone. Use HTTPS for production. For local
+development, use a reachable LAN HTTPS endpoint or tunnel; do not replace
+`localhost` with an unverified hard-coded IP in source control.
 
 Example Debug (ngrok):
 
@@ -78,7 +89,7 @@ Optional hardening later: edge rate limits, WAF, IP allowlists — not required 
 1. Open `frontend/ios/Runner.xcworkspace`.
 2. Confirm target **MessageFilterExtension** exists and is embedded in Runner (Embed Foundation Extensions).
 3. Set Team + unique bundle IDs if `com.example.secureSignal` is not available on your account.
-4. Update associated domains + network URL xcconfigs.
+4. For a production Message Filter build, enable/configure the required associated-domain capability and update the network URL xcconfigs with the same real HTTPS host.
 5. Build & run on a **physical iPhone**.
 6. Enable SMS Filtering for Argus in Settings.
 7. Send a test SMS from an unknown number.

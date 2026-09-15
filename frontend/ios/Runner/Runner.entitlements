@@ -2,11 +2,5 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>com.apple.developer.associated-domains</key>
-	<array>
-		<!-- Replace YOUR_*_HTTPS_HOST to match ILMessageFilterExtensionNetworkURL host -->
-		<string>messagefilter:YOUR_DEV_HTTPS_HOST</string>
-		<string>messagefilter:YOUR_PROD_HTTPS_HOST</string>
-	</array>
 </dict>
 </plist>

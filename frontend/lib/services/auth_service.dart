@@ -7,10 +7,20 @@ class AuthService {
   /// Custom backend URL override (e.g. http://192.168.100.224:8080)
   static String? customBaseUrl;
 
+  /// Optional build-time backend URL for physical-device or production builds.
+  ///
+  /// Supply with:
+  /// flutter run --dart-define=ARGUS_API_BASE_URL=https://api.example.com
+  static const String _buildTimeBaseUrl =
+      String.fromEnvironment('ARGUS_API_BASE_URL');
+
   /// Dynamic baseUrl getter for logging/debugging
   static String get baseUrl {
     if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
       return customBaseUrl!.trim();
+    }
+    if (_buildTimeBaseUrl.trim().isNotEmpty) {
+      return _buildTimeBaseUrl.trim();
     }
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:8080';
@@ -79,10 +89,14 @@ class AuthService {
     };
     final encodedBody = jsonEncode(body);
 
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+    if ((customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) ||
+        _buildTimeBaseUrl.trim().isNotEmpty) {
+      final configuredBaseUrl = customBaseUrl?.trim().isNotEmpty == true
+          ? customBaseUrl!.trim()
+          : _buildTimeBaseUrl.trim();
       return await http
           .post(
-            Uri.parse('${customBaseUrl!.trim()}$path'),
+            Uri.parse('$configuredBaseUrl$path'),
             headers: headers,
             body: encodedBody,
           )
@@ -129,10 +143,14 @@ class AuthService {
       ...?customHeaders,
     };
 
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+    if ((customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) ||
+        _buildTimeBaseUrl.trim().isNotEmpty) {
+      final configuredBaseUrl = customBaseUrl?.trim().isNotEmpty == true
+          ? customBaseUrl!.trim()
+          : _buildTimeBaseUrl.trim();
       return await http
           .get(
-            Uri.parse('${customBaseUrl!.trim()}$path'),
+            Uri.parse('$configuredBaseUrl$path'),
             headers: headers,
           )
           .timeout(const Duration(seconds: 10));
@@ -171,10 +189,14 @@ class AuthService {
       if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
     };
 
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+    if ((customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) ||
+        _buildTimeBaseUrl.trim().isNotEmpty) {
+      final configuredBaseUrl = customBaseUrl?.trim().isNotEmpty == true
+          ? customBaseUrl!.trim()
+          : _buildTimeBaseUrl.trim();
       return await http
           .delete(
-            Uri.parse('${customBaseUrl!.trim()}$path'),
+            Uri.parse('$configuredBaseUrl$path'),
             headers: headers,
           )
           .timeout(const Duration(seconds: 10));

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:telephony/telephony.dart';
 import 'services/sms_storage_service.dart';
@@ -14,19 +16,21 @@ Future<void> backgroundSmsHandler(SmsMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize storage mocks if empty
   await SmsStorageService.initializeWithMocksIfNeeded();
-  
+
   // Initialize local notifications
   await NotificationService.init();
-  
-  // Start SMS listener if permission has been granted
-  final hasPerm = await SmsIngestionService.hasSmsPermission();
-  if (hasPerm) {
-    await SmsIngestionService.startListening();
+
+  // Android-only SMS ingestion must not be initialized on iOS.
+  if (Platform.isAndroid) {
+    final hasPerm = await SmsIngestionService.hasSmsPermission();
+    if (hasPerm) {
+      await SmsIngestionService.startListening();
+    }
   }
-  
+
   runApp(const SecureSignalApp());
 }
 
@@ -50,7 +54,8 @@ class SecureSignalAppState extends State<SecureSignalApp> {
 
   void toggleTheme() {
     setState(() {
-      _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      _themeMode =
+          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     });
   }
 

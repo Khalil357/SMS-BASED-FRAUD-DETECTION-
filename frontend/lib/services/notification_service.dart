@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -8,37 +9,52 @@ class NotificationService {
 
   static const String _channelId = 'secure_signal_threats';
   static const String _channelName = 'Threat Alerts';
-  static const String _channelDesc = 'Alerts for high-risk phishing or scam SMS messages.';
+  static const String _channelDesc =
+      'Alerts for high-risk phishing or scam SMS messages.';
 
   /// Initialize notifications
   static Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings initializationSettingsDarwin =
+        DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
 
-    const InitializationSettings initializationSettings = InitializationSettings(
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
       android: initializationSettingsAndroid,
+      iOS: initializationSettingsDarwin,
     );
 
-    await _localNotificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse details) {
-        // Optional: handle notification tap (e.g. navigate to logs)
-      },
-    );
-
-    // Create high importance channel for Android 8.0+
-    final androidPlugin = _localNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    if (androidPlugin != null) {
-      const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        _channelId,
-        _channelName,
-        description: _channelDesc,
-        importance: Importance.max,
-        playSound: true,
-        enableVibration: true,
+    try {
+      await _localNotificationsPlugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse details) {
+          // Optional: handle notification tap (e.g. navigate to logs)
+        },
       );
-      await androidPlugin.createNotificationChannel(channel);
+
+      // Create high importance channel for Android 8.0+.
+      final androidPlugin =
+          _localNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      if (androidPlugin != null) {
+        const AndroidNotificationChannel channel = AndroidNotificationChannel(
+          _channelId,
+          _channelName,
+          description: _channelDesc,
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+        );
+        await androidPlugin.createNotificationChannel(channel);
+      }
+    } catch (error) {
+      // Notifications are optional; do not prevent the Flutter UI from starting.
+      debugPrint('Notification initialization failed: $error');
     }
   }
 
@@ -56,6 +72,17 @@ class NotificationService {
       } catch (_) {}
       return await Permission.notification.isGranted;
     }
+    if (Platform.isIOS) {
+      final iosPlugin =
+          _localNotificationsPlugin.resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
+      final granted = await iosPlugin?.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      return granted ?? false;
+    }
     return true;
   }
 
@@ -63,6 +90,13 @@ class NotificationService {
   static Future<bool> hasPermission() async {
     if (Platform.isAndroid) {
       return await Permission.notification.isGranted;
+    }
+    if (Platform.isIOS) {
+      final iosPlugin =
+          _localNotificationsPlugin.resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
+      final permissions = await iosPlugin?.checkPermissions();
+      return permissions?.isEnabled ?? false;
     }
     return true;
   }
@@ -78,7 +112,8 @@ class NotificationService {
 
       final threatPercentage = (threatLevel * 100).toStringAsFixed(0);
 
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      final AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
         _channelId,
         _channelName,
         channelDescription: _channelDesc,
@@ -96,6 +131,11 @@ class NotificationService {
 
       final NotificationDetails platformChannelSpecifics = NotificationDetails(
         android: androidDetails,
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       );
 
       await _localNotificationsPlugin.show(
