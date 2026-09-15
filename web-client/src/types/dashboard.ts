@@ -47,14 +47,3 @@ export interface BlacklistedSender {
   addedBy: string;
   dateAdded: string;
 }
-
-export interface SystemUser {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  role: 'ADMIN' | 'USER';
-  isVerified: boolean;
-  isLocked: boolean;
-  lastActive: string;
-}

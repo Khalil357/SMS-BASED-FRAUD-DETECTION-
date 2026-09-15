@@ -16,7 +16,6 @@ public interface SmsScanRepository extends JpaRepository<SmsScan, UUID> {
             UUID userId, String verdict, Pageable pageable);
 
     long countByVerdict(String verdict);
-
     java.util.List<SmsScan> findByVerdictAndScannedAtAfter(String verdict, java.time.Instant start);
 
     Page<SmsScan> findByVerdictOrderByScannedAtDesc(String verdict, Pageable pageable);

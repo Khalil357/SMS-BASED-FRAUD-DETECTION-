@@ -7,11 +7,15 @@ name: CI
 #                 never receive secrets).
 #   - dast      : DAST — OWASP ZAP baseline scan against the RUNNING backend.
 
+# ── Auto-run DISABLED during feature development. To re-enable, uncomment the
+#    push/pull_request triggers below. workflow_dispatch keeps the file valid and
+#    lets you run the test/scan jobs manually when you want them. ──────────────
 on:
-  push:
-    branches: [main, dev]
-  pull_request:
-    branches: [main, dev]
+  # push:
+  #   branches: [main, dev]
+  # pull_request:
+  #   branches: [main, dev]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
