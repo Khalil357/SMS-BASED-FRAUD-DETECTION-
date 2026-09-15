@@ -15,7 +15,7 @@
 	<description>SMS Fraud Detection backend</description>
 	<properties>
 		<java.version>21</java.version>
-		<jjwt.version>0.12.6</jjwt.version>
+		<jjwt.version>0.13.0</jjwt.version>
 	</properties>
 	<dependencies>
 
