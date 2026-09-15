@@ -1,0 +1,5 @@
+// Development HTTPS endpoint Apple will POST to via deferQueryRequestToNetwork.
+// Replace the host with a machine/LAN/tunnel hostname that serves Argus over HTTPS.
+// Do NOT use http://localhost — Message Filter requires HTTPS and a resolvable host.
+MESSAGE_FILTER_NETWORK_URL = https:/$()/YOUR_DEV_HTTPS_HOST/api/message-filter
+MESSAGE_FILTER_ASSOCIATED_DOMAIN = messagefilter:YOUR_DEV_HTTPS_HOST

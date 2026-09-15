@@ -1,0 +1,3 @@
+// Production HTTPS endpoint for Apple Message Filter network deferral.
+MESSAGE_FILTER_NETWORK_URL = https:/$()/YOUR_PROD_HTTPS_HOST/api/message-filter
+MESSAGE_FILTER_ASSOCIATED_DOMAIN = messagefilter:YOUR_PROD_HTTPS_HOST

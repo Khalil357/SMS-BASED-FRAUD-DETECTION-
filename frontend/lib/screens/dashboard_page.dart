@@ -2644,7 +2644,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                               Text(
                                 Platform.isAndroid
                                     ? 'Background listen'
-                                    : 'Unsupported on iOS',
+                                    : 'Use iOS SMS Filtering',
                                 style: GoogleFonts.inter(
                                   fontSize: 11,
                                   color: isDark
@@ -2693,6 +2693,18 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                           child: const Text('Grant'),
                         ),
                       ],
+                    ),
+                  ],
+                  if (Platform.isIOS) ...[
+                    const Divider(),
+                    Text(
+                      'On iPhone, Argus filters eligible SMS/MMS from unknown senders via Settings → Messages → Unknown & Spam → SMS Filtering. It does not read your full message history.',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: isDark
+                            ? AppTheme.subtleDark
+                            : AppTheme.subtleLight,
+                      ),
                     ),
                   ],
                 ],

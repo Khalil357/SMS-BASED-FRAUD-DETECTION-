@@ -19,8 +19,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 /**
- * Stateless security: the public /api/auth/** and Swagger endpoints are open;
- * everything else requires a valid JWT (validated by {@link JwtAuthenticationFilter}).
+ * Stateless security: the public /api/auth/**, Apple Message Filter adapter,
+ * AASA, and Swagger endpoints are open; everything else requires a valid JWT
+ * (validated by {@link JwtAuthenticationFilter}).
  * Role-based access is enforced via {@code @PreAuthorize} annotations
  * ({@link EnableMethodSecurity}); authorities are loaded from the database per request.
  * Passwords are hashed with BCrypt.
@@ -65,6 +66,11 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        // Apple Message Filter OS-mediated POST cannot attach a user JWT.
+                        .requestMatchers("/api/message-filter", "/api/message-filter/**").permitAll()
+                        .requestMatchers(
+                                "/.well-known/apple-app-site-association",
+                                "/apple-app-site-association").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
