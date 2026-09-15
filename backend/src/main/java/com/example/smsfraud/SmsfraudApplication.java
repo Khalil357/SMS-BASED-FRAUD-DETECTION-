@@ -7,11 +7,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 
 
-
-
-
-
-
 @SpringBootApplication
 public class SmsfraudApplication {
 

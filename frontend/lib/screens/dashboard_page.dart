@@ -2658,7 +2658,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                       ),
                       Switch(
                         value: _isIngestionEnabled,
-                        activeThumbColor: theme.colorScheme.primary,
+                        activeColor: theme.colorScheme.primary,
                         onChanged: Platform.isAndroid
                             ? (val) {
                                 if (val) {
@@ -2721,7 +2721,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ),
                   Switch(
                     value: _isNotificationsEnabled,
-                    activeThumbColor: theme.colorScheme.primary,
+                    activeColor: theme.colorScheme.primary,
                     onChanged: (val) => _updateNotifications(val),
                   ),
                 ],
@@ -2802,7 +2802,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ),
                   Switch(
                     value: isDark,
-                    activeThumbColor: theme.colorScheme.primary,
+                    activeColor: theme.colorScheme.primary,
                     onChanged: (val) {
                       SecureSignalApp.of(context).toggleTheme();
                     },
