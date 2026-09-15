@@ -14,7 +14,9 @@ class AuthService {
       return customBaseUrl!.trim();
     }
     if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8080';
+      // Prioritize 127.0.0.1 for physical devices (requires adb reverse)
+      // Fallback logic handled in _getRequest/_postRequest
+      return 'http://127.0.0.1:8080';
     }
     return 'http://localhost:8080';
   }
@@ -25,6 +27,16 @@ class AuthService {
 
   static const String _keyToken = 'auth_token_v1';
   static const String _keyUser = 'auth_user_v1';
+
+  static bool _isUsableAccessToken(String? value) {
+    final candidate = value?.trim() ?? '';
+    return candidate.isNotEmpty && candidate.split('.').length == 3;
+  }
+
+  static Future<bool> _ensureAuthenticated() async {
+    if (_isUsableAccessToken(token)) return true;
+    return loadSession();
+  }
 
   /// Save session to persistent storage
   static Future<void> saveSession(String tokenStr, Map<String, dynamic> userMap) async {
@@ -43,7 +55,7 @@ class AuthService {
       final savedToken = prefs.getString(_keyToken);
       final savedUserJson = prefs.getString(_keyUser);
 
-      if (savedToken != null && savedToken.isNotEmpty && savedUserJson != null && savedUserJson.isNotEmpty) {
+      if (_isUsableAccessToken(savedToken) && savedUserJson != null && savedUserJson.isNotEmpty) {
         token = savedToken;
         currentUser = jsonDecode(savedUserJson) as Map<String, dynamic>;
         return true;
@@ -66,12 +78,13 @@ class AuthService {
   static final StreamController<bool> _sessionExpiredController = StreamController<bool>.broadcast();
   static Stream<bool> get sessionExpiredStream => _sessionExpiredController.stream;
 
-  /// Helper to send authenticated GET requests
-  static Future<http.Response> _getRequest(String path) async {
+  /// Private helper for multi-host resilience
+  static Future<http.Response> _sendRequest(String method, String path, {Map<String, dynamic>? body, Duration timeout = const Duration(seconds: 15)}) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      if (_isUsableAccessToken(token)) 'Authorization': 'Bearer $token',
     };
+    final encodedBody = body != null ? jsonEncode(body) : null;
 
     final List<String> hostsToTry = customBaseUrl != null 
         ? [customBaseUrl!] 
@@ -81,7 +94,14 @@ class AuthService {
     for (var host in hostsToTry) {
       try {
         final uri = Uri.parse('${host.endsWith('/') ? host.substring(0, host.length - 1) : host}$path');
-        final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
+        http.Response response;
+        
+        switch (method.toUpperCase()) {
+          case 'GET': response = await http.get(uri, headers: headers).timeout(timeout); break;
+          case 'POST': response = await http.post(uri, headers: headers, body: encodedBody).timeout(timeout); break;
+          case 'DELETE': response = await http.delete(uri, headers: headers).timeout(timeout); break;
+          default: throw UnsupportedError('Method $method not supported');
+        }
         
         if (response.statusCode == 401) {
           await logout();
@@ -93,80 +113,13 @@ class AuthService {
         continue;
       }
     }
-    throw lastError ?? Exception('Failed to connect to any backend host');
+    throw lastError ?? Exception('Failed to connect to any backend host at $hostsToTry');
   }
 
-  /// Helper to send POST requests with automatic fallback for physical phone vs emulator
-  static Future<http.Response> _postRequest(String path, Map<String, dynamic> body) async {
-    final headers = {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-    final encodedBody = jsonEncode(body);
-
-    final List<String> hostsToTry = customBaseUrl != null 
-        ? [customBaseUrl!] 
-        : (Platform.isAndroid ? ['http://127.0.0.1:8080', 'http://10.0.2.2:8080'] : ['http://localhost:8080']);
-
-    Object? lastError;
-
-    for (var host in hostsToTry) {
-      try {
-        final uri = Uri.parse('${host.endsWith('/') ? host.substring(0, host.length - 1) : host}$path');
-        final response = await http.post(
-          uri,
-          headers: headers,
-          body: encodedBody,
-        ).timeout(const Duration(seconds: 15));
-        
-        if (response.statusCode == 401) {
-          await logout();
-          _sessionExpiredController.add(true);
-        }
-        return response;
-      } catch (e) {
-        lastError = e;
-        continue; // Try next host
-      }
-    }
-
-    throw lastError ?? Exception('Failed to connect to any backend host');
-  }
-
-  /// Helper to send authenticated DELETE requests
-  static Future<http.Response> _deleteRequest(String path) async {
-    final headers = {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-
-    final List<String> hostsToTry = customBaseUrl != null 
-        ? [customBaseUrl!] 
-        : (Platform.isAndroid ? ['http://127.0.0.1:8080', 'http://10.0.2.2:8080'] : ['http://localhost:8080']);
-
-    Object? lastError;
-    for (var host in hostsToTry) {
-      try {
-        final uri = Uri.parse('${host.endsWith('/') ? host.substring(0, host.length - 1) : host}$path');
-        final response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 15));
-        
-        if (response.statusCode == 401) {
-          await logout();
-          _sessionExpiredController.add(true);
-        }
-        return response;
-      } catch (e) {
-        lastError = e;
-        continue;
-      }
-    }
-    throw lastError ?? Exception('Failed to connect to any backend host');
-  }
-
-  /// Public generic request methods for other services
-  static Future<http.Response> get(String path) => _getRequest(path);
-  static Future<http.Response> post(String path, Map<String, dynamic> body) => _postRequest(path, body);
-  static Future<http.Response> delete(String path) => _deleteRequest(path);
+  /// Public generic request methods
+  static Future<http.Response> get(String path) => _sendRequest('GET', path);
+  static Future<http.Response> post(String path, Map<String, dynamic> body) => _sendRequest('POST', path, body: body);
+  static Future<http.Response> delete(String path) => _sendRequest('DELETE', path);
 
   /// Submit SMS scan payload to backend API
   static Future<Map<String, dynamic>> submitScan({
@@ -175,176 +128,84 @@ class AuthService {
     String source = 'MANUAL_QUERY',
   }) async {
     try {
-      if (token == null || token!.isEmpty) {
-        await loadSession();
+      if (!await _ensureAuthenticated()) {
+        return {'success': false, 'message': 'Authentication required.', 'statusCode': 401};
       }
 
-      final body = <String, dynamic>{
+      final body = {
         'sender': sender,
         'message_body': messageBody,
         'messageBody': messageBody,
-        'message': messageBody,
         'source': source,
       };
 
-      final response = await post('/api/scans', body);
+      final response = await _sendRequest('POST', '/api/scans', body: body, timeout: const Duration(seconds: 25));
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = decoded['data'] is Map<String, dynamic>
-            ? (decoded['data'] as Map<String, dynamic>)
-            : decoded;
-
-        final isScam = data['is_scam'] ??
-            data['isScam'] ??
-            (data['label'] == 'scam' || data['label'] == 'fraud');
-        final label = data['label'] ?? (isScam == true ? 'scam' : 'safe');
-        final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.95;
-
+        final data = decoded['data'] is Map<String, dynamic> ? decoded['data'] : decoded;
+        final isScam = data['is_scam'] ?? data['isScam'] ?? (data['label'] == 'scam' || data['label'] == 'fraud');
         return {
           'success': true,
           'message': decoded['message'] ?? 'Scan submitted successfully',
           'data': data,
           'isScam': isScam == true,
-          'label': label,
-          'confidence': confidence,
-        };
-      } else {
-        return {
-          'success': false,
-          'message': decoded['message'] ?? 'Scan submission failed',
-          'statusCode': response.statusCode,
+          'label': data['label'] ?? (isScam == true ? 'scam' : 'safe'),
+          'confidence': (data['confidence'] as num?)?.toDouble() ?? 0.95,
         };
       }
+      return {'success': false, 'message': decoded['message'] ?? 'Scan failed', 'statusCode': response.statusCode};
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Failed to submit scan to backend server.',
-        'error': e,
-      };
+      return {'success': false, 'message': 'Connection error', 'error': e.toString()};
     }
   }
 
-  static Future<Map<String, dynamic>> addFraudScan({
-    required String sender,
-    required String messageBody,
-    String source = 'MANUAL_QUERY',
-  }) async {
-    return await submitScan(
-      sender: sender,
-      messageBody: messageBody,
-      source: source,
-    );
-  }
-
-  /// Fetch authenticated user's "FRAUD" messages with pagination
-  static Future<Map<String, dynamic>> getFraudScans({
-    int page = 0,
-    int size = 20,
-  }) async {
+  /// Fetch authenticated user's "FRAUD" messages
+  static Future<Map<String, dynamic>> getFraudScans({int page = 0, int size = 20}) async {
     try {
-      if (token == null || token!.isEmpty) {
-        await loadSession();
-      }
-
+      if (!await _ensureAuthenticated()) return {'success': false, 'content': [], 'statusCode': 401};
       final response = await get('/api/scans/fraud?page=$page&size=$size');
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        final data = decoded['data'] is Map<String, dynamic>
-            ? (decoded['data'] as Map<String, dynamic>)
-            : <String, dynamic>{};
-        final content =
-            data['content'] is List ? (data['content'] as List) : [];
+        final data = decoded['data'] is Map<String, dynamic> ? decoded['data'] : {};
+        final content = data['content'] is List ? data['content'] : [];
         return {
           'success': true,
-          'message': decoded['message'] ?? 'Fraud scans retrieved successfully',
           'content': content,
           'totalElements': data['totalElements'] ?? content.length,
-          'totalPages': data['totalPages'] ?? 1,
-          'number': data['number'] ?? page,
           'data': data,
         };
-      } else {
-        return {
-          'success': false,
-          'message': decoded['message'] ?? 'Failed to fetch fraud scans',
-          'statusCode': response.statusCode,
-          'content': [],
-        };
       }
+      return {'success': false, 'content': [], 'statusCode': response.statusCode};
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Failed to connect to backend server.',
-        'error': e,
-        'content': [],
-      };
+      return {'success': false, 'content': [], 'error': e.toString()};
     }
   }
 
-  /// Delete a fraud scan row from backend
-  static Future<Map<String, dynamic>> deleteFraudScan({
-    required String id,
-  }) async {
-    if (id.trim().isEmpty) {
-      return {
-        'success': false,
-        'message': 'Missing backend record ID — cannot delete.',
-      };
-    }
-
+  /// Delete a fraud scan row
+  static Future<Map<String, dynamic>> deleteFraudScan({required String id}) async {
     try {
-      if (token == null || token!.isEmpty) {
-        await loadSession();
-      }
-
-      final path = '/api/v1/fraud-records/${Uri.encodeComponent(id)}';
-      final response = await delete(path);
-
+      if (!await _ensureAuthenticated()) return {'success': false, 'statusCode': 401};
+      final response = await delete('/api/v1/fraud-records/${Uri.encodeComponent(id)}');
       if (response.statusCode == 204 || response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': 'Record removed from the database.',
-        };
+        return {'success': true, 'message': 'Record removed.'};
       }
-
-      if (response.statusCode == 404) {
-        return {
-          'success': true,
-          'message': 'Record was already removed.',
-        };
-      }
-
-      final decoded = _safeJsonDecode(response.body);
-      return {
-        'success': false,
-        'message': decoded['message'] ??
-            'Failed to remove the record (status ${response.statusCode}).',
-        'statusCode': response.statusCode,
-      };
+      return {'success': false, 'statusCode': response.statusCode};
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Failed to connect to backend server.',
-        'error': e,
-      };
+      return {'success': false, 'error': e.toString()};
     }
   }
 
-  /// Safely decode JSON — returns empty map on null/empty/malformed body
   static Map<String, dynamic> _safeJsonDecode(String body) {
     if (body.trim().isEmpty) return {};
     try {
       final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) return decoded;
-      return {};
-    } catch (_) {
-      return {};
-    }
+      return decoded is Map<String, dynamic> ? decoded : {};
+    } catch (_) { return {}; }
   }
 
-  /// Register a new user
+  /// Auth: SignUp
   static Future<Map<String, dynamic>> signUp({
     required String fullName,
     required String email,
@@ -360,218 +221,96 @@ class AuthService {
         'gender': gender,
         'password': password,
       });
-
       final decoded = _safeJsonDecode(response.body);
-
       if (response.statusCode == 201 || response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': decoded['message'] ?? 'Account created successfully',
-          'data': decoded['data'] ?? decoded,
-        };
-      } else {
-        return {
-          'success': false,
-          'message': decoded['message'] ?? 'Sign up failed',
-          'statusCode': response.statusCode,
-        };
+        return {'success': true, 'message': decoded['message'], 'data': decoded['data'] ?? decoded};
       }
+      return {'success': false, 'message': decoded['message'] ?? 'Sign up failed', 'statusCode': response.statusCode};
     } catch (e) {
-      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
-      return {
-        'success': false,
-        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
-        'error': e.toString(),
-      };
+      return {'success': false, 'message': 'Connection error', 'error': e.toString()};
     }
   }
 
-  /// Login user
-  static Future<Map<String, dynamic>> login({
-    required String identifier,
-    required String password,
-  }) async {
+  /// Auth: Login (Two-Step support)
+  static Future<Map<String, dynamic>> login({required String identifier, required String password}) async {
     try {
       final trimmed = identifier.trim();
       final isEmail = trimmed.contains('@');
-
-      final body = <String, dynamic>{
+      final response = await post('/api/auth/login', {
         'password': password,
         'phone_number': trimmed,
         if (isEmail) 'email': trimmed,
-      };
-
-      final response = await post('/api/auth/login', body);
+      });
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200) {
         final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
-        final tokenStr = decoded['token'] as String? ?? data['token'] as String? ?? '';
+        // The front_end branch introduced mandatory OTP for login
+        return {
+          'success': true,
+          'requiresOtp': true,
+          'message': decoded['message'] ?? 'OTP sent for verification',
+          'email': data['email']?.toString() ?? '',
+          'data': data,
+        };
+      }
+      return {'success': false, 'message': decoded['message'] ?? 'Login failed', 'statusCode': response.statusCode};
+    } catch (e) {
+      return {'success': false, 'message': 'Connection error', 'error': e.toString()};
+    }
+  }
 
+  static Future<Map<String, dynamic>> verifyLoginOtp({required String email, required String verificationCode}) async {
+    try {
+      final response = await post('/api/auth/verify-login-otp', {'email': email, 'verificationCode': verificationCode});
+      final decoded = _safeJsonDecode(response.body);
+      if (response.statusCode == 200) {
+        final data = decoded['data'] as Map<String, dynamic>? ?? {};
+        final tokenStr = data['token']?.toString() ?? '';
+        if (tokenStr.isEmpty) return {'success': false, 'message': 'No token returned'};
         await saveSession(tokenStr, data);
-
-        return {
-          'success': true,
-          'message': decoded['message'] ?? 'Login successful',
-          'data': decoded,
-          'token': tokenStr,
-        };
-      } else {
-        return {
-          'success': false,
-          'message': decoded['message'] ?? 'Login failed',
-          'statusCode': response.statusCode,
-        };
+        return {'success': true, 'data': data};
       }
+      return {'success': false, 'message': decoded['message'] ?? 'Invalid code', 'statusCode': response.statusCode};
     } catch (e) {
-      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
-      return {
-        'success': false,
-        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
-        'error': e.toString(),
-      };
+      return {'success': false, 'message': 'Verification failed', 'error': e.toString()};
     }
   }
 
-  /// Request password reset code
-  static Future<Map<String, dynamic>> requestPasswordReset({
-    required String phoneNumber,
-  }) async {
+  static Future<Map<String, dynamic>> resendLoginOtp({required String email}) async {
     try {
-      final response = await post('/api/auth/password-resets', {
-        'phone_number': phoneNumber,
-      });
-
-      final decoded = _safeJsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': decoded['message'] ?? 'Reset code sent successfully',
-          'data': decoded['data'] ?? decoded,
-        };
-      } else {
-        return {
-          'success': false,
-          'message': decoded['message'] ?? 'Failed to send reset code',
-          'statusCode': response.statusCode,
-        };
-      }
-    } catch (e) {
-      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
-      return {
-        'success': false,
-        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
-        'error': e.toString(),
-      };
-    }
+      final response = await post('/api/auth/resend-login-otp', {'email': email});
+      return {'success': response.statusCode == 200, 'message': _safeJsonDecode(response.body)['message']};
+    } catch (e) { return {'success': false, 'error': e.toString()}; }
   }
 
-  /// Resend verification code
-  static Future<Map<String, dynamic>> resendCode({
-    required String phoneNumber,
-  }) async {
+  /// Password Resets
+  static Future<Map<String, dynamic>> requestPasswordReset({required String phoneNumber}) async {
     try {
-      final response = await post('/api/auth/password-resets/resend', {
-        'phone_number': phoneNumber,
-      });
-
+      final response = await post('/api/auth/password-resets', {'phone_number': phoneNumber});
       final decoded = _safeJsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': decoded['message'] ?? 'Code resent successfully',
-          'data': decoded['data'] ?? decoded,
-        };
-      } else {
-        return {
-          'success': false,
-          'message': decoded['message'] ?? 'Failed to resend code',
-          'statusCode': response.statusCode,
-        };
-      }
-    } catch (e) {
-      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
-      return {
-        'success': false,
-        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
-        'error': e.toString(),
-      };
-    }
+      return {'success': response.statusCode == 200, 'message': decoded['message'], 'data': decoded['data']};
+    } catch (e) { return {'success': false, 'error': e.toString()}; }
   }
 
-  /// Verify reset code
-  static Future<Map<String, dynamic>> verifyResetCode({
-    required String phoneNumber,
-    required String verificationCode,
-  }) async {
+  static Future<Map<String, dynamic>> resendCode({required String phoneNumber}) async {
     try {
-      final response = await post('/api/auth/password-resets/verify', {
-        'phone_number': phoneNumber,
-        'verification_code': verificationCode,
-      });
-
-      final decoded = _safeJsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': decoded['message'] ?? 'Code verified successfully',
-          'data': decoded['data'] ?? decoded,
-        };
-      } else {
-        return {
-          'success': false,
-          'message': decoded['message'] ?? 'Invalid verification code',
-          'statusCode': response.statusCode,
-        };
-      }
-    } catch (e) {
-      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
-      return {
-        'success': false,
-        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
-        'error': e.toString(),
-      };
-    }
+      final response = await post('/api/auth/password-resets/resend', {'phone_number': phoneNumber});
+      return {'success': response.statusCode == 200, 'message': _safeJsonDecode(response.body)['message']};
+    } catch (e) { return {'success': false, 'error': e.toString()}; }
   }
 
-  /// Reset password with verification code
-  static Future<Map<String, dynamic>> resetPassword({
-    required String phoneNumber,
-    required String verificationCode,
-    required String newPassword,
-  }) async {
+  static Future<Map<String, dynamic>> verifyResetCode({required String phoneNumber, required String verificationCode}) async {
     try {
-      final response = await post('/api/auth/password-resets/confirm', {
-        'phone_number': phoneNumber,
-        'verification_code': verificationCode,
-        'new_password': newPassword,
-      });
+      final response = await post('/api/auth/password-resets/verify', {'phone_number': phoneNumber, 'verification_code': verificationCode});
+      return {'success': response.statusCode == 200, 'message': _safeJsonDecode(response.body)['message']};
+    } catch (e) { return {'success': false, 'error': e.toString()}; }
+  }
 
-      final decoded = _safeJsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': decoded['message'] ?? 'Password reset successfully',
-          'data': decoded['data'] ?? decoded,
-        };
-      } else {
-        return {
-          'success': false,
-          'message': decoded['message'] ?? 'Failed to reset password',
-          'statusCode': response.statusCode,
-        };
-      }
-    } catch (e) {
-      final attemptedUrl = customBaseUrl ?? (Platform.isAndroid ? '10.0.2.2 or 127.0.0.1' : 'localhost');
-      return {
-        'success': false,
-        'message': 'Failed to connect to backend at $attemptedUrl. Please verify the backend is running and reachable.',
-        'error': e.toString(),
-      };
-    }
+  static Future<Map<String, dynamic>> resetPassword({required String phoneNumber, required String verificationCode, required String newPassword}) async {
+    try {
+      final response = await post('/api/auth/password-resets/confirm', {'phone_number': phoneNumber, 'verification_code': verificationCode, 'new_password': newPassword});
+      return {'success': response.statusCode == 200, 'message': _safeJsonDecode(response.body)['message']};
+    } catch (e) { return {'success': false, 'error': e.toString()}; }
   }
 }

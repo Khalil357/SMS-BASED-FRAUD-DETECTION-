@@ -6,12 +6,15 @@ class SmsStorageService {
   static const String keyIngestionEnabled = 'settings_ingestion_enabled';
   static const String keyNotificationsEnabled = 'settings_notifications_enabled';
   static const String keyNotificationThreshold = 'settings_notification_threshold';
+<<<<<<< HEAD
   static const String keyIsScanned = 'is_scanned';
   static const String keyScannedAt = 'scanned_at';
   static const String keySource = 'source';
   static const String keyIsTrainedModel = 'is_trained_model';
   static const String keyScanVerdict = 'scan_verdict';
   static const String keyBlockedNumbers = 'argus_blocked_numbers';
+=======
+>>>>>>> origin/front_end
 
   /// Helper to get the SharedPreferences instance and force a disk reload
   /// to sync background process writes with the foreground memory cache.
@@ -94,6 +97,7 @@ class SmsStorageService {
     final prefs = await _getPrefs();
     await prefs.setDouble(key, value);
   }
+<<<<<<< HEAD
 
   /// Get locally stored blocked phone numbers
   static Future<List<String>> getBlockedNumbers() async {
@@ -130,4 +134,6 @@ class SmsStorageService {
     final blocked = await getBlockedNumbers();
     return blocked.contains(phoneNumber);
   }
+=======
+>>>>>>> origin/front_end
 }

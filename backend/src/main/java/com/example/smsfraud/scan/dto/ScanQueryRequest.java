@@ -3,10 +3,12 @@ package com.example.smsfraud.scan.dto;
 import jakarta.validation.constraints.NotBlank;
 
 public class ScanQueryRequest {
+
     private String sender;
 
     @NotBlank
     private String messageBody;
+
     private String source;
 
     public String getSender() {

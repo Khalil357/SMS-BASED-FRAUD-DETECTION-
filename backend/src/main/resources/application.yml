@@ -1,3 +1,5 @@
 ml:
   service:
-    url: ${ML_SERVICE_URL:http://ml-service:8000}
+    url: ${ML_SERVICE_URL:https://13.53.200.176}
+    # Obtain ML_SERVICE_API_KEY from Barthez. Do not commit the key.
+    api-key: ${ML_SERVICE_API_KEY:}

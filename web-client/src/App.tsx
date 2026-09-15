@@ -45,10 +45,7 @@ function App() {
           <VerificationPage
             email={loginEmail || "your email"}
             onVerified={() => setPage("dashboard")}
-<<<<<<< HEAD
-=======
             onNavigateToLogin={() => setPage("login")}
->>>>>>> origin/front_end
           />
         );
 

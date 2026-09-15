@@ -111,6 +111,7 @@ class SmsDetectionService {
     );
   }
 
+<<<<<<< HEAD
   static SmsDetectionResult blockedResult({required String sender}) {
     return SmsDetectionResult(
       classification: 'Blocked',
@@ -120,6 +121,8 @@ class SmsDetectionService {
     );
   }
 
+=======
+>>>>>>> origin/front_end
   /// Parse response from backend ML model evaluation (POST /api/scans)
   static SmsDetectionResult parseBackendResult({
     required Map<String, dynamic> backendData,

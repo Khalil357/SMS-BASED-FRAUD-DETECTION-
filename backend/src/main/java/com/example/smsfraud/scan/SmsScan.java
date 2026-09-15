@@ -13,7 +13,7 @@ public class SmsScan {
     @Column(name = "scan_id")
     private UUID scanId;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id")
     private UUID userId;
 
     private String sender;
@@ -21,7 +21,6 @@ public class SmsScan {
     @Column(name = "message_body", nullable = false, columnDefinition = "TEXT")
     private String messageBody;
 
-    @Column(nullable = false)
     private String verdict;
 
     private Double confidence;

@@ -1,6 +1,10 @@
 package com.example.smsfraud.auth;
 
 import com.example.smsfraud.auth.dto.LoginRequest;
+<<<<<<< HEAD
+=======
+import com.example.smsfraud.auth.dto.LoginPendingResponse;
+>>>>>>> origin/front_end
 import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
@@ -10,6 +14,11 @@ import com.example.smsfraud.auth.dto.RegisterResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 import com.example.smsfraud.auth.dto.VerifyLoginOtpRequest;
 import com.example.smsfraud.auth.dto.ResendLoginOtpRequest;
+<<<<<<< HEAD
+=======
+import com.example.smsfraud.auth.dto.RefreshRequest;
+import com.example.smsfraud.auth.dto.RefreshResponse;
+>>>>>>> origin/front_end
 import com.example.smsfraud.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -41,8 +50,13 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+<<<<<<< HEAD
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Login successful", authService.login(req)));
+=======
+    public ResponseEntity<ApiResponse<LoginPendingResponse>> login(@Valid @RequestBody LoginRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("OTP sent for verification", authService.login(req)));
+>>>>>>> origin/front_end
     }
 
     @PostMapping("/password-resets")
@@ -77,5 +91,19 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> resendLoginOtp(@Valid @RequestBody ResendLoginOtpRequest req) {
         authService.resendLoginOtp(req.email());
         return ResponseEntity.ok(ApiResponse.ok("Login OTP resent successfully"));
+<<<<<<< HEAD
+=======
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<RefreshResponse>> refresh(@Valid @RequestBody RefreshRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Token refreshed successfully", authService.refresh(req.refreshToken())));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(@Valid @RequestBody RefreshRequest req) {
+        authService.logout(req.refreshToken());
+        return ResponseEntity.ok(ApiResponse.ok("Logged out successfully"));
+>>>>>>> origin/front_end
     }
 }

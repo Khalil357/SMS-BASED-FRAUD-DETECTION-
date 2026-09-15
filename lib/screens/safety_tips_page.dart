@@ -168,7 +168,11 @@ class _SafetyTipsPageState extends State<SafetyTipsPage> with SingleTickerProvid
                     : [const Color(0xFFEFF6FF), const Color(0xFFDBEAFE)],
               ),
               borderRadius: BorderRadius.circular(20),
+<<<<<<< HEAD
               border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
+=======
+              border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+>>>>>>> origin/front_end
             ),
             child: Row(
               children: [
@@ -302,7 +306,11 @@ class _SafetyTipsPageState extends State<SafetyTipsPage> with SingleTickerProvid
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
+<<<<<<< HEAD
             color: theme.colorScheme.primary.withValues(alpha: 0.1),
+=======
+            color: theme.colorScheme.primary.withOpacity(0.1),
+>>>>>>> origin/front_end
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(_getCategoryIcon(tip.category), color: theme.colorScheme.primary),
@@ -321,7 +329,11 @@ class _SafetyTipsPageState extends State<SafetyTipsPage> with SingleTickerProvid
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
+<<<<<<< HEAD
                   color: Colors.amber.shade700.withValues(alpha: 0.15),
+=======
+                  color: Colors.amber.shade700.withOpacity(0.15),
+>>>>>>> origin/front_end
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -548,7 +560,11 @@ class _SafetyTipsPageState extends State<SafetyTipsPage> with SingleTickerProvid
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
+<<<<<<< HEAD
                   color: Colors.amber.shade700.withValues(alpha: 0.15),
+=======
+                  color: Colors.amber.shade700.withOpacity(0.15),
+>>>>>>> origin/front_end
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -592,7 +608,11 @@ class _SafetyTipsPageState extends State<SafetyTipsPage> with SingleTickerProvid
               ),
               boxShadow: [
                 BoxShadow(
+<<<<<<< HEAD
                   color: Colors.black.withValues(alpha: 0.06),
+=======
+                  color: Colors.black.withOpacity(0.06),
+>>>>>>> origin/front_end
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                 ),
@@ -604,7 +624,11 @@ class _SafetyTipsPageState extends State<SafetyTipsPage> with SingleTickerProvid
                 Row(
                   children: [
                     CircleAvatar(
+<<<<<<< HEAD
                       backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+=======
+                      backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+>>>>>>> origin/front_end
                       child: Icon(Icons.person, color: theme.colorScheme.primary),
                     ),
                     const SizedBox(width: 12),
@@ -694,8 +718,13 @@ class _SafetyTipsPageState extends State<SafetyTipsPage> with SingleTickerProvid
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: _userAnswerIsScam == question.isScam
+<<<<<<< HEAD
                     ? Colors.green.withValues(alpha: 0.12)
                     : AppTheme.red.withValues(alpha: 0.12),
+=======
+                    ? Colors.green.withOpacity(0.12)
+                    : AppTheme.red.withOpacity(0.12),
+>>>>>>> origin/front_end
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: _userAnswerIsScam == question.isScam ? Colors.green : AppTheme.red,

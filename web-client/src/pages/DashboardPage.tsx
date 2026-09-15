@@ -3,10 +3,6 @@ import type { ChangeEvent } from "react";
 import "./DashboardPage.css";
 import type {
   StatCardData,
-<<<<<<< HEAD
-  ChartBarData,
-=======
->>>>>>> origin/front_end
   AlertData,
   SmsRecord,
   DetectionRule,
@@ -39,17 +35,10 @@ import {
   UserPlus,
   Bell,
   X,
-<<<<<<< HEAD
-  ArrowUpRight,
-  Terminal,
-  Copy,
-  Check,
-=======
   Terminal,
   Copy,
   Check,
   Download,
->>>>>>> origin/front_end
 } from "lucide-react";
 import inAppIcon from "../assets/images/in_app_icon.png";
 
@@ -92,19 +81,6 @@ const mockStats: StatCardData[] = [
   },
 ];
 
-<<<<<<< HEAD
-const mockChart: ChartBarData[] = [
-  { day: "Mon", percentage: 42 },
-  { day: "Tue", percentage: 65 },
-  { day: "Wed", percentage: 54 },
-  { day: "Thu", percentage: 88 },
-  { day: "Fri", percentage: 70 },
-  { day: "Sat", percentage: 94 },
-  { day: "Sun", percentage: 76 },
-];
-
-=======
->>>>>>> origin/front_end
 const mockAlerts: AlertData[] = [
   {
     id: "1",
@@ -318,8 +294,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [copiedCommandId, setCopiedCommandId] = useState<string | null>(null);
 
-<<<<<<< HEAD
-=======
   // Admin Profile state
   const [adminProfile, setAdminProfile] = useState({
     name: "System Admin",
@@ -367,7 +341,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     setIsEditProfileOpen(false);
   };
 
->>>>>>> origin/front_end
   const handleCopyCommand = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedCommandId(id);
@@ -501,44 +474,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
           <div className="brand-text">
             <h2>Argus</h2>
-<<<<<<< HEAD
-            <span>Admin Console</span>
-=======
             <span className="version-tag">v2.4 Enterprise</span>
->>>>>>> origin/front_end
           </div>
         </div>
 
         <nav className="sidebar-menu">
           {[
-<<<<<<< HEAD
-            { name: "Overview", icon: Activity },
-            { name: "SMS Ingestion Logs", icon: MessageSquare, badge: smsList.filter((s) => s.status === "Fraud").length },
-            { name: "Rules & Threat Engine", icon: Sliders },
-            { name: "Blacklist Management", icon: ShieldAlert, badge: blacklist.length },
-            { name: "Users & Devices", icon: Users },
-            { name: "System Settings", icon: Settings },
-          ].map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.name;
-            return (
-              <button
-                key={item.name}
-                type="button"
-                className={`sidebar-link ${isActive ? "active" : ""}`}
-                onClick={() => setActiveTab(item.name)}
-              >
-                <Icon size={18} className="sidebar-link-icon" />
-                <span>{item.name}</span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className={`menu-badge ${item.name === "Blacklist Management" ? "dark" : "danger"}`}>
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-=======
             {
               category: "MAIN TELEMETRY",
               items: [
@@ -585,7 +526,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               })}
             </div>
           ))}
->>>>>>> origin/front_end
         </nav>
 
         <div className="sidebar-footer">
@@ -669,15 +609,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             </div>
 
             {/* ADMIN PROFILE PILL */}
-<<<<<<< HEAD
-            <div className="admin-profile-pill">
-              <div className="admin-avatar">AD</div>
-              <div className="admin-info">
-                <strong>System Admin</strong>
-                <small>ADMINISTRATOR</small>
-              </div>
-            </div>
-=======
             <button
               type="button"
               className="admin-profile-pill clickable"
@@ -690,19 +621,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 <small>{adminProfile.role}</small>
               </div>
             </button>
->>>>>>> origin/front_end
           </div>
         </header>
 
         {/* TAB 1: OVERVIEW */}
         {activeTab === "Overview" && (
           <div className="tab-content fade-slide">
-<<<<<<< HEAD
-            {/* STATS GRID */}
-            <section className="stats-cards-grid">
-              {mockStats.map((stat) => (
-                <div key={stat.id} className="stat-card-box">
-=======
             {/* HERO SECURITY BANNER */}
             <section className="dashboard-hero-banner">
               <div className="hero-banner-content">
@@ -731,7 +655,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             <section className="stats-cards-grid">
               {mockStats.map((stat) => (
                 <div key={stat.id} className={`stat-card-box gradient-${stat.category}`}>
->>>>>>> origin/front_end
                   <div className="stat-header">
                     <span className="stat-title">{stat.title}</span>
                     <div className={`stat-icon-badge ${stat.category}`}>
@@ -751,29 +674,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
             {/* MIDDLE PANELS GRID */}
             <section className="middle-dashboard-grid">
-<<<<<<< HEAD
-              {/* CHART PANEL */}
-              <div className="admin-panel chart-panel">
-                <div className="panel-top">
-                  <div>
-                    <h3>Fraud Detection Velocity</h3>
-                    <p>Daily intercepted scam payloads</p>
-                  </div>
-                  <div className="panel-badge-pill">
-                    <Activity size={14} /> Live Stream
-                  </div>
-                </div>
-
-                <div className="chart-wrapper">
-                  <div className="chart-bars-container">
-                    {mockChart.map((bar) => (
-                      <div key={bar.day} className="chart-bar-column">
-                        <div className="bar-value">{bar.percentage}%</div>
-                        <div className="bar-track">
-                          <div className="bar-fill" style={{ height: `${bar.percentage}%` }} />
-                        </div>
-                        <span className="bar-label">{bar.day}</span>
-=======
               {/* PROFESSIONAL TELEMETRY AREA CHART PANEL */}
               <div className="admin-panel telemetry-chart-panel">
                 <div className="panel-top">
@@ -970,40 +870,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                       >
                         <span>{lbl.day}</span>
                         <small className={lbl.peak ? "peak-val" : "subtle-val"}>{lbl.val}</small>
->>>>>>> origin/front_end
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
 
-<<<<<<< HEAD
-              {/* THREAT ALERTS FEED */}
-              <div className="admin-panel alerts-panel">
-                <div className="panel-top">
-                  <div>
-                    <h3>Real-Time Threat Alerts</h3>
-                    <p>Highest severity intercepts</p>
-                  </div>
-                  <button type="button" className="text-btn" onClick={() => setActiveTab("SMS Ingestion Logs")}>
-                    View Logs <ArrowUpRight size={14} />
-                  </button>
-                </div>
-
-                <div className="alerts-feed-list">
-                  {mockAlerts.map((alt) => (
-                    <div key={alt.id} className={`feed-alert-card ${alt.severity}`}>
-                      <div className="feed-alert-icon">
-                        {alt.severity === "high" ? <ShieldAlert size={18} /> : <AlertTriangle size={18} />}
-                      </div>
-                      <div className="feed-alert-content">
-                        <strong>{alt.title}</strong>
-                        <p>{alt.description}</p>
-                        <small>{alt.timeAgo}</small>
-                      </div>
-                    </div>
-                  ))}
-=======
               {/* PIE / DONUT CHART BREAKDOWN PANEL */}
               <div className="admin-panel pie-chart-panel">
                 <div className="panel-top">
@@ -1150,7 +1022,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                       </div>
                     </div>
                   </div>
->>>>>>> origin/front_end
                 </div>
               </div>
             </section>
@@ -1310,22 +1181,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <div className="panel-top flex-wrap">
                 <div>
                   <h3>SMS Ingestion Audit Logs</h3>
-<<<<<<< HEAD
-                  <p>Filter, search, and verify all intercepted messages</p>
-                </div>
-
-                <div className="filter-button-group">
-                  {["All", "Fraud", "Review", "Safe"].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      className={`filter-btn ${filterType === t ? "active" : ""}`}
-                      onClick={() => setFilterType(t)}
-                    >
-                      {t}
-                    </button>
-                  ))}
-=======
                   <p>Filter, search, and verify all intercepted messages ({filteredSms.length} records)</p>
                 </div>
 
@@ -1350,7 +1205,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   >
                     <Download size={15} /> Export CSV
                   </button>
->>>>>>> origin/front_end
                 </div>
               </div>
 
@@ -1554,11 +1408,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   <h3>User & Device Registry</h3>
                   <p>Registered users, device authorization, and account security</p>
                 </div>
-<<<<<<< HEAD
-                <button type="button" className="btn-primary" onClick={() => alert("Creating user...")}>
-=======
                 <button type="button" className="btn-primary" onClick={() => alert("Creating new system user...")}>
->>>>>>> origin/front_end
                   <UserPlus size={16} /> Add User
                 </button>
               </div>
@@ -1680,8 +1530,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   </div>
                 </div>
               </div>
-<<<<<<< HEAD
-=======
 
               <div className="admin-panel">
                 <div className="panel-top">
@@ -1707,7 +1555,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   </div>
                 </div>
               </div>
->>>>>>> origin/front_end
             </div>
           </div>
         )}
@@ -1898,8 +1745,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
         </div>
       )}
-<<<<<<< HEAD
-=======
       {/* EDIT PROFILE MODAL */}
       {isEditProfileOpen && (
         <div className="modal-backdrop" onClick={() => setIsEditProfileOpen(false)}>
@@ -1974,7 +1819,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
         </div>
       )}
->>>>>>> origin/front_end
     </div>
   );
 };

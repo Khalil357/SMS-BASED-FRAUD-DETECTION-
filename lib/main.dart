@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:telephony/telephony.dart';
 import 'theme.dart';
 import 'screens/splash_screen.dart';
 import 'services/notification_service.dart';
 import 'services/sms_ingestion_service.dart';
 
+<<<<<<< HEAD
+=======
+@pragma('vm:entry-point')
+Future<void> backgroundSmsHandler(SmsMessage message) async {
+  await handleBackgroundSms(message);
+}
+
+>>>>>>> origin/front_end
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../app_theme.dart';
@@ -109,9 +109,7 @@ class _OtpInputFieldState extends State<OtpInputField> {
                 final text = _controller.text;
                 final char = index < text.length ? text[index] : '';
                 final isBoxFocused = _focusNode.hasFocus &&
-                    (index == text.length ||
-                        (index == widget.length - 1 &&
-                            text.length == widget.length));
+                    (index == text.length || (index == widget.length - 1 && text.length == widget.length));
 
                 return Container(
                   margin: const EdgeInsets.symmetric(horizontal: 5),
@@ -131,7 +129,7 @@ class _OtpInputFieldState extends State<OtpInputField> {
                     boxShadow: isBoxFocused
                         ? [
                             BoxShadow(
-                              color: theme.primaryColor.withValues(alpha: 0.15),
+                              color: theme.primaryColor.withOpacity(0.15),
                               blurRadius: 16,
                               offset: const Offset(0, 4),
                             )

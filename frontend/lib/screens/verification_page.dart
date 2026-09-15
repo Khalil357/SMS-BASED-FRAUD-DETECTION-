@@ -10,6 +10,11 @@ class VerificationPage extends StatefulWidget {
   final Navigate onNavigate;
   final String phoneNumber;
   final bool isResetPasswordFlow;
+<<<<<<< HEAD
+=======
+  final bool isLoginFlow;
+  final String? loginEmail;
+>>>>>>> origin/front_end
   final ValueChanged<String> onVerified;
 
   const VerificationPage({
@@ -17,6 +22,11 @@ class VerificationPage extends StatefulWidget {
     required this.onNavigate,
     required this.phoneNumber,
     this.isResetPasswordFlow = true,
+<<<<<<< HEAD
+=======
+    this.isLoginFlow = false,
+    this.loginEmail,
+>>>>>>> origin/front_end
     required this.onVerified,
   });
 
@@ -52,10 +62,15 @@ class _VerificationPageState extends State<VerificationPage> {
       _isLoading = true;
     });
 
-    final result = await AuthService.verifyResetCode(
-      phoneNumber: widget.phoneNumber,
-      verificationCode: _otpCode,
-    );
+    final result = widget.isLoginFlow
+        ? await AuthService.verifyLoginOtp(
+            email: widget.loginEmail ?? '',
+            verificationCode: _otpCode,
+          )
+        : await AuthService.verifyResetCode(
+            phoneNumber: widget.phoneNumber,
+            verificationCode: _otpCode,
+          );
 
     setState(() {
       _isLoading = false;
@@ -69,13 +84,19 @@ class _VerificationPageState extends State<VerificationPage> {
           content: Text(result['message'] ?? 'Code verified successfully!'),
           backgroundColor: Colors.green.shade600,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
       widget.onVerified(_otpCode);
     } else {
       setState(() {
+<<<<<<< HEAD
         _errorMessage = result['message'] ?? 'Invalid verification code. Please try again.';
+=======
+        _errorMessage =
+            result['message'] ?? 'Invalid verification code. Please try again.';
+>>>>>>> origin/front_end
       });
     }
   }
@@ -85,9 +106,11 @@ class _VerificationPageState extends State<VerificationPage> {
       _errorMessage = null;
     });
 
-    if (widget.phoneNumber.isEmpty) {
+    final destination =
+        widget.isLoginFlow ? (widget.loginEmail ?? '') : widget.phoneNumber;
+    if (destination.isEmpty) {
       setState(() {
-        _errorMessage = 'Phone number is missing. Please go back.';
+        _errorMessage = 'Verification destination is missing. Please go back.';
       });
       return;
     }
@@ -96,7 +119,9 @@ class _VerificationPageState extends State<VerificationPage> {
       _isLoading = true;
     });
 
-    final result = await AuthService.resendCode(phoneNumber: widget.phoneNumber);
+    final result = widget.isLoginFlow
+        ? await AuthService.resendLoginOtp(email: destination)
+        : await AuthService.resendCode(phoneNumber: destination);
 
     setState(() {
       _isLoading = false;
@@ -107,10 +132,12 @@ class _VerificationPageState extends State<VerificationPage> {
     if (result['success']) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'Verification code resent successfully!'),
+          content: Text(
+              result['message'] ?? 'Verification code resent successfully!'),
           backgroundColor: Colors.green.shade600,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } else {
@@ -145,7 +172,8 @@ class _VerificationPageState extends State<VerificationPage> {
 
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -199,7 +227,7 @@ class _VerificationPageState extends State<VerificationPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "We've sent a 6-digit verification code to ${widget.phoneNumber}",
+                          "We've sent a 6-digit verification code to ${widget.isLoginFlow ? widget.loginEmail : widget.phoneNumber}",
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium,
                         ),
@@ -217,7 +245,9 @@ class _VerificationPageState extends State<VerificationPage> {
                         color: theme.cardTheme.color,
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                          color: isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFFE2E8F0),
                           width: 1,
                         ),
                         boxShadow: AppTheme.cardShadow(isDark),
@@ -236,7 +266,7 @@ class _VerificationPageState extends State<VerificationPage> {
                               _handleVerify();
                             },
                           ),
-                          
+
                           if (_errorMessage != null) ...[
                             const SizedBox(height: 16),
                             Text(
@@ -290,7 +320,8 @@ class _VerificationPageState extends State<VerificationPage> {
                       alignment: WrapAlignment.center,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Icon(Icons.arrow_back, size: 16, color: theme.colorScheme.primary),
+                        Icon(Icons.arrow_back,
+                            size: 16, color: theme.colorScheme.primary),
                         const SizedBox(width: 4),
                         TextButton(
                           onPressed: () {

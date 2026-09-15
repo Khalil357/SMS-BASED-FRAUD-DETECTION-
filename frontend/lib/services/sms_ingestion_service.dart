@@ -20,13 +20,20 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
   if (body.isEmpty) return;
 
   try {
-    // 0. Ensure session token is loaded in background isolate
+    // 0. CHECK BLOCKLIST FIRST (Real Blocking)
+    final isBlocked = await SmsStorageService.isBlocked(sender);
+    if (isBlocked) {
+      debugPrint("SMS Ingestion: REAL BLOCK active. Discarding message from $sender");
+      return;
+    }
+
+    // 1. Ensure session token is loaded in background isolate
     await AuthService.loadSession();
 
-    // 1. Perform rule-based threat analysis
+    // 2. Perform rule-based threat analysis
     final result = SmsDetectionService.analyze(message: body, sender: sender);
 
-    // 2. Persist the log entry locally
+    // 3. Persist the log entry locally
     final logEntry = <String, dynamic>{
       'id': 'auto_${DateTime.now().millisecondsSinceEpoch}',
       'sender': sender,
@@ -39,7 +46,7 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
       'userFeedback': null,
     };
 
-    // 3. Submit scan to Backend API (POST /api/scans)
+    // 4. Submit scan to Backend API (POST /api/scans)
     try {
       final backendResult = await AuthService.submitScan(
         sender: sender,
@@ -47,6 +54,13 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
         source: 'AUTO_LISTENER',
       );
       if (backendResult['success'] == true && backendResult['isScam'] != null) {
+        final backendData = backendResult['data'];
+        if (backendData is Map<String, dynamic>) {
+          final scanId = backendData['scanId']?.toString();
+          logEntry['scanId'] = scanId;
+          logEntry['backendId'] = scanId;
+        }
+        
         final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
         final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
         final type = isScam ? 'Fraud' : 'Safe';
@@ -62,10 +76,10 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
       }
     } catch (_) {}
 
-    // 4. Add to local log storage
+    // 5. Add to local log storage
     await SmsStorageService.addLog(logEntry);
 
-    // 5. Trigger alert notification for Fraud or a high threat index.
+    // 6. Trigger alert notification for Fraud or a high threat index.
     final threatLevel = (logEntry['threat'] as num).toDouble();
     if (logEntry['type'] == 'Fraud' || threatLevel >= 0.50) {
       await NotificationService.showThreatAlert(
@@ -131,6 +145,13 @@ class SmsIngestionService {
 
           if (body.isEmpty) return;
 
+          // 0. CHECK BLOCKLIST FIRST (Real Blocking)
+          final isBlocked = await SmsStorageService.isBlocked(sender);
+          if (isBlocked) {
+            debugPrint("SMS Ingestion: REAL BLOCK active. Ignoring foreground message from $sender");
+            return;
+          }
+
           // Check if ingestion enabled
           final isIngestionEnabled = await SmsStorageService.getBoolSetting(
               SmsStorageService.keyIngestionEnabled, true);
@@ -140,17 +161,18 @@ class SmsIngestionService {
           final result = SmsDetectionService.analyze(message: body, sender: sender);
 
           // Save
-          final logEntry = {
+          final logEntry = <String, dynamic>{
             'id': 'auto_${DateTime.now().millisecondsSinceEpoch}',
             'sender': sender,
             'message': body,
             'type': result.classification,
             'time': DateTime.now().toIso8601String(),
             'threat': result.threatLevel,
-            'matchedReasons': result.matchedReasons,
+            'matchedReasons': List<String>.from(result.matchedReasons),
             'hasFeedback': false,
             'userFeedback': null,
           };
+          
           // Submit scan to Backend API (POST /api/scans)
           try {
             final backendResult = await AuthService.submitScan(
@@ -159,6 +181,13 @@ class SmsIngestionService {
               source: 'AUTO_LISTENER',
             );
             if (backendResult['success'] == true && backendResult['isScam'] != null) {
+              final backendData = backendResult['data'];
+              if (backendData is Map<String, dynamic>) {
+                final scanId = backendData['scanId']?.toString();
+                logEntry['scanId'] = scanId;
+                logEntry['backendId'] = scanId;
+              }
+              
               final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
               final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
               final type = isScam ? 'Fraud' : 'Safe';

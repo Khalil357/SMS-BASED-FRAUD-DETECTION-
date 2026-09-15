@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class AuthService {
+<<<<<<< HEAD
   /// Pass API_BASE_URL when building for a physical device or a deployed API.
   ///
   /// `10.0.2.2` is only the Android emulator's route back to the development
@@ -19,6 +20,10 @@ class AuthService {
           ? _configuredBaseUrl.substring(0, _configuredBaseUrl.length - 1)
           : _configuredBaseUrl;
     }
+=======
+  // Dynamically resolve baseUrl to support Android emulators (10.0.2.2) and local hosts
+  static String get baseUrl {
+>>>>>>> origin/front_end
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:8080';
     }
@@ -89,7 +94,11 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
+<<<<<<< HEAD
         'message': _connectionErrorMessage(),
+=======
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+>>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -139,7 +148,11 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
+<<<<<<< HEAD
         'message': _connectionErrorMessage(),
+=======
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+>>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -179,7 +192,11 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
+<<<<<<< HEAD
         'message': _connectionErrorMessage(),
+=======
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+>>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -219,7 +236,11 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
+<<<<<<< HEAD
         'message': _connectionErrorMessage(),
+=======
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+>>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -261,7 +282,11 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
+<<<<<<< HEAD
         'message': _connectionErrorMessage(),
+=======
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+>>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -305,7 +330,11 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
+<<<<<<< HEAD
         'message': _connectionErrorMessage(),
+=======
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+>>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -367,7 +396,11 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
+<<<<<<< HEAD
         'message': _connectionErrorMessage(),
+=======
+        'message': 'Failed to submit scan to backend server.',
+>>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -417,12 +450,17 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
+<<<<<<< HEAD
         'message': _connectionErrorMessage(),
+=======
+        'message': 'Failed to connect to backend server.',
+>>>>>>> origin/front_end
         'error': e,
         'content': [],
       };
     }
   }
+<<<<<<< HEAD
 
   /// Block a phone number
   /// POST /api/block
@@ -553,4 +591,6 @@ class AuthService {
       };
     }
   }
+=======
+>>>>>>> origin/front_end
 }

@@ -116,7 +116,7 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
                                   height: 140 * barHeightFactor,
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? theme.colorScheme.primary.withValues(alpha: 0.2)
+                                        ? theme.colorScheme.primary.withOpacity(0.2)
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(8),
                                     border: isSelected
@@ -247,10 +247,10 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withValues(alpha: isDark ? 0.15 : 0.08),
+        color: theme.colorScheme.primary.withOpacity(isDark ? 0.15 : 0.08),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+          color: theme.colorScheme.primary.withOpacity(0.3),
         ),
       ),
       child: Column(

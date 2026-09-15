@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import React, { useState } from "react";
-=======
 import React, { useState, useEffect } from "react";
->>>>>>> origin/front_end
 import { MailCheck } from "lucide-react";
 import AuthLayout from "../components/auth/AuthLayout";
 import AuthCard from "../components/auth/AuthCard";
@@ -12,10 +8,7 @@ import {
   AuthDescription,
   AuthButton,
   AuthPrompt,
-<<<<<<< HEAD
-=======
   AuthLink,
->>>>>>> origin/front_end
   FormMessage,
 } from "../components/auth/AuthElements";
 import OtpFields from "../components/auth/OtpFields";
@@ -24,11 +17,6 @@ import { verifyLoginOtp, resendLoginOtp } from "../services/authService";
 interface VerificationPageProps {
   email: string;
   onVerified: () => void;
-<<<<<<< HEAD
-}
-
-const VerificationPage: React.FC<VerificationPageProps> = ({ email, onVerified }) => {
-=======
   onNavigateToLogin?: () => void;
 }
 
@@ -37,14 +25,11 @@ const VerificationPage: React.FC<VerificationPageProps> = ({
   onVerified,
   onNavigateToLogin,
 }) => {
->>>>>>> origin/front_end
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
-<<<<<<< HEAD
-=======
   useEffect(() => {
     if (email && email !== "your email") {
       resendLoginOtp({ email }).then((res) => {
@@ -55,7 +40,6 @@ const VerificationPage: React.FC<VerificationPageProps> = ({
     }
   }, [email]);
 
->>>>>>> origin/front_end
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -112,12 +96,6 @@ const VerificationPage: React.FC<VerificationPageProps> = ({
           {errorMessage && <FormMessage text={errorMessage} type="error" />}
           {infoMessage && <FormMessage text={infoMessage} type="success" />}
 
-<<<<<<< HEAD
-          <AuthButton label={isLoading ? "Verifying..." : "Verify"} isLoading={isLoading} />
-        </form>
-
-        <AuthPrompt prefix="Didn't receive the code? " linkText="Resend Code" onClick={handleResend} />
-=======
           <AuthButton label={isLoading ? "Verifying..." : "Verify & Continue"} isLoading={isLoading} />
         </form>
 
@@ -128,7 +106,6 @@ const VerificationPage: React.FC<VerificationPageProps> = ({
             <AuthLink onClick={onNavigateToLogin}>← Back to Login</AuthLink>
           </div>
         )}
->>>>>>> origin/front_end
       </AuthCard>
     </AuthLayout>
   );

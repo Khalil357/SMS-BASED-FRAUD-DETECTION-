@@ -311,8 +311,6 @@ html.dark .login-card {
 
 .login-security-footer .security-icon {
   color: var(--emerald);
-<<<<<<< HEAD
-=======
 }
 
 .toggle-password-btn {
@@ -329,5 +327,4 @@ html.dark .login-card {
 
 .toggle-password-btn:hover {
   color: var(--heading);
->>>>>>> origin/front_end
 }

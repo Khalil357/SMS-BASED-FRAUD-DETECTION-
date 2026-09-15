@@ -11,6 +11,10 @@ import '../main.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/interactive_threat_chart.dart';
+<<<<<<< HEAD
+=======
+import '../widgets/security_illustrations.dart';
+>>>>>>> origin/front_end
 import '../services/safety_tips_service.dart';
 import 'safety_tips_page.dart';
 import 'auth/login_page.dart';
@@ -587,9 +591,15 @@ class _DashboardPageState extends State<DashboardPage> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
+<<<<<<< HEAD
                         color: classificationColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: classificationColor.withValues(alpha: 0.3)),
+=======
+                        color: classificationColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: classificationColor.withOpacity(0.3)),
+>>>>>>> origin/front_end
                       ),
                       child: Icon(
                         type == 'Safe'
@@ -659,10 +669,17 @@ class _DashboardPageState extends State<DashboardPage> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
+<<<<<<< HEAD
                     color: classificationColor.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: classificationColor.withValues(alpha: 0.1),
+=======
+                    color: classificationColor.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: classificationColor.withOpacity(0.1),
+>>>>>>> origin/front_end
                     ),
                   ),
                   child: Column(
@@ -887,7 +904,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 child: CircleAvatar(
                   radius: 15,
+<<<<<<< HEAD
                   backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+=======
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+>>>>>>> origin/front_end
                   child: Text(
                     fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
                     style: GoogleFonts.inter(
@@ -965,11 +986,19 @@ class _DashboardPageState extends State<DashboardPage> {
         color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
+<<<<<<< HEAD
           color: Colors.amber.shade700.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
             color: Colors.amber.shade700.withValues(alpha: 0.05),
+=======
+          color: Colors.amber.shade700.withOpacity(0.3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.amber.shade700.withOpacity(0.05),
+>>>>>>> origin/front_end
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1084,6 +1113,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: _isIngestionEnabled && _hasSmsPermission
+<<<<<<< HEAD
                             ? Colors.green.withValues(alpha: 0.12)
                             : Colors.orange.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
@@ -1091,6 +1121,15 @@ class _DashboardPageState extends State<DashboardPage> {
                           color: _isIngestionEnabled && _hasSmsPermission
                               ? Colors.green.withValues(alpha: 0.3)
                               : Colors.orange.withValues(alpha: 0.3),
+=======
+                            ? Colors.green.withOpacity(0.12)
+                            : Colors.orange.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _isIngestionEnabled && _hasSmsPermission
+                              ? Colors.green.withOpacity(0.3)
+                              : Colors.orange.withOpacity(0.3),
+>>>>>>> origin/front_end
                         ),
                       ),
                       child: Row(
@@ -1388,7 +1427,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     return ChoiceChip(
                       label: Text(type),
                       selected: isSelected,
+<<<<<<< HEAD
                       selectedColor: theme.colorScheme.primary.withValues(alpha: 0.2),
+=======
+                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
+>>>>>>> origin/front_end
                       checkmarkColor: theme.colorScheme.primary,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 11,
@@ -1416,7 +1459,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     return ChoiceChip(
                       label: Text(frame),
                       selected: isSelected,
+<<<<<<< HEAD
                       selectedColor: theme.colorScheme.primary.withValues(alpha: 0.2),
+=======
+                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
+>>>>>>> origin/front_end
                       checkmarkColor: theme.colorScheme.primary,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 11,
@@ -1485,9 +1532,15 @@ class _DashboardPageState extends State<DashboardPage> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
+<<<<<<< HEAD
                                         color: statusColor.withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(color: statusColor.withValues(alpha: 0.2)),
+=======
+                                        color: statusColor.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: statusColor.withOpacity(0.2)),
+>>>>>>> origin/front_end
                                       ),
                                       child: Text(
                                         type,
@@ -1760,7 +1813,11 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       Switch(
                         value: _isIngestionEnabled,
+<<<<<<< HEAD
                         activeThumbColor: theme.colorScheme.primary,
+=======
+                        activeColor: theme.colorScheme.primary,
+>>>>>>> origin/front_end
                         onChanged: Platform.isAndroid
                             ? (val) => _updateIngestion(val)
                             : null, // Disabled on iOS
@@ -1814,7 +1871,11 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   Switch(
                     value: _isNotificationsEnabled,
+<<<<<<< HEAD
                     activeThumbColor: theme.colorScheme.primary,
+=======
+                    activeColor: theme.colorScheme.primary,
+>>>>>>> origin/front_end
                     onChanged: (val) => _updateNotifications(val),
                   ),
                 ],
