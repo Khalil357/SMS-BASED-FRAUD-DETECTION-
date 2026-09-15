@@ -1,8 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:telephony/telephony.dart';
 import 'theme.dart';
-import 'screens/auth/login_page.dart';
+import 'screens/splash_screen.dart';
+import 'services/notification_service.dart';
+import 'services/sms_ingestion_service.dart';
+import 'services/argus_scanner.dart';
 
-void main() {
+@pragma('vm:entry-point')
+Future<void> backgroundSmsHandler(SmsMessage message) async {
+  await handleBackgroundSms(message);
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize notifications
+  await NotificationService.initialize();
+
+  // Listen to SMS if permission is already granted
+  final hasPerm = await SmsIngestionService.hasSmsPermission();
+  if (hasPerm) {
+    await SmsIngestionService.startListening();
+  }
+
   runApp(const MyApp());
 }
 
@@ -15,6 +35,9 @@ class MyApp extends StatefulWidget {
   static MyAppState of(BuildContext context) =>
       context.findAncestorStateOfType<MyAppState>()!;
 }
+
+typedef SecureSignalApp = MyApp;
+typedef SecureSignalAppState = MyAppState;
 
 class MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.system;
@@ -35,7 +58,7 @@ class MyAppState extends State<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
-      home: const LoginPage(),
+      home: const SplashScreen(),
     );
   }
 }

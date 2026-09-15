@@ -3,5 +3,10 @@ target/
 .idea/
 *.iml
 .env
+<<<<<<< HEAD
 .env
 !.env
+=======
+.env.*
+!.env.example
+>>>>>>> origin/front_end

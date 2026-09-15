@@ -5,8 +5,10 @@ import com.example.smsfraud.admin.dto.AlertResponse;
 import com.example.smsfraud.admin.dto.AdminSmsResponse;
 import com.example.smsfraud.admin.dto.FraudTrendPoint;
 import com.example.smsfraud.sender.BlockedSender;
+import com.example.smsfraud.user.dto.UserResponse;
 import org.springframework.data.domain.Page;
 import java.util.List;
+import java.util.UUID;
 
 public interface AdminService {
     AdminStatsResponse getSystemStats();
@@ -16,4 +18,6 @@ public interface AdminService {
     List<String> getAllSenders();
     List<BlockedSender> getBlockedSenders();
     void blockSender(String phoneNumber, String reason);
+
+    UserResponse updateUserRole(UUID userId, String role, UUID actorId);
 }

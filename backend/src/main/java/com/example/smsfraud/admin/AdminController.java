@@ -5,14 +5,17 @@ import com.example.smsfraud.admin.dto.AlertResponse;
 import com.example.smsfraud.admin.dto.AdminSmsResponse;
 import com.example.smsfraud.admin.dto.BlockSenderRequest;
 import com.example.smsfraud.admin.dto.FraudTrendPoint;
+import com.example.smsfraud.admin.dto.UpdateRoleRequest;
 import com.example.smsfraud.sender.BlockedSender;
 import com.example.smsfraud.common.dto.ApiResponse;
 import com.example.smsfraud.user.UserRepository;
 import com.example.smsfraud.user.dto.UserResponse;
 import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Admin-only endpoints, gated by {@code hasRole('ADMIN')}. Demonstrates the RBAC
@@ -86,5 +90,15 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Void>> blockSender(@Valid @RequestBody BlockSenderRequest req) {
         adminService.blockSender(req.phoneNumber(), req.reason());
         return ResponseEntity.ok(ApiResponse.ok("Sender blocked successfully"));
+    }
+
+    @PatchMapping("/users/{userId}/role")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUserRole(
+            @PathVariable UUID userId,
+            @Valid @RequestBody UpdateRoleRequest req,
+            Authentication authentication) {
+        UUID actorId = UUID.fromString(authentication.getName());
+        UserResponse updated = adminService.updateUserRole(userId, req.role(), actorId);
+        return ResponseEntity.ok(ApiResponse.ok("Role updated", updated));
     }
 }

@@ -117,10 +117,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                         child: Container(
                           padding: const EdgeInsets.all(22),
                           decoration: BoxDecoration(
-                            color: theme.primaryColor.withOpacity(0.08),
+                            color: theme.primaryColor.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: theme.primaryColor.withOpacity(0.15),
+                              color: theme.primaryColor.withValues(alpha: 0.15),
                               width: 2,
                             ),
                           ),
@@ -172,21 +172,18 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Phone input field
+                            // Email or Phone input field
                             CustomTextField(
                               controller: _phoneController,
-                              labelText: 'Phone Number',
-                              hintText: 'e.g. +27821234567',
-                              prefixIcon: Icons.phone_outlined,
-                              keyboardType: TextInputType.phone,
+                              labelText: 'Email or Phone Number',
+                              hintText: 'e.g. user@email.com or +27821234567',
+                              prefixIcon: Icons.contact_mail_outlined,
+                              keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.done,
                               onFieldSubmitted: (_) => _handleSendCode(),
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
-                                  return 'Please enter your phone number';
-                                }
-                                if (value.trim().length < 9) {
-                                  return 'Please enter a valid phone number';
+                                  return 'Please enter your email or phone number';
                                 }
                                 return null;
                               },

@@ -32,6 +32,9 @@ public class SmsScan {
     @Column(name = "scanned_at", nullable = false, updatable = false)
     private Instant scannedAt = Instant.now();
 
+    @Column(name = "is_scam")
+    private Boolean isScam = true;
+
     public UUID getScanId() {
         return scanId;
     }
@@ -94,5 +97,13 @@ public class SmsScan {
 
     public void setScannedAt(Instant scannedAt) {
         this.scannedAt = scannedAt;
+    }
+
+    public Boolean getIsScam() {
+        return isScam;
+    }
+
+    public void setIsScam(Boolean isScam) {
+        this.isScam = isScam;
     }
 }

@@ -62,6 +62,27 @@ cd backend
 ./mvnw spring-boot:run
 ```
 
+### Run on a Physical Android Phone
+
+`10.0.2.2` works only for an Android emulator. For a phone connected to the
+same Wi-Fi network as the computer running the backend, use the computer's
+LAN IP address when building the Flutter app. For example, if the computer is
+`192.168.1.25`:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://192.168.1.25:8080
+```
+
+Build an installable APK with the same option:
+
+```bash
+flutter build apk --dart-define=API_BASE_URL=http://192.168.1.25:8080
+```
+
+Ensure the backend is listening on port `8080`, the phone and computer are on
+the same network, and the computer firewall permits inbound TCP connections to
+that port. For a deployed backend, use its HTTPS URL instead.
+
 To run the tests:
 
 ```bash

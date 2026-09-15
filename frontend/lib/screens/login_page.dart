@@ -130,7 +130,13 @@ class _LoginPageState extends State<LoginPage> {
               result['statusCode'] == 403;
 
           if (isUnverified) {
-            _showUnverifiedAccountDialog(_identifierController.text.trim());
+            final data = result['data'] is Map<String, dynamic>
+                ? result['data'] as Map<String, dynamic>
+                : null;
+            final userEmail = data?['email'] ??
+                data?['user']?['email'] ??
+                _identifierController.text.trim();
+            _showUnverifiedAccountDialog(userEmail);
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -154,7 +160,6 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       body: Stack(
         children: [
-          // Background Gradient accent at the top
           Positioned(
             top: 0,
             left: 0,
@@ -179,17 +184,16 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     const SizedBox(height: 30),
 
-                    // Logo Icon with entrance animation
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 100),
                       child: Center(
                         child: Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: theme.primaryColor.withOpacity(0.08),
+                            color: theme.primaryColor.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: theme.primaryColor.withOpacity(0.15),
+                              color: theme.primaryColor.withValues(alpha: 0.15),
                               width: 2,
                             ),
                           ),
@@ -204,7 +208,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Titles
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 200),
                       child: Column(
@@ -225,7 +228,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 36),
 
-                    // Login Card Containing Inputs
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 300),
                       child: Container(
@@ -242,7 +244,6 @@ class _LoginPageState extends State<LoginPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Identifier input field (Phone or Email)
                             CustomTextField(
                               controller: _identifierController,
                               labelText: 'Phone Number or Email',
@@ -269,7 +270,6 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             const SizedBox(height: 20),
 
-                            // Password input field
                             CustomTextField(
                               controller: _passwordController,
                               labelText: 'Password',
@@ -290,7 +290,6 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             const SizedBox(height: 10),
 
-                            // Forgot Password Button
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
@@ -307,7 +306,6 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             const SizedBox(height: 28),
 
-                            // Login Button
                             CustomButton(
                               text: 'Login',
                               isLoading: _isLoading,
@@ -319,7 +317,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Create Account text
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 400),
                       child: Row(

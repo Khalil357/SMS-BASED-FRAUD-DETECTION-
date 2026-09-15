@@ -17,6 +17,7 @@ import java.util.UUID;
 
 @Service
 public class SmsScanService {
+
     private static final Logger log = LoggerFactory.getLogger(SmsScanService.class);
 
     private final SmsScanRepository repo;

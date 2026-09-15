@@ -4,15 +4,21 @@ import com.example.smsfraud.admin.dto.AdminStatsResponse;
 import com.example.smsfraud.admin.dto.AlertResponse;
 import com.example.smsfraud.admin.dto.AdminSmsResponse;
 import com.example.smsfraud.admin.dto.FraudTrendPoint;
+import com.example.smsfraud.common.exception.BadRequestException;
+import com.example.smsfraud.common.exception.NotFoundException;
 import com.example.smsfraud.sender.BlockedSender;
 import com.example.smsfraud.sender.BlockedSenderRepository;
 import com.example.smsfraud.scan.SmsScan;
 import com.example.smsfraud.scan.SmsScanRepository;
 import com.example.smsfraud.user.User;
+import com.example.smsfraud.user.UserRole;
 import com.example.smsfraud.user.UserRepository;
+import com.example.smsfraud.user.UserRoleRepository;
+import com.example.smsfraud.user.dto.UserResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -21,6 +27,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,11 +35,16 @@ public class AdminServiceImpl implements AdminService {
 
     private final SmsScanRepository smsScanRepository;
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
     private final BlockedSenderRepository blockedSenderRepository;
 
-    public AdminServiceImpl(SmsScanRepository smsScanRepository, UserRepository userRepository, BlockedSenderRepository blockedSenderRepository) {
+    public AdminServiceImpl(SmsScanRepository smsScanRepository,
+                            UserRepository userRepository,
+                            UserRoleRepository userRoleRepository,
+                            BlockedSenderRepository blockedSenderRepository) {
         this.smsScanRepository = smsScanRepository;
         this.userRepository = userRepository;
+        this.userRoleRepository = userRoleRepository;
         this.blockedSenderRepository = blockedSenderRepository;
     }
 
@@ -129,5 +141,43 @@ public class AdminServiceImpl implements AdminService {
             blocked.setReason(reason);
             blockedSenderRepository.save(blocked);
         }
+    }
+
+    @Override
+    @Transactional
+    public UserResponse updateUserRole(UUID userId, String role, UUID actorId) {
+        String normalized = role == null ? "" : role.trim().toUpperCase();
+        if (!"ADMIN".equals(normalized) && !"USER".equals(normalized)) {
+            throw new BadRequestException("role must be either ADMIN or USER");
+        }
+
+        User target = userRepository.findByIdWithRole(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (target.getUserId().equals(actorId)) {
+            throw new BadRequestException("You cannot change your own role");
+        }
+
+        String currentRole = target.getRole().getRoleName();
+        if (currentRole.equals(normalized)) {
+            return UserResponse.from(target); // no-op
+        }
+
+        // Guard: never demote the last remaining active admin.
+        if ("USER".equals(normalized) && "ADMIN".equals(currentRole) && target.isActive()) {
+            if (userRepository.countActiveByRole("ADMIN") <= 1) {
+                throw new BadRequestException("Cannot demote the last active admin");
+            }
+        }
+
+        UserRole newRole = userRoleRepository.findByRoleName(normalized)
+                .orElseThrow(() -> new IllegalStateException(normalized + " role is not configured"));
+        target.setRole(newRole);
+        // Bump the version so the user's existing access + refresh tokens are revoked
+        // and they must re-authenticate with the new role.
+        target.setTokenVersion(target.getTokenVersion() + 1);
+        target.setUpdatedAt(Instant.now());
+        userRepository.save(target);
+
+        return UserResponse.from(target);
     }
 }

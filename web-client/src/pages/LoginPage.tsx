@@ -4,7 +4,11 @@ import "./LoginPage.css";
 import { login } from "../services/authService";
 import { useTheme } from "../theme/ThemeContext";
 import inAppIcon from "../assets/images/in_app_icon.png";
+<<<<<<< HEAD
 import { Mail, Lock, Sun, Moon, ShieldCheck } from "lucide-react";
+=======
+import { Mail, Lock, Sun, Moon, ShieldCheck, Eye, EyeOff } from "lucide-react";
+>>>>>>> origin/front_end
 
 interface LoginPageProps {
   onLoginSuccess: (email: string) => void;
@@ -20,6 +24,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   const [email, setEmail] = useState("smsfraud.noreply@gmail.com");
   const [password, setPassword] = useState("Admin000!");
+<<<<<<< HEAD
+=======
+  const [showPassword, setShowPassword] = useState(false);
+>>>>>>> origin/front_end
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -129,11 +137,26 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               <div className="field-input">
                 <Lock size={18} className="field-icon" />
                 <input
+<<<<<<< HEAD
                   type="password"
+=======
+                  type={showPassword ? "text" : "password"}
+>>>>>>> origin/front_end
                   placeholder="•••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+<<<<<<< HEAD
+=======
+                <button
+                  type="button"
+                  className="toggle-password-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? <EyeOff size={18} className="field-icon" /> : <Eye size={18} className="field-icon" />}
+                </button>
+>>>>>>> origin/front_end
               </div>
               {errors.password && <span className="field-error">{errors.password}</span>}
             </label>

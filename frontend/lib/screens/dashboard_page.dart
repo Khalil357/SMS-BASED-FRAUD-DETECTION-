@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import '../services/sms_detection_service.dart';
 import '../services/sms_storage_service.dart';
@@ -11,6 +12,11 @@ import '../auth_flow.dart';
 import '../main.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
+import '../widgets/interactive_threat_chart.dart';
+import '../services/safety_tips_service.dart';
+import '../widgets/scam_detected_card.dart';
+import 'terms_and_conditions_page.dart';
+import 'blocked_numbers_screen.dart';
 
 class DashboardPage extends StatefulWidget {
   final Navigate onNavigate;
@@ -21,7 +27,7 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   // Controllers
@@ -37,8 +43,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // Search & Filter State
   String _searchQuery = '';
-  String _filterThreat = 'All'; // 'All', 'Safe', 'Spam', 'Fraud'
-  String _filterTimeframe = 'All'; // 'All', 'Today', '7 Days'
+  String _filterThreat = 'All';
+  String _filterTimeframe = 'All';
 
   // Settings & Permission State
   bool _isIngestionEnabled = true;
@@ -49,11 +55,14 @@ class _DashboardPageState extends State<DashboardPage> {
   // Logs list
   List<Map<String, dynamic>> _smsLogs = [];
 
+  // NEW: tracks which log id is currently being marked-as-safe (backend call in flight)
+  String? _markingSafeLogId;
+
   // Blocklist state
   final List<Map<String, String>> _blockedNumbers = [
-    {'number': '+27829876543', 'date': '2026-08-20'},
-    {'number': '+27831112222', 'date': '2026-08-21'},
-    {'number': '+14155552671', 'date': '2026-08-22'},
+    {'number': '+1 (415) 555-0198', 'date': 'today', 'reason': 'Scam SMS'},
+    {'number': '+44 7700 900821', 'date': 'Sep 12', 'reason': 'Phishing'},
+    {'number': '+1 (202) 555-0147', 'date': 'Sep 8', 'reason': 'Suspicious link'},
   ];
 
   StreamSubscription? _smsStreamSubscription;
@@ -61,9 +70,9 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadDataAndPermissions();
 
-    // Listen to live incoming foreground messages
     _smsStreamSubscription = SmsIngestionService.smsStream.listen((newLog) {
       if (mounted) {
         setState(() {
@@ -72,6 +81,23 @@ class _DashboardPageState extends State<DashboardPage> {
         _showForegroundThreatSnackBar(newLog);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _scanController.dispose();
+    _blockNumberController.dispose();
+    _searchController.dispose();
+    _smsStreamSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadStoredData();
+    }
   }
 
   Future<void> _loadDataAndPermissions() async {
@@ -128,7 +154,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.red.withOpacity(0.12),
+                    color: AppTheme.red.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -232,7 +258,7 @@ class _DashboardPageState extends State<DashboardPage> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.1),
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: theme.colorScheme.primary, size: 22),
@@ -260,20 +286,14 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  @override
-  void dispose() {
-    _scanController.dispose();
-    _blockNumberController.dispose();
-    _searchController.dispose();
-    _smsStreamSubscription?.cancel();
-    super.dispose();
-  }
-
   Future<void> _loadStoredData() async {
     final logs = await SmsStorageService.getLogs();
-    final ingestion = await SmsStorageService.getBoolSetting(SmsStorageService.keyIngestionEnabled, true);
-    final notifications = await SmsStorageService.getBoolSetting(SmsStorageService.keyNotificationsEnabled, true);
-    final threshold = await SmsStorageService.getDoubleSetting(SmsStorageService.keyNotificationThreshold, 0.80);
+    final ingestion = await SmsStorageService.getBoolSetting(
+        SmsStorageService.keyIngestionEnabled, true);
+    final notifications = await SmsStorageService.getBoolSetting(
+        SmsStorageService.keyNotificationsEnabled, true);
+    final threshold = await SmsStorageService.getDoubleSetting(
+        SmsStorageService.keyNotificationThreshold, 0.80);
 
     setState(() {
       _smsLogs = logs;
@@ -281,6 +301,63 @@ class _DashboardPageState extends State<DashboardPage> {
       _isNotificationsEnabled = notifications;
       _notificationThreshold = threshold;
     });
+
+    _fetchBackendFraudScans();
+  }
+
+  Future<void> _fetchBackendFraudScans() async {
+    try {
+      final res = await AuthService.getFraudScans(page: 0, size: 20);
+      if (res['success'] == true && res['content'] is List) {
+        final List content = res['content'];
+        bool hasNew = false;
+        for (final item in content) {
+          if (item is Map<String, dynamic>) {
+            final msgText = item['message'] ?? item['messageBody'] ?? '';
+            if (msgText.toString().trim().isEmpty) continue;
+
+            final exists =
+                _smsLogs.any((l) => l['message'] == msgText.toString());
+            if (!exists) {
+              final isScam = item['is_scam'] ?? item['isScam'] ?? true;
+              final verdict = item['verdict']?.toString();
+              final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
+              final type = (isScam == true)
+                  ? 'Fraud'
+                  : ((verdict == 'spam') ? 'Spam' : 'Safe');
+              final threatLevel = (type == 'Safe')
+                  ? (1.0 - conf).clamp(0.0, 1.0)
+                  : conf.clamp(0.0, 1.0);
+
+              final backendScanId = item['scanId']?.toString();
+
+              final logEntry = {
+                'id': backendScanId ??
+                    'backend_fraud_${DateTime.now().millisecondsSinceEpoch}_${item.hashCode}',
+                'backendId': backendScanId,
+                'sender': item['sender'] ?? 'Backend Shield Alert',
+                'message': msgText.toString(),
+                'type': type,
+                'time': item['scannedAt'] ?? DateTime.now().toIso8601String(),
+                'threat': threatLevel,
+                'matchedReasons': [
+                  'Trained Model Label: ${verdict ?? (isScam == true ? 'scam' : 'safe')}',
+                  'Threat Index: ${(threatLevel * 100).toStringAsFixed(1)}%'
+                ],
+                'hasFeedback': false,
+                'userFeedback': null,
+              };
+              _smsLogs.insert(0, logEntry);
+              await SmsStorageService.addLog(logEntry);
+              hasNew = true;
+            }
+          }
+        }
+        if (hasNew && mounted) {
+          setState(() {});
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkPermissions() async {
@@ -300,7 +377,8 @@ class _DashboardPageState extends State<DashboardPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('SMS permissions granted! Auto-ingestion active.'),
+            content:
+                const Text('SMS permissions granted! Auto-ingestion active.'),
             backgroundColor: Colors.green.shade600,
             behavior: SnackBarBehavior.floating,
           ),
@@ -310,7 +388,8 @@ class _DashboardPageState extends State<DashboardPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('SMS permissions denied. Auto-ingestion unavailable.'),
+            content:
+                Text('SMS permissions denied. Auto-ingestion unavailable.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -319,15 +398,13 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _showForegroundThreatSnackBar(Map<String, dynamic> log) {
-    if (log['type'] == 'Fraud' || log['type'] == 'Spam') {
+    if (log['type'] == 'Fraud') {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              Icon(
-                log['type'] == 'Fraud' ? Icons.gpp_bad : Icons.warning_amber_rounded,
-                color: Colors.white,
-              ),
+              const Icon(Icons.gpp_bad, color: Colors.white),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -337,15 +414,16 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             ],
           ),
-          backgroundColor: log['type'] == 'Fraud' ? AppTheme.red : Colors.amber.shade700,
+          backgroundColor: AppTheme.red,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 4),
           action: SnackBarAction(
             label: 'VIEW',
             textColor: Colors.white,
             onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
               setState(() {
-                _currentIndex = 1; // Go to Logs tab
+                _currentIndex = 1;
               });
               _showLogDetail(log);
             },
@@ -355,9 +433,9 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  // Settings modification updates
   Future<void> _updateIngestion(bool val) async {
-    await SmsStorageService.saveBoolSetting(SmsStorageService.keyIngestionEnabled, val);
+    await SmsStorageService.saveBoolSetting(
+        SmsStorageService.keyIngestionEnabled, val);
     setState(() {
       _isIngestionEnabled = val;
     });
@@ -368,18 +446,185 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  Future<void> _showTurnOffIngestionDialog() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.25),
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 36),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.cardDark : Colors.white,
+              borderRadius: BorderRadius.circular(42),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Turn Off Automatic\nIngestion',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark
+                        ? const Color(0xFFF1F5F9)
+                        : const Color(0xFF1E293B),
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Are you sure you want\nto turn off automatic ingestion',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w400,
+                    color: isDark
+                        ? AppTheme.subtleDark
+                        : AppTheme.subtleLight,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(false),
+                      child: Container(
+                        width: 103,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(34),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 19),
+                    GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(true),
+                      child: Container(
+                        width: 103,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppTheme.primaryDark
+                              : AppTheme.primaryLight,
+                          borderRadius: BorderRadius.circular(34),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Turn Off',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await _updateIngestion(false);
+    }
+  }
+
   Future<void> _updateNotifications(bool val) async {
-    await SmsStorageService.saveBoolSetting(SmsStorageService.keyNotificationsEnabled, val);
+    await SmsStorageService.saveBoolSetting(
+        SmsStorageService.keyNotificationsEnabled, val);
     setState(() {
       _isNotificationsEnabled = val;
     });
   }
 
   Future<void> _updateThreshold(double val) async {
-    await SmsStorageService.saveDoubleSetting(SmsStorageService.keyNotificationThreshold, val);
+    await SmsStorageService.saveDoubleSetting(
+        SmsStorageService.keyNotificationThreshold, val);
     setState(() {
       _notificationThreshold = val;
     });
+  }
+
+  void _confirmLogout() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.logout_rounded, color: AppTheme.red),
+            const SizedBox(width: 10),
+            Text(
+              'Confirm Logout',
+              style:
+                  GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to log out of Argus SMS Fraud Interception Platform?',
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.red,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _handleLogout();
+            },
+            child: Text(
+              'Yes, Logout',
+              style: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -389,10 +634,9 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  // Live Metric Getters
   int get _scannedCount => _smsLogs.length;
   int get _threatsCount => _smsLogs.where((l) => l['type'] == 'Fraud').length;
-  
+
   double get _safetyIndex {
     if (_scannedCount == 0) return 100.0;
     final safeCount = _smsLogs.where((l) => l['type'] == 'Safe').length;
@@ -401,21 +645,20 @@ class _DashboardPageState extends State<DashboardPage> {
 
   List<Map<String, dynamic>> get _filteredLogs {
     return _smsLogs.where((log) {
-      // 1. Search Query
       final message = (log['message'] as String).toLowerCase();
       final sender = (log['sender'] as String).toLowerCase();
       final query = _searchQuery.toLowerCase();
-      if (query.isNotEmpty && !message.contains(query) && !sender.contains(query)) {
+      if (query.isNotEmpty &&
+          !message.contains(query) &&
+          !sender.contains(query)) {
         return false;
       }
 
-      // 2. Threat Classification Filter
       final type = log['type'] as String;
       if (_filterThreat != 'All' && type != _filterThreat) {
         return false;
       }
 
-      // 3. Timeframe Filter
       if (_filterTimeframe != 'All') {
         try {
           final logTime = DateTime.parse(log['time'] as String);
@@ -459,10 +702,27 @@ class _DashboardPageState extends State<DashboardPage> {
       _scanResult = null;
     });
 
-    // Simulate AI model processing delay
-    await Future.delayed(const Duration(seconds: 2));
+    final backendResponse = await AuthService.submitScan(
+      sender: 'Manual Scan',
+      messageBody: text,
+      source: 'MANUAL_QUERY',
+    );
 
-    final result = SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    SmsAnalysisResult result;
+    bool evaluatedByBackend = false;
+
+    if (backendResponse['success'] == true && backendResponse['data'] != null) {
+      final data = backendResponse['data'] as Map<String, dynamic>;
+      result = SmsDetectionService.parseBackendResult(
+        backendData: data,
+        originalMessage: text,
+        sender: 'Manual Scan',
+      );
+      evaluatedByBackend = true;
+    } else {
+      result =
+          SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    }
 
     final logEntry = {
       'id': 'manual_${DateTime.now().millisecondsSinceEpoch}',
@@ -484,32 +744,57 @@ class _DashboardPageState extends State<DashboardPage> {
       _isScanning = false;
       _scanIsSafe = result.classification == 'Safe';
       _threatLevel = result.threatLevel;
+
+      final safeConfPct = ((1.0 - result.threatLevel) * 100).toStringAsFixed(1);
+      final threatPct = (result.threatLevel * 100).toStringAsFixed(1);
+      final modelTag =
+          evaluatedByBackend ? 'AI Trained Model' : 'Local Rule Engine';
+
       if (result.classification == 'Fraud') {
-        _scanResult = '🚨 High Risk Alert: Potential Phishing/Fraud detected!\n\n${result.feedback}';
-      } else if (result.classification == 'Spam') {
-        _scanResult = '⚠️ Moderate Risk: Spam content detected.\n\n${result.feedback}';
+        _scanResult =
+            '🚨 High Risk Alert ($modelTag):\nScam/Phishing detected with $threatPct% Threat Index!\n\n${result.feedback}';
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ScamDetectedScreen(
+              sender: 'Manual Scan',
+              message: text,
+              reasons: result.matchedReasons,
+              onBlock: () {
+                Navigator.pop(context);
+                // In manual scan, we don't have a sender number, using a placeholder
+                _blockNumberController.text = 'Scam Sender';
+                _handleAddBlockedNumber(reason: 'Manual scan result');
+              },
+              onDismiss: () => Navigator.pop(context),
+            ),
+          ),
+        );
       } else {
-        _scanResult = '✅ Secure: This message is safe.\n\n${result.feedback}';
+        _scanResult =
+            '🛡️ Verified Safe ($modelTag):\nMessage evaluated as safe ($safeConfPct% Confidence, $threatPct% Threat Index).\n\n${result.feedback}';
       }
-      
+
       _smsLogs.insert(0, logEntry);
     });
   }
 
   void _handleFeedbackSubmit(String id, String feedbackType) async {
-    await SmsStorageService.submitFeedback(logId: id, feedbackType: feedbackType);
-    
-    // Reload logs
+    await SmsStorageService.submitFeedback(
+        logId: id, feedbackType: feedbackType);
+
     final logs = await SmsStorageService.getLogs();
     setState(() {
       _smsLogs = logs;
     });
 
     if (mounted) {
-      Navigator.pop(context); // Close details modal
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Feedback saved. SMS cataloged as "$feedbackType" for model optimization.'),
+          content: Text(
+              'Feedback saved. SMS cataloged as "$feedbackType" for model optimization.'),
           backgroundColor: Colors.green.shade600,
           behavior: SnackBarBehavior.floating,
         ),
@@ -517,7 +802,241 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  void _showMessageActionSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError
+            ? Theme.of(context).colorScheme.error
+            : Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> _reportToAuthorities(Map<String, dynamic> log) async {
+    final fraudsterNumber = log['sender']?.toString().trim() ?? '';
+    if (fraudsterNumber.isEmpty || fraudsterNumber == 'Unknown') {
+      _showMessageActionSnackBar(
+          'Unable to find a phone number for this message.',
+          isError: true);
+      return;
+    }
+
+    try {
+      final launched = await launchUrl(
+        Uri(
+            scheme: 'sms',
+            path: '15040',
+            queryParameters: {'body': 'Fraud $fraudsterNumber'}),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        _showMessageActionSnackBar('Unable to open the messaging app.',
+            isError: true);
+      }
+    } catch (_) {
+      _showMessageActionSnackBar('Unable to open the messaging app.',
+          isError: true);
+    }
+  }
+
+  void _confirmMarkAsSafe(Map<String, dynamic> log) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.green),
+            const SizedBox(width: 10),
+            Text(
+              'Mark as Safe?',
+              style:
+                  GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to mark this message as safe?',
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.red,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _markAsSafe(log);
+            },
+            child: Text(
+              'Confirm',
+              style: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmMarkAsFraud(Map<String, dynamic> log) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.gpp_bad, color: AppTheme.red),
+            const SizedBox(width: 10),
+            Text(
+              'Mark as Fraud?',
+              style:
+                  GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to mark this message as fraud?',
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.red,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _markAsFraud(log);
+            },
+            child: Text(
+              'Confirm',
+              style: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _markAsSafe(Map<String, dynamic> log) async {
+    final logId = log['id']?.toString() ?? '';
+    final backendId = log['backendId']?.toString();
+
+    if (backendId != null && backendId.isNotEmpty) {
+      setState(() {
+        _markingSafeLogId = logId;
+      });
+
+      final result = await AuthService.deleteFraudScan(id: backendId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _markingSafeLogId = null;
+      });
+
+      if (result['success'] != true) {
+        _showMessageActionSnackBar(
+          result['message'] ?? 'Failed to update on the server.',
+          isError: true,
+        );
+        return;
+      }
+    }
+
+    await SmsStorageService.submitFeedback(logId: logId, feedbackType: 'Safe');
+    final logs = await SmsStorageService.getLogs();
+    if (!mounted) return;
+
+    setState(() {
+      _smsLogs = logs;
+    });
+    Navigator.pop(context);
+    _showMessageActionSnackBar('Your response has successfully been updated.');
+  }
+
+  Future<void> _markAsFraud(Map<String, dynamic> log) async {
+    final logId = log['id']?.toString() ?? '';
+    await SmsStorageService.submitFeedback(logId: logId, feedbackType: 'Fraud');
+    final logs = await SmsStorageService.getLogs();
+    if (!mounted) return;
+
+    setState(() {
+      _smsLogs = logs;
+    });
+    Navigator.pop(context);
+
+    final result = await AuthService.addFraudScan(
+      sender: log['sender']?.toString() ?? '',
+      messageBody: log['message']?.toString() ?? '',
+    );
+
+    if (result['success'] == true) {
+      _showMessageActionSnackBar(result['message']?.toString() ??
+          'Your response has successfully been updated.');
+    } else {
+      _showMessageActionSnackBar(
+        'Saved locally. The server could not be updated yet.',
+      );
+    }
+  }
+
   void _showLogDetail(Map<String, dynamic> log) {
+    if (log['type'] == 'Fraud') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ScamDetectedScreen(
+            sender: log['sender'] ?? 'Unknown',
+            message: log['message'] ?? '',
+            reasons: List<String>.from(log['matchedReasons'] ?? []),
+            onBlock: () {
+              Navigator.pop(context);
+              _blockNumberController.text = log['sender'] ?? 'Unknown';
+              _handleAddBlockedNumber(reason: 'Scam detected');
+            },
+            onDismiss: () => Navigator.pop(context),
+          ),
+        ),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -525,14 +1044,16 @@ class _DashboardPageState extends State<DashboardPage> {
       builder: (context) {
         final theme = Theme.of(context);
         final isDark = theme.brightness == Brightness.dark;
-        
+
         final type = log['type'] as String;
-        final threatVal = (log['threat'] as num).toDouble();
+        final rawThreat = (log['threat'] as num).toDouble();
+        final threatVal = (type == 'Safe' && rawThreat > 0.50)
+            ? (1.0 - rawThreat)
+            : rawThreat;
         final matchedReasons = List<String>.from(log['matchedReasons'] ?? []);
-        
-        final Color classificationColor = type == 'Safe'
-            ? Colors.green
-            : (type == 'Fraud' ? AppTheme.red : Colors.amber.shade700);
+
+        final Color classificationColor =
+            type == 'Safe' ? Colors.green : AppTheme.red;
 
         return Container(
           decoration: BoxDecoration(
@@ -556,7 +1077,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     width: 50,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+                      color:
+                          isDark ? Colors.grey.shade700 : Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
@@ -580,8 +1102,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 const Divider(),
                 const SizedBox(height: 12),
-                
-                // Metadata Row
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -595,7 +1116,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     Text(
                       _formatLogTime(log['time']),
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                        color:
+                            isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                         fontSize: 12,
                       ),
                     ),
@@ -603,14 +1125,17 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 const SizedBox(height: 14),
 
-                // SMS Body Block
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                    color: isDark
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFE2E8F0),
                     ),
                   ),
                   child: Text(
@@ -623,7 +1148,6 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 const SizedBox(height: 20),
 
-                // Threat Level Gauge
                 Row(
                   children: [
                     Expanded(
@@ -644,23 +1168,25 @@ class _DashboardPageState extends State<DashboardPage> {
                             style: GoogleFonts.inter(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                              color: isDark
+                                  ? AppTheme.subtleDark
+                                  : AppTheme.subtleLight,
                             ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        color: classificationColor.withOpacity(0.12),
+                        color: classificationColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: classificationColor.withOpacity(0.3)),
+                        border: Border.all(
+                            color: classificationColor.withValues(alpha: 0.3)),
                       ),
                       child: Icon(
-                        type == 'Safe'
-                            ? Icons.gpp_good
-                            : (type == 'Fraud' ? Icons.gpp_bad : Icons.warning_amber),
+                        type == 'Safe' ? Icons.gpp_good : Icons.gpp_bad,
                         color: classificationColor,
                         size: 28,
                       ),
@@ -673,13 +1199,15 @@ class _DashboardPageState extends State<DashboardPage> {
                   child: LinearProgressIndicator(
                     value: threatVal,
                     minHeight: 8,
-                    backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                    valueColor: AlwaysStoppedAnimation<Color>(classificationColor),
+                    backgroundColor: isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFE2E8F0),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(classificationColor),
                   ),
                 ),
                 const SizedBox(height: 24),
 
-                // Breakdown of analysis rules
                 Text(
                   'ANALYSIS DETECTOR CHECKS',
                   style: GoogleFonts.inter(
@@ -721,14 +1249,13 @@ class _DashboardPageState extends State<DashboardPage> {
                       )),
                 const SizedBox(height: 28),
 
-                // Feedback Section for ML optimization
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: classificationColor.withOpacity(0.04),
+                    color: classificationColor.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: classificationColor.withOpacity(0.1),
+                      color: classificationColor.withValues(alpha: 0.1),
                     ),
                   ),
                   child: Column(
@@ -744,67 +1271,88 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Your feedback feeds into our system to improve the ML algorithms for Sprint 3.',
+                        'Help train the Argus ML Threat Engine by reporting misclassified messages in real-time.',
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                          color: isDark
+                              ? AppTheme.subtleDark
+                              : AppTheme.subtleLight,
                           fontSize: 11,
                         ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          if (type != 'Safe')
-                            Expanded(
-                              child: OutlinedButton.icon(
+                      if (_markingSafeLogId == log['id']?.toString())
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2.4),
+                            ),
+                          ),
+                        )
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (type == 'Fraud') ...[
+                              OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.green,
                                   side: const BorderSide(color: Colors.green),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  alignment: Alignment.center,
                                 ),
                                 icon: const Icon(Icons.check, size: 16),
-                                label: const Text('Mark Safe (FP)', style: TextStyle(fontSize: 12)),
-                                onPressed: () => _handleFeedbackSubmit(log['id'], 'Safe'),
+                                label: const Text('Mark Safe (FP)',
+                                    style: TextStyle(fontSize: 12)),
+                                onPressed: () => _confirmMarkAsSafe(log),
                               ),
-                            ),
-                          if (type == 'Safe') ...[
-                            Expanded(
-                              child: OutlinedButton.icon(
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: AppTheme.red,
                                   side: const BorderSide(color: AppTheme.red),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  alignment: Alignment.center,
                                 ),
-                                icon: const Icon(Icons.gpp_bad, size: 16),
-                                label: const Text('Mark Fraud', style: TextStyle(fontSize: 12)),
-                                onPressed: () => _handleFeedbackSubmit(log['id'], 'Fraud'),
+                                icon: const Icon(Icons.flag_outlined, size: 16),
+                                label: const Text('Report',
+                                    style: TextStyle(fontSize: 12)),
+                                onPressed: () => _reportToAuthorities(log),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.amber.shade800,
-                                  side: BorderSide(color: Colors.amber.shade800),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                icon: const Icon(Icons.warning, size: 16),
-                                label: const Text('Mark Spam', style: TextStyle(fontSize: 12)),
-                                onPressed: () => _handleFeedbackSubmit(log['id'], 'Spam'),
+                            ],
+                            if (type == 'Safe')
+                              OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppTheme.red,
+                                        side: const BorderSide(
+                                            color: AppTheme.red),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12),
+                                        alignment: Alignment.center,
+                                      ),
+                                      icon: const Icon(Icons.gpp_bad, size: 16),
+                                      label: const Text('Mark Fraud',
+                                          style: TextStyle(fontSize: 12)),
+                                      onPressed: () =>
+                                          _confirmMarkAsFraud(log),
                               ),
-                            ),
-                          ]
-                        ],
-                      ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -816,20 +1364,15 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _handleAddBlockedNumber() {
+  void _handleAddBlockedNumber({String? reason}) {
     final number = _blockNumberController.text.trim();
     if (number.isEmpty) return;
-    if (number.length < 8) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid phone number.')),
-      );
-      return;
-    }
 
     setState(() {
       _blockedNumbers.insert(0, {
         'number': number,
-        'date': DateTime.now().toString().split(' ')[0],
+        'date': 'today',
+        'reason': reason ?? 'Manual block',
       });
       _blockNumberController.clear();
     });
@@ -866,10 +1409,34 @@ class _DashboardPageState extends State<DashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: _currentIndex == 4
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back to Dashboard',
+                onPressed: () => setState(() => _currentIndex = 0),
+              )
+            : null,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.shield, color: theme.colorScheme.primary),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset(
+                'assets/images/sms_fraud_inapp_icon.png',
+                width: 28,
+                height: 28,
+                errorBuilder: (context, error, stackTrace) => Image.asset(
+                  'assets/images/sms_fraud_app_icon.png',
+                  width: 28,
+                  height: 28,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.shield,
+                    color: theme.colorScheme.primary,
+                    size: 28,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
             Text(
               _currentIndex == 0
@@ -877,18 +1444,60 @@ class _DashboardPageState extends State<DashboardPage> {
                   : _currentIndex == 1
                       ? 'Scan Logs'
                       : _currentIndex == 2
-                          ? 'Spam Blocklist'
-                          : 'Profile & Settings',
+                          ? 'Blocklist'
+                          : _currentIndex == 3
+                              ? 'Safety Tips'
+                              : 'Profile & Settings',
               style: GoogleFonts.inter(fontWeight: FontWeight.w800),
             ),
           ],
         ),
         actions: [
-          if (_currentIndex == 3)
-            IconButton(
-              icon: const Icon(Icons.logout_outlined),
-              onPressed: _handleLogout,
+          IconButton(
+            icon: Icon(
+              isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+              color: isDark ? Colors.amber : theme.colorScheme.primary,
             ),
+            tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+            onPressed: () {
+              SecureSignalApp.of(context).toggleTheme();
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12.0),
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _currentIndex = 4;
+                });
+              },
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _currentIndex == 4
+                        ? theme.colorScheme.primary
+                        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    width: 2,
+                  ),
+                ),
+                child: CircleAvatar(
+                  radius: 15,
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+                  child: Text(
+                    fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
       body: switch (_currentIndex) {
@@ -906,7 +1515,9 @@ class _DashboardPageState extends State<DashboardPage> {
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: isDark ? Colors.black.withOpacity(0.4) : Colors.black.withOpacity(0.08),
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.4)
+                  : Colors.black.withValues(alpha: 0.08),
               blurRadius: 20,
               offset: const Offset(0, 6),
             ),
@@ -923,7 +1534,7 @@ class _DashboardPageState extends State<DashboardPage> {
               index: 0,
               icon: Icons.grid_view_outlined,
               activeIcon: Icons.grid_view_rounded,
-              label: 'Dashboard',
+              label: 'Home',
               theme: theme,
               isDark: isDark,
             ),
@@ -931,7 +1542,7 @@ class _DashboardPageState extends State<DashboardPage> {
               index: 1,
               icon: Icons.shield_outlined,
               activeIcon: Icons.shield_rounded,
-              label: 'Logs',
+              label: 'Scan',
               badgeCount: _threatsCount,
               theme: theme,
               isDark: isDark,
@@ -940,7 +1551,7 @@ class _DashboardPageState extends State<DashboardPage> {
               index: 2,
               icon: Icons.do_not_disturb_on_outlined,
               activeIcon: Icons.do_not_disturb_on_rounded,
-              label: 'Blocklist',
+              label: 'Blocked',
               theme: theme,
               isDark: isDark,
             ),
@@ -982,7 +1593,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? activeColor.withOpacity(isDark ? 0.2 : 0.1)
+              ? activeColor.withValues(alpha: isDark ? 0.2 : 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
@@ -1043,20 +1654,104 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Widget _buildTipOfTheDayBanner(ThemeData theme, bool isDark) {
+    final tip = SafetyTipsService.getTipOfTheDay();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.amber.shade700.withValues(alpha: 0.3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.amber.shade700.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.lightbulb_rounded, color: Colors.amber.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'FRAUD SAFETY TIP OF THE DAY',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.amber.shade800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _currentIndex = 3;
+                  });
+                },
+                child: Text(
+                  'View All',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            tip.title,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            tip.summary,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontSize: 12,
+              height: 1.3,
+              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHomeTab(String name, ThemeData theme, bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Welcome Card
+          _buildTipOfTheDayBanner(theme, isDark),
+
           Container(
             padding: const EdgeInsets.all(20.0),
             decoration: BoxDecoration(
-              gradient: isDark ? AppTheme.heroBgGradientDark : AppTheme.heroBgGradientLight,
+              gradient: isDark
+                  ? AppTheme.heroBgGradientDark
+                  : AppTheme.heroBgGradientLight,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                color:
+                    isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
               ),
             ),
             child: Column(
@@ -1072,7 +1767,9 @@ class _DashboardPageState extends State<DashboardPage> {
                           Text(
                             'Welcome back,',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                              color: isDark
+                                  ? AppTheme.subtleDark
+                                  : AppTheme.subtleLight,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -1086,16 +1783,17 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: _isIngestionEnabled && _hasSmsPermission
-                            ? Colors.green.withOpacity(0.12)
-                            : Colors.orange.withOpacity(0.12),
+                            ? Colors.green.withValues(alpha: 0.12)
+                            : Colors.orange.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: _isIngestionEnabled && _hasSmsPermission
-                              ? Colors.green.withOpacity(0.3)
-                              : Colors.orange.withOpacity(0.3),
+                              ? Colors.green.withValues(alpha: 0.3)
+                              : Colors.orange.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
@@ -1131,8 +1829,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
             ),
           ),
-          
-          // Protection Action / Shield Status Banner
+
           if (!_isIngestionEnabled || !_hasSmsPermission)
             Container(
               padding: const EdgeInsets.all(16),
@@ -1153,10 +1850,11 @@ class _DashboardPageState extends State<DashboardPage> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.amber.shade700.withOpacity(0.2),
+                      color: Colors.amber.shade700.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.security_update_warning_rounded, color: Colors.amber.shade900, size: 28),
+                    child: Icon(Icons.security_update_warning_rounded,
+                        color: Colors.amber.shade900, size: 28),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -1168,7 +1866,9 @@ class _DashboardPageState extends State<DashboardPage> {
                           style: GoogleFonts.inter(
                             fontWeight: FontWeight.w800,
                             fontSize: 14,
-                            color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                            color: isDark
+                                ? Colors.amber.shade200
+                                : Colors.amber.shade900,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -1176,7 +1876,9 @@ class _DashboardPageState extends State<DashboardPage> {
                           'Grant SMS permission & turn on auto-ingestion to scan incoming texts automatically.',
                           style: GoogleFonts.inter(
                             fontSize: 12,
-                            color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                            color: isDark
+                                ? Colors.amber.shade300
+                                : Colors.amber.shade900,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -1184,11 +1886,15 @@ class _DashboardPageState extends State<DashboardPage> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.red,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
                           ),
                           icon: const Icon(Icons.bolt, size: 16),
-                          label: const Text('Enable Protection Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          label: const Text('Enable Protection Now',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 12)),
                           onPressed: () async {
                             await _requestPermissions();
                             await _updateIngestion(true);
@@ -1205,13 +1911,16 @@ class _DashboardPageState extends State<DashboardPage> {
               padding: const EdgeInsets.all(14),
               margin: const EdgeInsets.only(top: 16),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF064E3B).withOpacity(0.4) : const Color(0xFFD1FAE5),
+                color: isDark
+                    ? const Color(0xFF064E3B).withValues(alpha: 0.4)
+                    : const Color(0xFFD1FAE5),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.green.shade400),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.verified_user_rounded, color: Colors.green, size: 28),
+                  const Icon(Icons.verified_user_rounded,
+                      color: Colors.green, size: 28),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -1222,14 +1931,18 @@ class _DashboardPageState extends State<DashboardPage> {
                           style: GoogleFonts.inter(
                             fontWeight: FontWeight.w800,
                             fontSize: 13,
-                            color: isDark ? Colors.green.shade200 : Colors.green.shade900,
+                            color: isDark
+                                ? Colors.green.shade200
+                                : Colors.green.shade900,
                           ),
                         ),
                         Text(
                           'Argus is monitoring incoming SMS for scam links and fake alerts.',
                           style: GoogleFonts.inter(
                             fontSize: 11,
-                            color: isDark ? Colors.green.shade300 : Colors.green.shade800,
+                            color: isDark
+                                ? Colors.green.shade300
+                                : Colors.green.shade800,
                           ),
                         ),
                       ],
@@ -1240,7 +1953,6 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           const SizedBox(height: 20),
 
-          // Statistics Grid
           Row(
             children: [
               Expanded(
@@ -1256,7 +1968,7 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(width: 14),
               Expanded(
                 child: _buildMetricCard(
-                  title: 'Threats Blocked',
+                  title: 'Threats Detected',
                   value: _threatsCount.toString(),
                   icon: Icons.gpp_bad_outlined,
                   iconColor: AppTheme.red,
@@ -1276,11 +1988,15 @@ class _DashboardPageState extends State<DashboardPage> {
             isDark: isDark,
             subtitle: _safetyIndex > 90
                 ? 'Outstanding security level'
-                : (_safetyIndex > 70 ? 'Moderate security warning' : 'High vulnerability warning'),
+                : (_safetyIndex > 70
+                    ? 'Moderate security warning'
+                    : 'High vulnerability warning'),
           ),
           const SizedBox(height: 24),
 
-          // Manual Scan Title
+          InteractiveThreatChart(logs: _smsLogs),
+          const SizedBox(height: 24),
+
           Text(
             'Analyze SMS Content',
             style: theme.textTheme.titleMedium?.copyWith(
@@ -1296,14 +2012,14 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 14),
 
-          // Manual Scan Card
           Container(
             padding: const EdgeInsets.all(20.0),
             decoration: BoxDecoration(
               color: theme.cardTheme.color,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                color:
+                    isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
               ),
               boxShadow: AppTheme.cardShadow(isDark),
             ),
@@ -1333,17 +2049,17 @@ class _DashboardPageState extends State<DashboardPage> {
                     padding: const EdgeInsets.all(16.0),
                     decoration: BoxDecoration(
                       color: _scanIsSafe == true
-                          ? Colors.green.withOpacity(0.08)
+                          ? Colors.green.withValues(alpha: 0.08)
                           : (_threatLevel > 0.8
-                              ? Colors.red.withOpacity(0.08)
-                              : Colors.amber.withOpacity(0.08)),
+                              ? Colors.red.withValues(alpha: 0.08)
+                              : Colors.amber.withValues(alpha: 0.08)),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _scanIsSafe == true
-                            ? Colors.green.withOpacity(0.2)
+                            ? Colors.green.withValues(alpha: 0.2)
                             : (_threatLevel > 0.8
-                                ? Colors.red.withOpacity(0.2)
-                                : Colors.amber.withOpacity(0.2)),
+                                ? Colors.red.withValues(alpha: 0.2)
+                                : Colors.amber.withValues(alpha: 0.2)),
                       ),
                     ),
                     child: Column(
@@ -1403,7 +2119,7 @@ class _DashboardPageState extends State<DashboardPage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
+              color: iconColor.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: iconColor, size: 24),
@@ -1454,7 +2170,6 @@ class _DashboardPageState extends State<DashboardPage> {
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
-          // Search Box
           TextField(
             controller: _searchController,
             onChanged: (val) => setState(() => _searchQuery = val),
@@ -1470,7 +2185,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       },
                     )
                   : null,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -1478,30 +2194,34 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 12),
 
-          // Filters Row
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                // Threat Filter Title
                 Text(
                   'Threat:',
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.inter(
+                      fontSize: 12, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 8),
                 Wrap(
                   spacing: 6,
-                  children: ['All', 'Safe', 'Spam', 'Fraud'].map((type) {
+                  children: ['All', 'Safe', 'Fraud'].map((type) {
                     final isSelected = _filterThreat == type;
                     return ChoiceChip(
                       label: Text(type),
                       selected: isSelected,
-                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
+                      selectedColor: theme.colorScheme.primary.withValues(alpha: 0.2),
                       checkmarkColor: theme.colorScheme.primary,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 11,
-                        color: isSelected ? theme.colorScheme.primary : (isDark ? Colors.grey.shade400 : Colors.grey.shade700),
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected
+                            ? theme.colorScheme.primary
+                            : (isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700),
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
                       ),
                       onSelected: (val) {
                         if (val) setState(() => _filterThreat = type);
@@ -1510,11 +2230,11 @@ class _DashboardPageState extends State<DashboardPage> {
                   }).toList(),
                 ),
                 const SizedBox(width: 16),
-                
-                // Date Filter Title
+
                 Text(
                   'Time:',
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.inter(
+                      fontSize: 12, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 8),
                 Wrap(
@@ -1524,12 +2244,17 @@ class _DashboardPageState extends State<DashboardPage> {
                     return ChoiceChip(
                       label: Text(frame),
                       selected: isSelected,
-                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
+                      selectedColor: theme.colorScheme.primary.withValues(alpha: 0.2),
                       checkmarkColor: theme.colorScheme.primary,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 11,
-                        color: isSelected ? theme.colorScheme.primary : (isDark ? Colors.grey.shade400 : Colors.grey.shade700),
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected
+                            ? theme.colorScheme.primary
+                            : (isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700),
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
                       ),
                       onSelected: (val) {
                         if (val) setState(() => _filterTimeframe = frame);
@@ -1542,115 +2267,171 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 12),
 
-          // Logs List
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 48,
-                          color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await _loadStoredData();
+              },
+              child: filtered.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Container(
+                        height: 350,
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.inbox_outlined,
+                              size: 48,
+                              color: isDark
+                                  ? AppTheme.subtleDark
+                                  : AppTheme.subtleLight,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No matching SMS logs found.',
+                              style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Pull down to refresh and sync remote alerts.',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: isDark
+                                    ? AppTheme.subtleDark
+                                    : AppTheme.subtleLight,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No matching SMS logs found.',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final log = filtered[index];
-                      final type = log['type'];
-                      final Color statusColor = type == 'Safe'
-                          ? Colors.green
-                          : (type == 'Fraud' ? AppTheme.red : Colors.amber.shade700);
+                      ),
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final log = filtered[index];
+                        final type = log['type'];
+                        final Color statusColor = type == 'Safe'
+                            ? Colors.green
+                            : (type == 'Fraud'
+                                ? AppTheme.red
+                                : Colors.amber.shade700);
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: InkWell(
-                          onTap: () => _showLogDetail(log),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Sender: ${log['sender']}',
-                                      style: theme.textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: statusColor.withOpacity(0.2)),
-                                      ),
-                                      child: Text(
-                                        type,
-                                        style: GoogleFonts.inter(
-                                          color: statusColor,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: InkWell(
+                            onTap: () => _showLogDetail(log),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Sender: ${log['sender']}',
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  log['message'],
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      _formatLogTime(log['time']),
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          'Threat: ${(log['threat'] * 100).toStringAsFixed(0)}%',
-                                          style: theme.textTheme.bodyMedium?.copyWith(
-                                            color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: statusColor.withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color:
+                                                  statusColor.withValues(alpha: 0.2)),
+                                        ),
+                                        child: Text(
+                                          type,
+                                          style: GoogleFonts.inter(
+                                            color: statusColor,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
                                           ),
                                         ),
-                                        const SizedBox(width: 4),
-                                        Icon(Icons.chevron_right, size: 14, color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
-                                      ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    log['message'],
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: isDark
+                                          ? Colors.grey.shade300
+                                          : Colors.grey.shade800,
                                     ),
-                                  ],
-                                ),
-                              ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _formatLogTime(log['time']),
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                          color: isDark
+                                              ? AppTheme.subtleDark
+                                              : AppTheme.subtleLight,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                      Row(
+                                        children: (() {
+                                          final logType = log['type'] ?? 'Safe';
+                                          final rawThreat =
+                                              (log['threat'] as num?)
+                                                      ?.toDouble() ??
+                                                  0.0;
+                                          final displayThreat =
+                                              (logType == 'Safe' &&
+                                                      rawThreat > 0.50)
+                                                  ? (1.0 - rawThreat)
+                                                  : rawThreat;
+                                          return [
+                                            Text(
+                                              'Threat: ${(displayThreat * 100).toStringAsFixed(0)}%',
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
+                                                color: isDark
+                                                    ? AppTheme.subtleDark
+                                                    : AppTheme.subtleLight,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Icon(Icons.chevron_right,
+                                                size: 14,
+                                                color: isDark
+                                                    ? AppTheme.subtleDark
+                                                    : AppTheme.subtleLight),
+                                          ];
+                                        })(),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
+            ),
           ),
         ],
       ),
@@ -1658,105 +2439,15 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildBlocklistTab(ThemeData theme, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Blocked Senders',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'SMS messages from numbers on this blocklist will be automatically rejected and reported.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Input Card
-          Row(
-            children: [
-              Expanded(
-                child: CustomTextField(
-                  controller: _blockNumberController,
-                  labelText: 'Block Number',
-                  hintText: 'e.g. +27820000000',
-                  prefixIcon: Icons.block,
-                  keyboardType: TextInputType.phone,
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _handleAddBlockedNumber,
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                  ),
-                  child: const Icon(Icons.add, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Numbers List
-          Expanded(
-            child: _blockedNumbers.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline,
-                          size: 48,
-                          color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'No numbers blocked yet',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: _blockedNumbers.length,
-                    itemBuilder: (context, index) {
-                      final item = _blockedNumbers[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        child: ListTile(
-                          leading: const CircleAvatar(
-                            backgroundColor: AppTheme.red,
-                            child: Icon(Icons.block, color: Colors.white, size: 16),
-                          ),
-                          title: Text(
-                            item['number']!,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Text('Blocked on ${item['date']}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () => _handleRemoveBlockedNumber(index),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
+    return BlockedNumbersScreen(
+      blockedNumbers: _blockedNumbers,
+      onUnblock: _handleRemoveBlockedNumber,
+      onBack: () => setState(() => _currentIndex = 0),
     );
   }
 
-  Widget _buildProfileTab(String name, Map<String, dynamic> user, ThemeData theme, bool isDark) {
+  Widget _buildProfileTab(
+      String name, Map<String, dynamic> user, ThemeData theme, bool isDark) {
     final email = user['email'] ?? 'demo@securesignal.com';
     final phone = user['phone_number'] ?? '+27820000000';
     final gender = user['gender'] ?? 'Male';
@@ -1766,14 +2457,13 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Profile Details Header
           Center(
             child: Column(
               children: [
                 const SizedBox(height: 10),
                 CircleAvatar(
                   radius: 50,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                   child: Text(
                     name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'U',
                     style: GoogleFonts.inter(
@@ -1802,7 +2492,6 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 32),
 
-          // User Info Fields
           Text(
             'ACCOUNT DETAILS',
             style: GoogleFonts.inter(
@@ -1813,11 +2502,11 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
           const SizedBox(height: 12),
-          _buildInfoRow(Icons.phone_android, 'Phone Number', phone, theme, isDark),
+          _buildInfoRow(
+              Icons.phone_android, 'Phone Number', phone, theme, isDark),
           _buildInfoRow(Icons.face_outlined, 'Gender', gender, theme, isDark),
           const SizedBox(height: 24),
 
-          // Settings Section
           Text(
             'SETTINGS & PREFERENCES',
             style: GoogleFonts.inter(
@@ -1829,11 +2518,11 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 12),
 
-          // Auto-Ingestion SMS (Android only permission control)
           Card(
             margin: const EdgeInsets.only(bottom: 10),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
               child: Column(
                 children: [
                   Row(
@@ -1841,20 +2530,26 @@ class _DashboardPageState extends State<DashboardPage> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.mark_chat_unread_outlined, color: theme.colorScheme.primary),
+                          Icon(Icons.mark_chat_unread_outlined,
+                              color: theme.colorScheme.primary),
                           const SizedBox(width: 14),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 'Auto SMS Ingestion',
-                                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                                style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600),
                               ),
                               Text(
-                                Platform.isAndroid ? 'Background listen' : 'Unsupported on iOS',
+                                Platform.isAndroid
+                                    ? 'Background listen'
+                                    : 'Unsupported on iOS',
                                 style: GoogleFonts.inter(
                                   fontSize: 11,
-                                  color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                                  color: isDark
+                                      ? AppTheme.subtleDark
+                                      : AppTheme.subtleLight,
                                 ),
                               ),
                             ],
@@ -1865,8 +2560,14 @@ class _DashboardPageState extends State<DashboardPage> {
                         value: _isIngestionEnabled,
                         activeThumbColor: theme.colorScheme.primary,
                         onChanged: Platform.isAndroid
-                            ? (val) => _updateIngestion(val)
-                            : null, // Disabled on iOS
+                            ? (val) {
+                                if (val) {
+                                  _updateIngestion(true);
+                                } else {
+                                  _showTurnOffIngestionDialog();
+                                }
+                              }
+                            : null,
                       ),
                     ],
                   ),
@@ -1897,17 +2598,18 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
 
-          // Threat Notifications Toggle
           Card(
             margin: const EdgeInsets.only(bottom: 10),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.notifications_active_outlined, color: theme.colorScheme.primary),
+                      Icon(Icons.notifications_active_outlined,
+                          color: theme.colorScheme.primary),
                       const SizedBox(width: 14),
                       Text(
                         'High Threat Notifications',
@@ -1925,7 +2627,6 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
 
-          // Alert Threshold Slider
           if (_isNotificationsEnabled)
             Card(
               margin: const EdgeInsets.only(bottom: 10),
@@ -1939,7 +2640,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       children: [
                         Text(
                           'Notification Alert Threshold',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13),
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                         Text(
                           '${(_notificationThreshold * 100).toStringAsFixed(0)}% Threat',
@@ -1956,7 +2658,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       value: _notificationThreshold,
                       min: 0.1,
                       max: 0.95,
-                      divisions: 17, // step of 0.05
+                      divisions: 17,
                       activeColor: theme.colorScheme.primary,
                       onChanged: (val) => _updateThreshold(val),
                     ),
@@ -1964,7 +2666,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       'You will only receive local device notifications for SMS messages rated above this threat index.',
                       style: GoogleFonts.inter(
                         fontSize: 10,
-                        color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                        color:
+                            isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                       ),
                     ),
                   ],
@@ -1972,18 +2675,20 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             ),
 
-          // Theme Switch Card
           Card(
             margin: const EdgeInsets.only(bottom: 10),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
                       Icon(
-                        isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                        isDark
+                            ? Icons.dark_mode_outlined
+                            : Icons.light_mode_outlined,
                         color: theme.colorScheme.primary,
                       ),
                       const SizedBox(width: 14),
@@ -2006,12 +2711,54 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 30),
 
-          // Logout Button
+          Text(
+            'LEGAL',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => showTermsAndConditionsPage(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+                child: Row(
+                  children: [
+                    Icon(Icons.description_outlined,
+                        color: theme.colorScheme.primary, size: 22),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Terms & Conditions & Privacy Policy',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
           CustomButton(
             text: 'Logout from System',
             type: ButtonType.ghost,
             icon: Icons.logout,
-            onPressed: _handleLogout,
+            onPressed: _confirmLogout,
           ),
           const SizedBox(height: 20),
         ],
@@ -2019,7 +2766,8 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String title, String value, ThemeData theme, bool isDark) {
+  Widget _buildInfoRow(
+      IconData icon, String title, String value, ThemeData theme, bool isDark) {
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -2041,7 +2789,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 14),
                 ),
               ],
             ),

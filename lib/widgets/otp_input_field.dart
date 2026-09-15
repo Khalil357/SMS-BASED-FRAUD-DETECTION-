@@ -93,7 +93,7 @@ class _OtpInputFieldState extends State<OtpInputField> {
             boxShadow: isFocused
                 ? [
                     BoxShadow(
-                      color: theme.primaryColor.withOpacity(0.15),
+                      color: theme.primaryColor.withValues(alpha: 0.15),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     )

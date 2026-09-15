@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../main.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../services/auth_service.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/fade_slide_transition.dart';
+import 'terms_and_conditions_page.dart';
 
 class SignUpPage extends StatefulWidget {
   final Navigate onNavigate;
@@ -162,10 +162,10 @@ class _SignUpPageState extends State<SignUpPage> {
                         child: Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: theme.primaryColor.withOpacity(0.08),
+                            color: theme.primaryColor.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: theme.primaryColor.withOpacity(0.15),
+                              color: theme.primaryColor.withValues(alpha: 0.15),
                               width: 2,
                             ),
                           ),
@@ -274,7 +274,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
                             // Gender Dropdown
                             DropdownButtonFormField<String>(
-                              value: _selectedGender,
+                              initialValue: _selectedGender,
                               style: GoogleFonts.inter(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w500,
@@ -363,7 +363,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Terms & Conditions Checkbox
+                             // Terms & Conditions Checkbox
                             Row(
                               children: [
                                 Checkbox(
@@ -371,23 +371,53 @@ class _SignUpPageState extends State<SignUpPage> {
                                   onChanged: (val) {
                                     setState(() {
                                       _termsAccepted = val ?? false;
+                                      if (_termsAccepted) {
+                                        _termsErrorMessage = null;
+                                      }
                                     });
                                   },
                                 ),
                                 Expanded(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        _termsAccepted = !_termsAccepted;
-                                      });
-                                    },
-                                    child: Text(
-                                      'I accept the Terms & Conditions',
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
+                                  child: Wrap(
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    children: [
+                                      Text(
+                                        'I accept the ',
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
-                                    ),
+                                      GestureDetector(
+                                        onTap: () async {
+                                          final accepted = await showTermsAndConditionsPage(
+                                            context,
+                                            isAcceptanceMode: true,
+                                            onAccepted: () {
+                                              setState(() {
+                                                _termsAccepted = true;
+                                                _termsErrorMessage = null;
+                                              });
+                                            },
+                                          );
+                                          if (accepted == true) {
+                                            setState(() {
+                                              _termsAccepted = true;
+                                              _termsErrorMessage = null;
+                                            });
+                                          }
+                                        },
+                                        child: Text(
+                                          'Terms & Conditions',
+                                          style: theme.textTheme.bodyMedium?.copyWith(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: theme.colorScheme.primary,
+                                            decoration: TextDecoration.underline,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],

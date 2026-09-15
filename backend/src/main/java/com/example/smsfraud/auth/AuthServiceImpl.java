@@ -97,7 +97,7 @@ public class AuthServiceImpl implements AuthService {
             user = userRepository.findByPhone(req.phoneNumber())
                     .orElseThrow(() -> new UnauthorizedException("Invalid phone number or password"));
         }
-        
+
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
             throw new UnauthorizedException("Invalid phone number or password");
         }
@@ -172,7 +172,7 @@ public class AuthServiceImpl implements AuthService {
         }
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new NotFoundException("No account found for that email"));
-        
+
         otpService.invalidate(email);
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);

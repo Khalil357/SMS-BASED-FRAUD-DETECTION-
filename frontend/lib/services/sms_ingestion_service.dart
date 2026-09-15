@@ -6,11 +6,12 @@ import 'package:permission_handler/permission_handler.dart';
 import 'sms_detection_service.dart';
 import 'sms_storage_service.dart';
 import 'notification_service.dart';
+import 'auth_service.dart';
 
 /// Top-level background message handler required by Telephony.
 /// Marked with @pragma('vm:entry-point') so the Dart compiler doesn't tree-shake it.
 @pragma('vm:entry-point')
-Future<void> backgroundSmsHandler(SmsMessage message) async {
+Future<void> handleBackgroundSms(SmsMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   
   final body = message.body ?? '';
@@ -18,42 +19,63 @@ Future<void> backgroundSmsHandler(SmsMessage message) async {
 
   if (body.isEmpty) return;
 
-  // 1. Check if background SMS ingestion is enabled in settings
-  final isIngestionEnabled = await SmsStorageService.getBoolSetting(
-      SmsStorageService.keyIngestionEnabled, true);
-  if (!isIngestionEnabled) return;
+  try {
+    // 0. Ensure session token is loaded in background isolate
+    await AuthService.loadSession();
 
-  // 2. Perform the rule-based threat analysis
-  final result = SmsDetectionService.analyze(message: body, sender: sender);
+    // 1. Perform rule-based threat analysis
+    final result = SmsDetectionService.analyze(message: body, sender: sender);
 
-  // 3. Persist the log entry
-  final logEntry = {
-    'id': 'auto_${DateTime.now().millisecondsSinceEpoch}',
-    'sender': sender,
-    'message': body,
-    'type': result.classification,
-    'time': DateTime.now().toIso8601String(),
-    'threat': result.threatLevel,
-    'matchedReasons': result.matchedReasons,
-    'hasFeedback': false,
-    'userFeedback': null,
-  };
-  await SmsStorageService.addLog(logEntry);
+    // 2. Persist the log entry locally
+    final logEntry = <String, dynamic>{
+      'id': 'auto_${DateTime.now().millisecondsSinceEpoch}',
+      'sender': sender,
+      'message': body,
+      'type': result.classification,
+      'time': DateTime.now().toIso8601String(),
+      'threat': result.threatLevel,
+      'matchedReasons': List<String>.from(result.matchedReasons),
+      'hasFeedback': false,
+      'userFeedback': null,
+    };
 
-  // 4. Trigger alert notification if high risk (exceeds user threshold)
-  final isAlertEnabled = await SmsStorageService.getBoolSetting(
-      SmsStorageService.keyNotificationsEnabled, true);
-  final alertThreshold = await SmsStorageService.getDoubleSetting(
-      SmsStorageService.keyNotificationThreshold, 0.80);
+    // 3. Submit scan to Backend API (POST /api/scans)
+    try {
+      final backendResult = await AuthService.submitScan(
+        sender: sender,
+        messageBody: body,
+        source: 'AUTO_LISTENER',
+      );
+      if (backendResult['success'] == true && backendResult['isScam'] != null) {
+        final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
+        final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
+        final type = isScam ? 'Fraud' : 'Safe';
+        final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
 
-  if (isAlertEnabled && result.threatLevel >= alertThreshold) {
-    // Initialize notification service in background isolate to show the notification
-    await NotificationService.init();
-    await NotificationService.showThreatAlert(
-      sender: sender,
-      message: body,
-      threatLevel: result.threatLevel,
-    );
+        logEntry['type'] = type;
+        logEntry['threat'] = threatLevel;
+        if (backendResult['label'] != null) {
+          final confPct = (conf * 100).toStringAsFixed(1);
+          final threatPct = (threatLevel * 100).toStringAsFixed(1);
+          (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
+        }
+      }
+    } catch (_) {}
+
+    // 4. Add to local log storage
+    await SmsStorageService.addLog(logEntry);
+
+    // 5. Trigger alert notification for Fraud or a high threat index.
+    final threatLevel = (logEntry['threat'] as num).toDouble();
+    if (logEntry['type'] == 'Fraud' || threatLevel >= 0.50) {
+      await NotificationService.showThreatAlert(
+        sender: sender,
+        message: body,
+        threatLevel: threatLevel,
+      );
+    }
+  } catch (e) {
+    debugPrint("Background SMS Handler Exception: $e");
   }
 }
 
@@ -129,6 +151,29 @@ class SmsIngestionService {
             'hasFeedback': false,
             'userFeedback': null,
           };
+          // Submit scan to Backend API (POST /api/scans)
+          try {
+            final backendResult = await AuthService.submitScan(
+              sender: sender,
+              messageBody: body,
+              source: 'AUTO_LISTENER',
+            );
+            if (backendResult['success'] == true && backendResult['isScam'] != null) {
+              final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
+              final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
+              final type = isScam ? 'Fraud' : 'Safe';
+              final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
+
+              logEntry['type'] = type;
+              logEntry['threat'] = threatLevel;
+              if (backendResult['label'] != null) {
+                final confPct = (conf * 100).toStringAsFixed(1);
+                final threatPct = (threatLevel * 100).toStringAsFixed(1);
+                (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
+              }
+            }
+          } catch (_) {}
+
           await SmsStorageService.addLog(logEntry);
 
           // Add to stream to notify foreground UI immediately
@@ -140,15 +185,16 @@ class SmsIngestionService {
           final alertThreshold = await SmsStorageService.getDoubleSetting(
               SmsStorageService.keyNotificationThreshold, 0.80);
 
-          if (isAlertEnabled && result.threatLevel >= alertThreshold) {
+          final threatLevel = (logEntry['threat'] as num).toDouble();
+          if (isAlertEnabled && threatLevel >= alertThreshold) {
             await NotificationService.showThreatAlert(
               sender: sender,
               message: body,
-              threatLevel: result.threatLevel,
+              threatLevel: threatLevel,
             );
           }
         },
-        onBackgroundMessage: backgroundSmsHandler,
+        onBackgroundMessage: handleBackgroundSms,
       );
       debugPrint("SMS Ingestion: Background & Foreground listeners registered.");
     } catch (e) {

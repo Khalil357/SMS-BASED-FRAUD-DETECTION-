@@ -29,4 +29,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /** All users with their roles eagerly loaded (admin listing). */
     @Query("SELECT u FROM User u JOIN FETCH u.role")
     List<User> findAllWithRoles();
+
+    /** Number of active users holding the given role (used to guard the last admin). */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.role.roleName = :roleName AND u.isActive = true")
+    long countActiveByRole(@Param("roleName") String roleName);
 }

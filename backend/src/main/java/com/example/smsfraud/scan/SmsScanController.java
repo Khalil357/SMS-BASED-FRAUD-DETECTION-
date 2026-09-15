@@ -68,10 +68,15 @@ public class SmsScanController {
         dto.put("scanId", s.getScanId());
         dto.put("sender", s.getSender() == null ? "" : s.getSender());
         dto.put("messageBody", s.getMessageBody());
+        dto.put("message", s.getMessageBody());
         dto.put("verdict", s.getVerdict());
+        dto.put("label", "FRAUD".equals(s.getVerdict()) ? "scam" : s.getVerdict().toLowerCase(Locale.ROOT));
         dto.put("confidence", s.getConfidence() == null ? 0.0 : s.getConfidence());
+        dto.put("is_scam", "FRAUD".equals(s.getVerdict()));
+        dto.put("isScam", "FRAUD".equals(s.getVerdict()));
         dto.put("source", s.getSource());
         dto.put("scannedAt", s.getScannedAt().toString());
+        dto.put("scanId", s.getScanId());
         return dto;
     }
 
