@@ -145,7 +145,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.red.withOpacity(0.12),
+                    color: AppTheme.red.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -256,7 +256,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.1),
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: theme.colorScheme.primary, size: 22),
@@ -1165,10 +1165,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        color: classificationColor.withOpacity(0.12),
+                        color: classificationColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                            color: classificationColor.withOpacity(0.3)),
+                            color: classificationColor.withValues(alpha: 0.3)),
                       ),
                       child: Icon(
                         type == 'Safe' ? Icons.gpp_good : Icons.gpp_bad,
@@ -1237,10 +1237,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: classificationColor.withOpacity(0.04),
+                    color: classificationColor.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: classificationColor.withOpacity(0.1),
+                      color: classificationColor.withValues(alpha: 0.1),
                     ),
                   ),
                   child: Column(
@@ -1478,7 +1478,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 ),
                 child: CircleAvatar(
                   radius: 15,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15),
                   child: Text(
                     fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
                     style: GoogleFonts.inter(
@@ -1510,8 +1510,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           boxShadow: [
             BoxShadow(
               color: isDark
-                  ? Colors.black.withOpacity(0.4)
-                  : Colors.black.withOpacity(0.08),
+                  ? Colors.black.withValues(alpha: 0.4)
+                  : Colors.black.withValues(alpha: 0.08),
               blurRadius: 20,
               offset: const Offset(0, 6),
             ),
@@ -1587,7 +1587,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? activeColor.withOpacity(isDark ? 0.2 : 0.1)
+              ? activeColor.withValues(alpha: isDark ? 0.2 : 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
@@ -1670,11 +1670,11 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
         color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.amber.shade700.withOpacity(0.3),
+          color: Colors.amber.shade700.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.amber.shade700.withOpacity(0.05),
+            color: Colors.amber.shade700.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1793,13 +1793,13 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: _isIngestionEnabled && _hasSmsPermission
-                            ? Colors.green.withOpacity(0.12)
-                            : Colors.orange.withOpacity(0.12),
+                            ? Colors.green.withValues(alpha: 0.12)
+                            : Colors.orange.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: _isIngestionEnabled && _hasSmsPermission
-                              ? Colors.green.withOpacity(0.3)
-                              : Colors.orange.withOpacity(0.3),
+                              ? Colors.green.withValues(alpha: 0.3)
+                              : Colors.orange.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
@@ -1856,7 +1856,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.amber.shade700.withOpacity(0.2),
+                      color: Colors.amber.shade700.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(Icons.security_update_warning_rounded,
@@ -1918,7 +1918,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
               margin: const EdgeInsets.only(top: 16),
               decoration: BoxDecoration(
                 color: isDark
-                    ? const Color(0xFF064E3B).withOpacity(0.4)
+                    ? const Color(0xFF064E3B).withValues(alpha: 0.4)
                     : const Color(0xFFD1FAE5),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.green.shade400),
@@ -2055,17 +2055,17 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     padding: const EdgeInsets.all(16.0),
                     decoration: BoxDecoration(
                       color: _scanIsSafe == true
-                          ? Colors.green.withOpacity(0.08)
+                          ? Colors.green.withValues(alpha: 0.08)
                           : (_threatLevel > 0.8
-                              ? Colors.red.withOpacity(0.08)
-                              : Colors.amber.withOpacity(0.08)),
+                              ? Colors.red.withValues(alpha: 0.08)
+                              : Colors.amber.withValues(alpha: 0.08)),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _scanIsSafe == true
-                            ? Colors.green.withOpacity(0.2)
+                            ? Colors.green.withValues(alpha: 0.2)
                             : (_threatLevel > 0.8
-                                ? Colors.red.withOpacity(0.2)
-                                : Colors.amber.withOpacity(0.2)),
+                                ? Colors.red.withValues(alpha: 0.2)
+                                : Colors.amber.withValues(alpha: 0.2)),
                       ),
                     ),
                     child: Column(
@@ -2125,7 +2125,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
+              color: iconColor.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: iconColor, size: 24),
@@ -2217,7 +2217,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     return ChoiceChip(
                       label: Text(type),
                       selected: isSelected,
-                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
+                      selectedColor: theme.colorScheme.primary.withValues(alpha: 0.2),
                       checkmarkColor: theme.colorScheme.primary,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 11,
@@ -2250,7 +2250,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     return ChoiceChip(
                       label: Text(frame),
                       selected: isSelected,
-                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
+                      selectedColor: theme.colorScheme.primary.withValues(alpha: 0.2),
                       checkmarkColor: theme.colorScheme.primary,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 11,
@@ -2351,12 +2351,12 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: statusColor.withOpacity(0.12),
+                                          color: statusColor.withValues(alpha: 0.12),
                                           borderRadius:
                                               BorderRadius.circular(12),
                                           border: Border.all(
                                               color:
-                                                  statusColor.withOpacity(0.2)),
+                                                  statusColor.withValues(alpha: 0.2)),
                                         ),
                                         child: Text(
                                           type,
@@ -2563,7 +2563,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 const SizedBox(height: 10),
                 CircleAvatar(
                   radius: 50,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                   child: Text(
                     name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'U',
                     style: GoogleFonts.inter(
@@ -2658,7 +2658,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                       ),
                       Switch(
                         value: _isIngestionEnabled,
-                        activeColor: theme.colorScheme.primary,
+                        activeThumbColor: theme.colorScheme.primary,
                         onChanged: Platform.isAndroid
                             ? (val) {
                                 if (val) {
@@ -2733,7 +2733,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ),
                   Switch(
                     value: _isNotificationsEnabled,
-                    activeColor: theme.colorScheme.primary,
+                    activeThumbColor: theme.colorScheme.primary,
                     onChanged: (val) => _updateNotifications(val),
                   ),
                 ],
@@ -2814,7 +2814,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ),
                   Switch(
                     value: isDark,
-                    activeColor: theme.colorScheme.primary,
+                    activeThumbColor: theme.colorScheme.primary,
                     onChanged: (val) {
                       SecureSignalApp.of(context).toggleTheme();
                     },

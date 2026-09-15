@@ -192,10 +192,10 @@ class _LoginPageState extends State<LoginPage> {
                         child: Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: theme.primaryColor.withOpacity(0.08),
+                            color: theme.primaryColor.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: theme.primaryColor.withOpacity(0.15),
+                              color: theme.primaryColor.withValues(alpha: 0.15),
                               width: 2,
                             ),
                           ),

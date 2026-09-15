@@ -115,7 +115,7 @@ class _CustomButtonState extends State<CustomButton>
           gradient: isEnabled
               ? AppTheme.primaryGradient
               : LinearGradient(
-                  colors: [primary.withOpacity(0.5), primary.withOpacity(0.4)],
+                  colors: [primary.withValues(alpha: 0.5), primary.withValues(alpha: 0.4)],
                 ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: isEnabled ? AppTheme.buttonShadow : [],
@@ -125,13 +125,13 @@ class _CustomButtonState extends State<CustomButton>
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isEnabled ? primary : primary.withOpacity(0.4),
+            color: isEnabled ? primary : primary.withValues(alpha: 0.4),
             width: 1.5,
           ),
         );
       case ButtonType.ghost:
         return BoxDecoration(
-          color: primary.withOpacity(0.08),
+          color: primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(16),
         );
     }
