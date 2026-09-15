@@ -2474,7 +2474,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Analyze SMS & Links',
+            'Analyze SMS',
             style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -2483,7 +2483,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           ),
           const SizedBox(height: 4),
           Text(
-            'Paste suspicious messages or URLs to verify legitimacy through the Argus heuristic shield.',
+            'Paste suspicious messages to verify safety of a message through the Argus Detection System',
             style: GoogleFonts.inter(
               fontSize: 12,
               color: textMuted,

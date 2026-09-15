@@ -44,51 +44,7 @@ class SmsStorageService {
           'hasFeedback': false,
           'userFeedback': null
         },
-        {
-          'id': 'mock_2',
-          'sender': '+27832223333',
-          'message':
-              'FNB Alert: A login attempt was made on your profile. If this was not you, please verify your details here: https://fnb-secure-login.info',
-          'type': 'Fraud',
-          'time': DateTime.now()
-              .subtract(const Duration(hours: 1))
-              .toIso8601String(),
-          'threat': 0.98,
-          'matchedReasons': [
-            'Account credential update/verification request',
-            'Financial institution or login page reference',
-            'Contains external hyperlink or link call-to-action'
-          ],
-          'hasFeedback': false,
-          'userFeedback': null
-        },
-        {
-          'id': 'mock_3',
-          'sender': 'Absa Bank',
-          'message': 'Your OTP is 492010. Do not share this code with anyone.',
-          'type': 'Safe',
-          'time': DateTime.now()
-              .subtract(const Duration(hours: 2))
-              .toIso8601String(),
-          'threat': 0.02,
-          'matchedReasons': ['No suspicious patterns matched'],
-          'hasFeedback': false,
-          'userFeedback': null
-        },
-        {
-          'id': 'mock_5',
-          'sender': '+27829998888',
-          'message':
-              'Hey, are we still meeting for coffee at 3pm today? Let me know.',
-          'type': 'Safe',
-          'time': DateTime.now()
-              .subtract(const Duration(days: 1))
-              .toIso8601String(),
-          'threat': 0.00,
-          'matchedReasons': ['No suspicious patterns matched'],
-          'hasFeedback': false,
-          'userFeedback': null
-        },
+
       ];
       await saveLogs(mockLogs);
     }

@@ -219,7 +219,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             CustomTextField(
                               controller: _phoneController,
                               labelText: 'Email or Phone Number',
-                              hintText: 'e.g. user@email.com or +27821234567',
+                              hintText: 'e.g. user@email.com or +255754234567',
                               prefixIcon: Icons.contact_mail_outlined,
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.done,

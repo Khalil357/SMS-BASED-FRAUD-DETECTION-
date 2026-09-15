@@ -305,7 +305,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             CustomTextField(
                               controller: _phoneController,
                               labelText: 'Phone Number',
-                              hintText: 'e.g. +27821234567',
+                              hintText: 'e.g. +255754234567',
                               prefixIcon: Icons.phone_android_outlined,
                               keyboardType: TextInputType.phone,
                               validator: (value) {
