@@ -14,8 +14,7 @@ class AuthService {
       return customBaseUrl!.trim();
     }
     if (Platform.isAndroid) {
-      // Prioritize 127.0.0.1 for physical devices (requires adb reverse)
-      // Fallback logic handled in _getRequest/_postRequest
+      // Prioritize 127.0.0.1 for physical devices (requires adb reverse tcp:8080 tcp:8080)
       return 'http://127.0.0.1:8080';
     }
     return 'http://localhost:8080';
@@ -245,7 +244,6 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
-        // The front_end branch introduced mandatory OTP for login
         return {
           'success': true,
           'requiresOtp': true,

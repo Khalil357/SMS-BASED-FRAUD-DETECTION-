@@ -46,10 +46,9 @@ frontend/ios/Pods/
 # Secret files — never commit credentials
 .env
 backend/.env
-<<<<<<< HEAD
+
 __pycache__/
 *.py[cod]
-=======
 
 # Flutter/Android generated files
 .dart_tool/
@@ -57,6 +56,6 @@ __pycache__/
 .flutter-plugins-dependencies
 .packages
 android/.gradle/
->>>>>>> origin/front_end
+
 # Widget Preview related
 .widget_preview/

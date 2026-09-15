@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SmsStorageService {
   static const String _keyLogs = 'sms_logs_v1';
   static const String _keyFeedback = 'feedback_logs_v1';
+  static const String _keyBlocklist = 'blocked_numbers_v1';
 
   // Settings Keys
   static const String keyIngestionEnabled = 'settings_ingestion_enabled';
@@ -194,6 +195,34 @@ class SmsStorageService {
     } catch (_) {
       return [];
     }
+  }
+
+  /// --- BLOCKLIST MANAGEMENT ---
+
+  static Future<List<Map<String, String>>> getBlockedNumbers() async {
+    final prefs = await _getPrefs();
+    final jsonStr = prefs.getString(_keyBlocklist);
+    if (jsonStr == null) return [];
+    try {
+      final List<dynamic> decoded = jsonDecode(jsonStr);
+      return decoded.map((e) => Map<String, String>.from(e)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> saveBlocklist(List<Map<String, String>> blocklist) async {
+    final prefs = await _getPrefs();
+    await prefs.setString(_keyBlocklist, jsonEncode(blocklist));
+  }
+
+  static Future<bool> isBlocked(String phoneNumber) async {
+    final list = await getBlockedNumbers();
+    final normalized = phoneNumber.replaceAll(RegExp(r'[\s\-()]'), '');
+    return list.any((item) {
+      final itemNum = item['number']?.replaceAll(RegExp(r'[\s\-()]'), '') ?? '';
+      return itemNum == normalized;
+    });
   }
 
   // --- SETTINGS MANAGEMENT ---
