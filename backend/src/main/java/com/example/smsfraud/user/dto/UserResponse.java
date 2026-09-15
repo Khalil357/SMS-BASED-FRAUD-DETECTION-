@@ -13,7 +13,6 @@ public record UserResponse(
         String fullName,
         String email,
         String phone,
-        String gender,
         String role,
         boolean verified,
         boolean active) {
@@ -24,7 +23,6 @@ public record UserResponse(
                 user.getFullName(),
                 user.getEmail(),
                 user.getPhone(),
-                user.getGender(),
                 user.getRole().getRoleName(),
                 user.isVerified(),
                 user.isActive());

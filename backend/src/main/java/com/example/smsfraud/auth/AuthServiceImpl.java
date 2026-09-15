@@ -191,7 +191,7 @@ public class AuthServiceImpl implements AuthService {
 
         String accessToken = tokenProvider.generateAccessToken(user.getUserId(), user.getTokenVersion());
         String refreshToken = tokenProvider.generateRefreshToken(user.getUserId(), user.getTokenVersion());
-        return new LoginResponse(accessToken, refreshToken, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone(), user.getGender());
+        return new LoginResponse(accessToken, refreshToken, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
     }
 
     @Override
