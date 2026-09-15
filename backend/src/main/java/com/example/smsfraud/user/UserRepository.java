@@ -30,6 +30,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT u FROM User u JOIN FETCH u.role")
     List<User> findAllWithRoles();
 
+    /** Admin accounts with roles eagerly loaded — the portal manages admins only. */
+    @Query("SELECT u FROM User u JOIN FETCH u.role WHERE u.role.roleName = 'ADMIN'")
+    List<User> findAllAdminsWithRoles();
+
     /** Number of active users holding the given role (used to guard the last admin). */
     @Query("SELECT COUNT(u) FROM User u WHERE u.role.roleName = :roleName AND u.isActive = true")
     long countActiveByRole(@Param("roleName") String roleName);
