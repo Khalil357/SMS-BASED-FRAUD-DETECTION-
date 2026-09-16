@@ -1,65 +1,101 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  --primary-light: #dc2626;
+  /* 10% Brand Accent */
+  --primary-light: #e31b3b;
   --primary-dark: #ef4444;
+  --primary-hover-light: #c81431;
+  --primary-hover-dark: #dc2626;
+  --primary-alpha-light: rgba(227, 27, 59, 0.08);
+  --primary-alpha-dark: rgba(239, 68, 68, 0.14);
+
+  /* 60% Canvas Background */
   --bg-light: #f8fafc;
-  --bg-dark: #0f172a;
+  --bg-dark: #08090d;
+
+  /* 30% Structural Panels & Cards */
   --card-light: #ffffff;
-  --card-dark: #1e293b;
+  --card-dark: #131722;
+  --card-hover-light: #f1f5f9;
+  --card-hover-dark: #1a202c;
+
+  /* 1px Structural Borders */
   --border-light: #e2e8f0;
-  --border-dark: #334155;
+  --border-dark: #202736;
+
+  /* Typography & Neutrals */
   --subtle-light: #64748b;
-  --subtle-dark: #94a3b8;
+  --subtle-dark: #8d98a9;
   --text-body-light: #334155;
-  --text-body-dark: #e2e8f0;
+  --text-body-dark: #cdd5e0;
   --heading-light: #0f172a;
   --heading-dark: #f8fafc;
-  --error-light: #dc2626;
-  --error-dark: #f87171;
+
+  /* Status Colors */
+  --error-light: #e31b3b;
+  --error-dark: #ef4444;
   --emerald: #10b981;
   --amber: #f59e0b;
   --blue: #3b82f6;
 
+  /* Fonts */
   --font-title: 'Outfit', 'Plus Jakarta Sans', sans-serif;
-  --font-btn: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-btn: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-main: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --glass-bg-light: rgba(255, 255, 255, 0.7);
-  --glass-bg-dark: rgba(15, 23, 42, 0.75);
-  --glass-border-light: rgba(226, 232, 240, 0.7);
-  --glass-border-dark: rgba(255, 255, 255, 0.08);
+  /* Glassmorphism Tokens (Light Mode) */
+  --glass-bg-light: rgba(255, 255, 255, 0.95);
+  --glass-border-light: rgba(226, 232, 240, 0.8);
+  --glass-shadow-light: 0 10px 30px -10px rgba(15, 23, 42, 0.06);
 
+  /* Glassmorphism Tokens (Dark Mode) */
+  --glass-bg-dark: rgba(19, 23, 34, 0.92);
+  --glass-border-dark: rgba(32, 39, 54, 0.85);
+  --glass-shadow-dark: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+
+  /* Computed Theme Variables (Default Light) */
   --primary: var(--primary-light);
+  --primary-hover: var(--primary-hover-light);
+  --primary-alpha: var(--primary-alpha-light);
   --error: var(--error-light);
   --bg: var(--bg-light);
   --card: var(--card-light);
+  --card-hover: var(--card-hover-light);
   --border: var(--border-light);
   --subtle: var(--subtle-light);
   --text-body: var(--text-body-light);
   --heading: var(--heading-light);
+
   --glass-bg: var(--glass-bg-light);
   --glass-border: var(--glass-border-light);
-  --card-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.06);
-  --card-shadow-hover: 0 12px 36px 0 rgba(220, 38, 38, 0.12);
+  --glass-shadow: var(--glass-shadow-light);
+
+  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  --card-shadow-hover: 0 12px 28px -4px rgba(0, 0, 0, 0.12);
 
   color-scheme: light;
 }
 
 html.dark {
   --primary: var(--primary-dark);
+  --primary-hover: var(--primary-hover-dark);
+  --primary-alpha: var(--primary-alpha-dark);
   --error: var(--error-dark);
   --bg: var(--bg-dark);
   --card: var(--card-dark);
+  --card-hover: var(--card-hover-dark);
   --border: var(--border-dark);
   --subtle: var(--subtle-dark);
   --text-body: var(--text-body-dark);
   --heading: var(--heading-dark);
+
   --glass-bg: var(--glass-bg-dark);
   --glass-border: var(--glass-border-dark);
-  --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-  --card-shadow-hover: 0 12px 36px 0 rgba(220, 38, 38, 0.25);
+  --glass-shadow: var(--glass-shadow-dark);
+
+  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  --card-shadow-hover: 0 12px 28px -4px rgba(0, 0, 0, 0.6);
 
   color-scheme: dark;
 }

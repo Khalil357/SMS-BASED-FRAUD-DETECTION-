@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -19,9 +23,11 @@ import java.util.UUID;
 public class FraudAlertController {
 
     private final FraudAlertService fraudAlertService;
+    private final SmsScanService smsScanService;
 
-    public FraudAlertController(FraudAlertService fraudAlertService) {
+    public FraudAlertController(FraudAlertService fraudAlertService, SmsScanService smsScanService) {
         this.fraudAlertService = fraudAlertService;
+        this.smsScanService = smsScanService;
     }
 
     @GetMapping
@@ -40,5 +46,29 @@ public class FraudAlertController {
                 userId, PageRequest.of(page, size));
 
         return ResponseEntity.ok(ApiResponse.ok("Fraud alerts retrieved", alerts));
+    }
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<SmsScan>> createFraudScan(
+            Authentication authentication,
+            @RequestBody Map<String, String> body
+    ) {
+        UUID userId = null;
+        try {
+            if (authentication != null && authentication.getName() != null) {
+                userId = UUID.fromString(authentication.getName());
+            }
+        } catch (Exception ignored) {}
+
+        String sender = body.getOrDefault("sender", "Unknown");
+        String message = body.getOrDefault("message", body.getOrDefault("messageBody", ""));
+
+        if (message.isBlank()) {
+            throw new BadRequestException("Message text is required");
+        }
+
+        SmsScan saved = smsScanService.saveManualFraudScan(userId, sender, message);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Message marked as fraud and saved to database", saved));
     }
 }

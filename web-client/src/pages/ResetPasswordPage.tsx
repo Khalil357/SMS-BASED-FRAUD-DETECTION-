@@ -45,6 +45,22 @@ const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
       setErrorMessage("Password must be at least 8 characters long");
       return;
     }
+    if (!/[A-Z]/.test(newPassword)) {
+      setErrorMessage("Password must contain at least one uppercase letter (A-Z)");
+      return;
+    }
+    if (!/[a-z]/.test(newPassword)) {
+      setErrorMessage("Password must contain at least one lowercase letter (a-z)");
+      return;
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      setErrorMessage("Password must contain at least one number (0-9)");
+      return;
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
+      setErrorMessage("Password must contain at least one special character (!@#$%...)");
+      return;
+    }
 
     setIsLoading(true);
     const result = await resetPassword({ phoneNumber, verificationCode, newPassword });
@@ -63,7 +79,7 @@ const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
         <AuthIcon icon={KeyRound} size={34} />
         <AuthTitle>Reset Password</AuthTitle>
         <AuthDescription>Create a new, strong password to secure your account.</AuthDescription>
-        <p className="password-requirements">Must be at least 8 characters</p>
+        <p className="password-requirements">At least 8 chars with uppercase, lowercase, number & special symbol</p>
 
         <form onSubmit={handleReset} noValidate>
           <AuthField
