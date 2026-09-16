@@ -22,31 +22,11 @@ class SmsStorageService {
     return _prefs!;
   }
 
-  /// Initialize default logs if storage is empty
+  /// Initialize empty logs list if storage key doesn't exist
   static Future<void> initializeWithMocksIfNeeded() async {
     final prefs = await _getPrefs();
     if (!prefs.containsKey(_keyLogs)) {
-      final mockLogs = [
-        {
-          'id': 'mock_1',
-          'sender': '+27821110000',
-          'message':
-              'Congratulations! You have won a R5000 voucher from Woolworths. Click http://bit.ly/woolies-win to claim now!',
-          'type': 'Fraud',
-          'time': DateTime.now()
-              .subtract(const Duration(minutes: 10))
-              .toIso8601String(),
-          'threat': 0.95,
-          'matchedReasons': [
-            'Contains lottery/financial reward keywords (e.g. win, prize, voucher)',
-            'Contains external hyperlink or link call-to-action'
-          ],
-          'hasFeedback': false,
-          'userFeedback': null
-        },
-
-      ];
-      await saveLogs(mockLogs);
+      await saveLogs([]);
     }
   }
 

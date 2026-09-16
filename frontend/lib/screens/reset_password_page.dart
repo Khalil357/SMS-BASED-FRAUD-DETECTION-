@@ -169,7 +169,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'ARGUS SENTINEL • PASSWORD RESET',
+                                  'ARGUS • PASSWORD RESET',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,

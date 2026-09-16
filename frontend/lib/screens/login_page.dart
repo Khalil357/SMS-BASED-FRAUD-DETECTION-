@@ -246,7 +246,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'ARGUS SENTINEL • SMS FRAUD SHIELD',
+                                  'ARGUS • SMS FRAUD SHIELD',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
@@ -297,7 +297,7 @@ class _LoginPageState extends State<LoginPage> {
                             CustomTextField(
                               controller: _identifierController,
                               labelText: 'Phone Number or Email',
-                              hintText: 'e.g. +255754234567 or user@email.com',
+                              hintText: 'e.g. +255754234567 or user@gmail.com',
                               prefixIcon: Icons.login_outlined,
                               keyboardType: TextInputType.emailAddress,
                               validator: (value) {

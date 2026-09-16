@@ -4,18 +4,31 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  /// Custom backend URL override (e.g. http://192.168.100.224:8080)
+  /// Default server base URL
+  static const String defaultServerBaseUrl = 'https://54.242.107.64/api';
+
+  /// Custom backend URL override (e.g. https://54.242.107.64/api)
   static String? customBaseUrl;
 
-  /// Dynamic baseUrl getter for logging/debugging
+  /// Dynamic baseUrl getter
   static String get baseUrl {
     if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
-      return customBaseUrl!.trim();
+      return customBaseUrl!.trim().replaceAll(RegExp(r'/$'), '');
     }
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8080';
+    return defaultServerBaseUrl;
+  }
+
+  /// Helper to construct full request URL from base URL and path
+  static String _buildUrl(String path) {
+    final base = baseUrl;
+    var cleanPath = path.trim();
+    if (!cleanPath.startsWith('/')) {
+      cleanPath = '/$cleanPath';
     }
-    return 'http://localhost:8080';
+    if (base.endsWith('/api') && cleanPath.startsWith('/api/')) {
+      cleanPath = cleanPath.substring(4);
+    }
+    return '$base$cleanPath';
   }
 
   // Session variables & Storage Keys
@@ -86,44 +99,27 @@ class AuthService {
       ...?customHeaders,
     };
     final encodedBody = jsonEncode(body);
+    final primaryUrl = _buildUrl(path);
 
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+    try {
       return await http
           .post(
-            Uri.parse('${customBaseUrl!.trim()}$path'),
+            Uri.parse(primaryUrl),
             headers: headers,
             body: encodedBody,
           )
           .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      final fallbackHost = Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+      var cleanPath = path.startsWith('/') ? path : '/$path';
+      return await http
+          .post(
+            Uri.parse('$fallbackHost$cleanPath'),
+            headers: headers,
+            body: encodedBody,
+          )
+          .timeout(const Duration(seconds: 6));
     }
-
-    if (Platform.isAndroid) {
-      try {
-        return await http
-            .post(
-              Uri.parse('http://10.0.2.2:8080$path'),
-              headers: headers,
-              body: encodedBody,
-            )
-            .timeout(const Duration(seconds: 3));
-      } catch (_) {
-        return await http
-            .post(
-              Uri.parse('http://127.0.0.1:8080$path'),
-              headers: headers,
-              body: encodedBody,
-            )
-            .timeout(const Duration(seconds: 6));
-      }
-    }
-
-    return await http
-        .post(
-          Uri.parse('http://localhost:8080$path'),
-          headers: headers,
-          body: encodedBody,
-        )
-        .timeout(const Duration(seconds: 10));
   }
 
   /// Helper to send GET requests with automatic fallback for physical phone vs emulator
@@ -136,40 +132,25 @@ class AuthService {
       if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
       ...?customHeaders,
     };
+    final primaryUrl = _buildUrl(path);
 
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+    try {
       return await http
           .get(
-            Uri.parse('${customBaseUrl!.trim()}$path'),
+            Uri.parse(primaryUrl),
             headers: headers,
           )
           .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      final fallbackHost = Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+      var cleanPath = path.startsWith('/') ? path : '/$path';
+      return await http
+          .get(
+            Uri.parse('$fallbackHost$cleanPath'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 6));
     }
-
-    if (Platform.isAndroid) {
-      try {
-        return await http
-            .get(
-              Uri.parse('http://10.0.2.2:8080$path'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 3));
-      } catch (_) {
-        return await http
-            .get(
-              Uri.parse('http://127.0.0.1:8080$path'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 6));
-      }
-    }
-
-    return await http
-        .get(
-          Uri.parse('http://localhost:8080$path'),
-          headers: headers,
-        )
-        .timeout(const Duration(seconds: 10));
   }
 
   /// Helper to send DELETE requests with the same host fallback as other calls.
@@ -178,40 +159,25 @@ class AuthService {
       'Content-Type': 'application/json',
       if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
     };
+    final primaryUrl = _buildUrl(path);
 
-    if (customBaseUrl != null && customBaseUrl!.trim().isNotEmpty) {
+    try {
       return await http
           .delete(
-            Uri.parse('${customBaseUrl!.trim()}$path'),
+            Uri.parse(primaryUrl),
             headers: headers,
           )
           .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      final fallbackHost = Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+      var cleanPath = path.startsWith('/') ? path : '/$path';
+      return await http
+          .delete(
+            Uri.parse('$fallbackHost$cleanPath'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 6));
     }
-
-    if (Platform.isAndroid) {
-      try {
-        return await http
-            .delete(
-              Uri.parse('http://10.0.2.2:8080$path'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 3));
-      } catch (_) {
-        return await http
-            .delete(
-              Uri.parse('http://127.0.0.1:8080$path'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 6));
-      }
-    }
-
-    return await http
-        .delete(
-          Uri.parse('http://localhost:8080$path'),
-          headers: headers,
-        )
-        .timeout(const Duration(seconds: 10));
   }
 
   /// Submit SMS scan payload to backend API

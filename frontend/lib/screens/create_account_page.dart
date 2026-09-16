@@ -70,7 +70,7 @@ class _SignUpPageState extends State<SignUpPage> {
       fullName: _nameController.text.trim(),
       email: _emailController.text.trim(),
       phoneNumber: _phoneController.text.trim(),
-      gender: _selectedGender ?? 'Other',
+      gender: _selectedGender ?? 'Male',
       password: _passwordController.text,
     );
 
@@ -219,7 +219,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'ARGUS SENTINEL • REGISTRATION',
+                                  'ARGUS • REGISTRATION',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
@@ -238,7 +238,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Join Argus Sentinel to protect your messages from scam & fraud',
+                            'Join Argus to protect your messages from scam & fraud',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
@@ -285,7 +285,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             CustomTextField(
                               controller: _emailController,
                               labelText: 'Email Address',
-                              hintText: 'e.g. john@example.com',
+                              hintText: 'e.g. user@gmail.com',
                               prefixIcon: Icons.mail_outline,
                               keyboardType: TextInputType.emailAddress,
                               validator: (value) {
@@ -341,7 +341,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                 ),
                                 prefixIconConstraints: const BoxConstraints(minWidth: 52),
                               ),
-                              items: ['Male', 'Female', 'Other'].map((g) {
+                              items: ['Male', 'Female'].map((g) {
                                 return DropdownMenuItem<String>(
                                   value: g,
                                   child: Text(g),

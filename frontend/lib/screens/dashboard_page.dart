@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/sms_detection_service.dart';
 import '../services/sms_storage_service.dart';
 import '../services/sms_ingestion_service.dart';
+import '../services/notification_service.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
 import '../main.dart';
@@ -48,7 +49,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   // Settings & Permission State
   bool _isIngestionEnabled = true;
   bool _isNotificationsEnabled = true;
-  double _notificationThreshold = 0.80;
+  double _notificationThreshold = 0.50;
   bool _hasSmsPermission = false;
   bool _isTipDismissed = false;
 
@@ -91,6 +92,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   }
 
   Future<void> _loadDataAndPermissions() async {
+    await NotificationService.requestPermission();
     await _loadStoredData();
     await _checkPermissions();
     _checkFirstTimeIngestionPrompt();
@@ -302,7 +304,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     final notifications = await SmsStorageService.getBoolSetting(
         SmsStorageService.keyNotificationsEnabled, true);
     final threshold = await SmsStorageService.getDoubleSetting(
-        SmsStorageService.keyNotificationThreshold, 0.80);
+        SmsStorageService.keyNotificationThreshold, 0.50);
 
     setState(() {
       _smsLogs = logs;
@@ -700,6 +702,17 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   Future<void> _updateNotifications(bool val) async {
     await SmsStorageService.saveBoolSetting(
         SmsStorageService.keyNotificationsEnabled, val);
+    if (val) {
+      final granted = await NotificationService.requestPermission();
+      if (!granted && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Notification permission is required for live threat alerts.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
     setState(() {
       _isNotificationsEnabled = val;
     });
@@ -1576,10 +1589,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   : _currentIndex == 1
                       ? 'Scan Logs'
                       : _currentIndex == 2
-                          ? 'Blocklist'
+                          ? 'Analytics'
                           : _currentIndex == 3
                               ? 'Safety Tips'
-                              : 'Profile & Settings',
+                              : 'Profile',
               style: GoogleFonts.inter(
                 fontWeight: FontWeight.w800,
                 fontSize: 20,
@@ -1710,7 +1723,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       body: switch (_currentIndex) {
         0 => _buildHomeTab(fullName, theme, isDark),
         1 => _buildLogsTab(theme, isDark),
-        2 => _buildBlocklistTab(theme, isDark),
+        2 => _buildAnalyticsTab(theme, isDark),
         3 => const SafetyTipsPage(),
         4 => _buildProfileTab(fullName, user, theme, isDark),
         _ => const SizedBox(),
@@ -1757,9 +1770,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ),
             _buildNavItem(
               index: 2,
-              icon: Icons.block_outlined,
-              activeIcon: Icons.block,
-              label: 'Blocklist',
+              icon: Icons.analytics_outlined,
+              activeIcon: Icons.analytics_rounded,
+              label: 'Analytics',
               theme: theme,
               isDark: isDark,
             ),
@@ -1863,18 +1876,91 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   }
 
   Widget _buildAnalyticsTab(ThemeData theme, bool isDark) {
+    final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+    final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
+    final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+    final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Header summary card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.analytics_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'THREAT ANALYTICS',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: theme.colorScheme.primary,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Scanned Messages & Risk Breakdown',
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Visual breakdown of your scanned messages and daily security trends.',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Message Classification Distribution Chart
+          MessageClassificationChart(logs: _smsLogs),
+          const SizedBox(height: 16),
+
+          // Daily Threat Analysis Trend Bar Chart
           InteractiveThreatChart(logs: _smsLogs),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
   Widget _buildTipOfTheDayBanner(ThemeData theme, bool isDark) {
+    final accentColor = AppTheme.cyberRed;
     if (_isTipDismissed) {
       return Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -1883,7 +1969,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           color: isDark ? AppTheme.cyberCard : AppTheme.cardLight,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.amber.shade600.withOpacity(0.3),
+            color: accentColor.withOpacity(0.3),
             width: 1,
           ),
         ),
@@ -1892,10 +1978,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           children: [
             Row(
               children: [
-                Icon(Icons.lightbulb_outline_rounded, color: Colors.amber.shade500, size: 16),
+                Icon(Icons.lightbulb_outline_rounded, color: accentColor, size: 16),
                 const SizedBox(width: 8),
                 Text(
-                  'Safety Tip of the Day Hidden',
+                  'Safety Tip Hidden',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -1911,11 +1997,11 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 });
               },
               child: Text(
-                'Restore Card',
+                'Show Safety Tip',
                 style: GoogleFonts.inter(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: Colors.amber.shade500,
+                  color: accentColor,
                 ),
               ),
             ),
@@ -1924,185 +2010,120 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       );
     }
 
-    final tip = SafetyTipsService.getTipOfTheDay();
-    final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
-    final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
-    final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
+    return TipOfTheDayBannerWidget(
+      key: ValueKey(_isTipDismissed),
+      theme: theme,
+      isDark: isDark,
+      onDismiss: () {
+        if (mounted) {
+          setState(() {
+            _isTipDismissed = true;
+          });
+        }
+      },
+      onViewAll: () {
+        if (mounted) {
+          setState(() {
+            _currentIndex = 3;
+          });
+        }
+      },
+    );
+  }
 
+  Widget _buildHomeAnalyticsDirectiveCard(
+    ThemeData theme,
+    bool isDark,
+    Color cardBg,
+    Color borderColor,
+    Color textPrimary,
+    Color textMuted,
+  ) {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.amber.shade600.withOpacity(0.4),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.amber.shade600.withOpacity(isDark ? 0.12 : 0.06),
-            blurRadius: 20,
-            spreadRadius: 0,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header Bar
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.amber.shade700.withOpacity(0.2),
-                    Colors.amber.shade900.withOpacity(0.08),
-                  ],
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              Icons.analytics_rounded,
+              color: theme.colorScheme.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'THREAT ANALYTICS',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: theme.colorScheme.primary,
+                    letterSpacing: 0.8,
+                  ),
                 ),
-                border: Border(
-                  bottom: BorderSide(color: Colors.amber.shade700.withOpacity(0.2)),
+                const SizedBox(height: 2),
+                Text(
+                  'View charts and trends of scanned messages.',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () {
+              setState(() {
+                _currentIndex = 2; // Switch to Analytics tab
+              });
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withOpacity(0.3),
                 ),
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.shade600.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.security_rounded, color: Colors.amber.shade500, size: 14),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'SAFETY TIP • [${tip.category.toUpperCase()}]',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.amber.shade500,
-                              letterSpacing: 0.6,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'View Analytics',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      InkWell(
-                        onTap: () {
-                          setState(() {
-                            _currentIndex = 3;
-                          });
-                        },
-                        child: Row(
-                          children: [
-                            Text(
-                              'View All',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.cyberCyan,
-                              ),
-                            ),
-                            const SizedBox(width: 2),
-                            const Icon(Icons.arrow_forward_rounded, size: 12, color: AppTheme.cyberCyan),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: () {
-                          setState(() {
-                            _isTipDismissed = true;
-                          });
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.shade700.withOpacity(0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.close_rounded, size: 14, color: Colors.amber),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 12,
+                    color: theme.colorScheme.primary,
                   ),
                 ],
               ),
             ),
-
-            // Tip Content
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tip.title,
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: textPrimary,
-                      height: 1.25,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    tip.summary,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      height: 1.4,
-                      color: textMuted,
-                    ),
-                  ),
-                  if (tip.actionSteps.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.shield_outlined, size: 14, color: AppTheme.cyberGreen),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Action: ${tip.actionSteps.first}',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? AppTheme.cyberGreen : Colors.green.shade800,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -2129,18 +2150,14 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
           // Statistics Cards Row (SMS Scanned / Threats Blocked)
           _buildCyberStatsRow(theme, isDark, cardBg, cardSecBg, borderColor, textPrimary, textMuted),
+          const SizedBox(height: 12),
+
+          // Analytics Directive Card (Right after 2 stats cards, short & compact)
+          _buildHomeAnalyticsDirectiveCard(theme, isDark, cardBg, borderColor, textPrimary, textMuted),
           const SizedBox(height: 16),
 
-          // Analyze SMS & Links Section (MOVED ABOVE Message Classification)
+          // Analyze SMS & Links Section
           _buildCyberAnalyzeSection(theme, isDark, cardBg, borderColor, textPrimary, textMuted),
-          const SizedBox(height: 16),
-
-          // Message Classification Distribution Chart
-          MessageClassificationChart(logs: _smsLogs),
-          const SizedBox(height: 16),
-
-          // Daily Threat Analysis Trend Bar Chart
-          InteractiveThreatChart(logs: _smsLogs),
           const SizedBox(height: 16),
 
           // Recent Activity Section
@@ -2326,6 +2343,58 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     );
   }
 
+  String _calculateWeeklyScannedStats() {
+    if (_smsLogs.isEmpty) {
+      return '0% this week';
+    }
+    final now = DateTime.now();
+    final sevenDaysAgo = now.subtract(const Duration(days: 7));
+    final fourteenDaysAgo = now.subtract(const Duration(days: 14));
+
+    int currentWeekCount = 0;
+    int previousWeekCount = 0;
+
+    for (final log in _smsLogs) {
+      DateTime? logTime;
+      final rawTs = log['timestamp'] ?? log['time'] ?? log['date'] ?? log['receivedAt'];
+      if (rawTs is DateTime) {
+        logTime = rawTs;
+      } else if (rawTs is String) {
+        logTime = DateTime.tryParse(rawTs);
+      } else if (rawTs is int) {
+        logTime = DateTime.fromMillisecondsSinceEpoch(rawTs);
+      }
+
+      if (logTime != null) {
+        if (logTime.isAfter(sevenDaysAgo)) {
+          currentWeekCount++;
+        } else if (logTime.isAfter(fourteenDaysAgo)) {
+          previousWeekCount++;
+        }
+      } else {
+        currentWeekCount++;
+      }
+    }
+
+    if (previousWeekCount == 0) {
+      if (currentWeekCount == 0) {
+        return '0% this week';
+      }
+      return '↑ 100% this week';
+    }
+
+    final diff = currentWeekCount - previousWeekCount;
+    final percent = ((diff / previousWeekCount) * 100).round();
+
+    if (percent > 0) {
+      return '↑ $percent% this week';
+    } else if (percent < 0) {
+      return '↓ ${percent.abs()}% this week';
+    } else {
+      return '0% this week';
+    }
+  }
+
   Widget _buildCyberStatsRow(
     ThemeData theme,
     bool isDark,
@@ -2335,6 +2404,16 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     Color textPrimary,
     Color textMuted,
   ) {
+    final weeklyStatText = _calculateWeeklyScannedStats();
+    final isUp = weeklyStatText.startsWith('↑');
+    final isDown = weeklyStatText.startsWith('↓');
+    final trendColor = isUp
+        ? AppTheme.cyberGreen
+        : (isDown ? AppTheme.cyberRed : textMuted);
+    final trendIcon = isUp
+        ? Icons.trending_up_rounded
+        : (isDown ? Icons.trending_down_rounded : Icons.remove_rounded);
+
     return Row(
       children: [
         Expanded(
@@ -2374,14 +2453,14 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.trending_up_rounded, size: 13, color: AppTheme.cyberGreen),
+                    Icon(trendIcon, size: 13, color: trendColor),
                     const SizedBox(width: 4),
                     Text(
-                      '↑ 12% this week',
+                      weeklyStatText,
                       style: GoogleFonts.inter(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: AppTheme.cyberGreen,
+                        color: trendColor,
                       ),
                     ),
                   ],
@@ -2494,13 +2573,14 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
           TextField(
             controller: _scanController,
-            maxLines: 3,
-            minLines: 1,
+            minLines: 3,
+            maxLines: 8,
+            keyboardType: TextInputType.multiline,
             style: GoogleFonts.inter(fontSize: 13, color: textPrimary),
             decoration: InputDecoration(
               hintText: 'Paste suspicious SMS or message link...',
               hintStyle: GoogleFonts.inter(fontSize: 13, color: textMuted),
-              prefixIcon: const Icon(Icons.sms_outlined, color: AppTheme.cyberCyan, size: 20),
+              prefixIcon: Icon(Icons.sms_outlined, color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary, size: 20),
               filled: true,
               fillColor: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF1F5F9),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -2514,7 +2594,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppTheme.cyberCyan, width: 1.5),
+                borderSide: BorderSide(color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary, width: 1.5),
               ),
             ),
           ),
@@ -3370,10 +3450,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppTheme.cyberCyan.withOpacity(0.12),
+                            color: (isDark ? AppTheme.cyberRed : theme.colorScheme.primary).withOpacity(0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.mark_chat_unread_outlined, color: AppTheme.cyberCyan, size: 20),
+                          child: Icon(Icons.mark_chat_unread_outlined, color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary, size: 20),
                         ),
                         const SizedBox(width: 12),
                         Column(
@@ -3397,7 +3477,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     ),
                     Switch(
                       value: _isIngestionEnabled && _hasSmsPermission,
-                      activeColor: AppTheme.cyberGreen,
+                      activeColor: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                       onChanged: Platform.isAndroid
                           ? (val) {
                               if (val) {
@@ -3461,10 +3541,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppTheme.cyberRed.withOpacity(0.12),
+                            color: (isDark ? AppTheme.cyberRed : theme.colorScheme.primary).withOpacity(0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.notifications_active_outlined, color: AppTheme.cyberRed, size: 20),
+                          child: Icon(Icons.notifications_active_outlined, color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary, size: 20),
                         ),
                         const SizedBox(width: 12),
                         Text(
@@ -3479,7 +3559,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     ),
                     Switch(
                       value: _isNotificationsEnabled,
-                      activeColor: AppTheme.cyberRed,
+                      activeColor: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                       onChanged: (val) => _updateNotifications(val),
                     ),
                   ],
@@ -3498,18 +3578,18 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          color: AppTheme.cyberRed,
+                          color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Slider(
-                    value: _notificationThreshold,
-                    min: 0.1,
-                    max: 0.95,
-                    divisions: 17,
-                    activeColor: AppTheme.cyberRed,
+                    value: _notificationThreshold.clamp(0.50, 1.00),
+                    min: 0.50,
+                    max: 1.00,
+                    divisions: 10,
+                    activeColor: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                     inactiveColor: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFE2E8F0),
                     onChanged: (val) => _updateThreshold(val),
                   ),
@@ -3539,12 +3619,12 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.12),
+                        color: (isDark ? AppTheme.cyberRed : theme.colorScheme.primary).withOpacity(0.12),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-                        color: Colors.amber.shade700,
+                        color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                         size: 20,
                       ),
                     ),
@@ -3561,7 +3641,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 ),
                 Switch(
                   value: isDark,
-                  activeColor: Colors.amber.shade700,
+                  activeColor: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                   onChanged: (val) {
                     SecureSignalApp.of(context).toggleTheme();
                   },
@@ -3634,7 +3714,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
               ),
               icon: const Icon(Icons.logout_rounded, size: 18),
               label: Text(
-                'Logout from Argus Sentinel',
+                'Logout from Argus',
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.w800,
                   fontSize: 13,
@@ -3645,6 +3725,282 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           ),
           const SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+}
+
+class TipOfTheDayBannerWidget extends StatefulWidget {
+  final ThemeData theme;
+  final bool isDark;
+  final VoidCallback onDismiss;
+  final VoidCallback onViewAll;
+
+  const TipOfTheDayBannerWidget({
+    super.key,
+    required this.theme,
+    required this.isDark,
+    required this.onDismiss,
+    required this.onViewAll,
+  });
+
+  @override
+  State<TipOfTheDayBannerWidget> createState() => _TipOfTheDayBannerWidgetState();
+}
+
+class _TipOfTheDayBannerWidgetState extends State<TipOfTheDayBannerWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  static const int _timerSeconds = 15;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: _timerSeconds),
+    );
+    _controller.reverse(from: 1.0);
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed) {
+        widget.onDismiss();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tip = SafetyTipsService.getTipOfTheDay();
+    final cardBg = widget.isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+    final textPrimary = widget.isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+    final textMuted = widget.isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
+    final accentColor = AppTheme.cyberRed;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: accentColor.withOpacity(0.4),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(widget.isDark ? 0.12 : 0.06),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Timer Unfilling Progress Bar at top of card
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return Stack(
+                  children: [
+                    Container(
+                      height: 4,
+                      width: double.infinity,
+                      color: accentColor.withOpacity(0.15),
+                    ),
+                    FractionallySizedBox(
+                      widthFactor: _controller.value.clamp(0.0, 1.0),
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              accentColor,
+                              Colors.redAccent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+            // Header Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    accentColor.withOpacity(0.15),
+                    accentColor.withOpacity(0.05),
+                  ],
+                ),
+                border: Border(
+                  bottom: BorderSide(color: accentColor.withOpacity(0.2)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.18),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.security_rounded, color: accentColor, size: 14),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'SAFETY TIP',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: accentColor,
+                              letterSpacing: 0.8,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Countdown seconds pill
+                      AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, child) {
+                          final secs = (_controller.value * _timerSeconds).ceil();
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: accentColor.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${secs}s',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: accentColor,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      InkWell(
+                        onTap: widget.onViewAll,
+                        child: Row(
+                          children: [
+                            Text(
+                              'View All',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.cyberCyan,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(Icons.arrow_forward_rounded, size: 12, color: AppTheme.cyberCyan),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: widget.onDismiss,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.close_rounded, size: 14, color: accentColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Tip Content
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tip.title,
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: textPrimary,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    tip.summary,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: textMuted,
+                    ),
+                  ),
+                  if (tip.actionSteps.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: widget.isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: widget.isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.shield_outlined, size: 14, color: AppTheme.cyberGreen),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Action: ${tip.actionSteps.first}',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: widget.isDark ? AppTheme.cyberGreen : Colors.green.shade800,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -564,7 +564,6 @@ class _GenderDropdownState extends State<GenderDropdown> {
             DropdownMenuItem(value: '', child: Text('Select your gender')),
             DropdownMenuItem(value: 'Female', child: Text('Female')),
             DropdownMenuItem(value: 'Male', child: Text('Male')),
-            DropdownMenuItem(value: 'Other', child: Text('Other'))
           ],
           onChanged: (value) {
             if (value != null) {

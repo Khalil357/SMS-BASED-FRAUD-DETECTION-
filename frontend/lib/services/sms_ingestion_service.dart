@@ -82,7 +82,7 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
     final isAlertEnabled = await SmsStorageService.getBoolSetting(
         SmsStorageService.keyNotificationsEnabled, true);
     final alertThreshold = await SmsStorageService.getDoubleSetting(
-        SmsStorageService.keyNotificationThreshold, 0.80);
+        SmsStorageService.keyNotificationThreshold, 0.50);
 
     if (isAlertEnabled && (logEntry['type'] == 'Fraud' || threatLevel >= alertThreshold)) {
       await NotificationService.showThreatAlert(
@@ -203,10 +203,10 @@ class SmsIngestionService {
           final isAlertEnabled = await SmsStorageService.getBoolSetting(
               SmsStorageService.keyNotificationsEnabled, true);
           final alertThreshold = await SmsStorageService.getDoubleSetting(
-              SmsStorageService.keyNotificationThreshold, 0.80);
+              SmsStorageService.keyNotificationThreshold, 0.50);
 
           final threatLevel = (logEntry['threat'] as num).toDouble();
-          if (isAlertEnabled && threatLevel >= alertThreshold) {
+          if (isAlertEnabled && (logEntry['type'] == 'Fraud' || threatLevel >= alertThreshold)) {
             await NotificationService.showThreatAlert(
               sender: sender,
               message: body,

@@ -168,7 +168,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'ARGUS SENTINEL • ACCOUNT RECOVERY',
+                                  'ARGUS • ACCOUNT RECOVERY',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
@@ -219,7 +219,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             CustomTextField(
                               controller: _phoneController,
                               labelText: 'Email or Phone Number',
-                              hintText: 'e.g. user@email.com or +255754234567',
+                              hintText: 'e.g. user@gmail.com or +255754234567',
                               prefixIcon: Icons.contact_mail_outlined,
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.done,
