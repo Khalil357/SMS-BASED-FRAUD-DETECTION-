@@ -171,11 +171,7 @@ class _LoginPageState extends State<LoginPage> {
                             CustomTextField(
                               controller: _identifierController,
                               labelText: 'Phone Number or Email',
-<<<<<<< HEAD
                               hintText: 'e.g. +2557541234567 or user@email.com',
-=======
-                              hintText: 'e.g. +27821234567 or user@email.com',
->>>>>>> origin/front_end
                               prefixIcon: Icons.login_outlined,
                               keyboardType: TextInputType.emailAddress,
                               validator: (value) {

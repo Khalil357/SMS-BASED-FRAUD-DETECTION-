@@ -14,6 +14,7 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import java.io.IOException;
 import java.util.List;
 
@@ -64,8 +65,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         SecurityContextHolder.getContext().setAuthentication(authentication);
                     }
                 }
+            } catch (ExpiredJwtException e) {
+                SecurityContextHolder.clearContext();
+                request.setAttribute("authError", "Session expired");
             } catch (RuntimeException e) {
-                // Invalid, expired, or malformed token — treat as unauthenticated.
                 SecurityContextHolder.clearContext();
             }
         }

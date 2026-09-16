@@ -10,11 +10,8 @@ class VerificationPage extends StatefulWidget {
   final Navigate onNavigate;
   final String phoneNumber;
   final bool isResetPasswordFlow;
-<<<<<<< HEAD
-=======
   final bool isLoginFlow;
   final String? loginEmail;
->>>>>>> origin/front_end
   final ValueChanged<String> onVerified;
 
   const VerificationPage({
@@ -22,11 +19,8 @@ class VerificationPage extends StatefulWidget {
     required this.onNavigate,
     required this.phoneNumber,
     this.isResetPasswordFlow = true,
-<<<<<<< HEAD
-=======
     this.isLoginFlow = false,
     this.loginEmail,
->>>>>>> origin/front_end
     required this.onVerified,
   });
 
@@ -91,12 +85,7 @@ class _VerificationPageState extends State<VerificationPage> {
       widget.onVerified(_otpCode);
     } else {
       setState(() {
-<<<<<<< HEAD
         _errorMessage = result['message'] ?? 'Invalid verification code. Please try again.';
-=======
-        _errorMessage =
-            result['message'] ?? 'Invalid verification code. Please try again.';
->>>>>>> origin/front_end
       });
     }
   }

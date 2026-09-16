@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 import 'auth/login_page.dart';
+import 'dashboard_page.dart';
 import 'onboarding_screen.dart';
+import '../services/auth_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -51,6 +53,21 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Future<void> _navigateToNext() async {
     await Future.delayed(const Duration(milliseconds: 2800));
     if (!mounted) return;
+
+    final session = await AuthService.restoreSession();
+    if (session != null) {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const DashboardPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
+      );
+      return;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     // Default to true so onboarding shows on first run

@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-<<<<<<< HEAD
+  static const String _prefsKeyToken = 'auth_token';
+  static const String _prefsKeyUser = 'auth_user';
+
   /// Pass API_BASE_URL when building for a physical device or a deployed API.
   ///
   /// `10.0.2.2` is only the Android emulator's route back to the development
@@ -20,10 +24,6 @@ class AuthService {
           ? _configuredBaseUrl.substring(0, _configuredBaseUrl.length - 1)
           : _configuredBaseUrl;
     }
-=======
-  // Dynamically resolve baseUrl to support Android emulators (10.0.2.2) and local hosts
-  static String get baseUrl {
->>>>>>> origin/front_end
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:8080';
     }
@@ -33,6 +33,94 @@ class AuthService {
   // Session variables
   static Map<String, dynamic>? currentUser;
   static String? token;
+  static Timer? _sessionTimer;
+  static void Function(String?)? onSessionExpired;
+
+  static Future<void> _saveSession(String jwtToken, Map<String, dynamic> userData) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsKeyToken, jwtToken);
+      await prefs.setString(_prefsKeyUser, jsonEncode(userData));
+    } catch (_) {}
+  }
+
+  static Future<void> _clearSessionPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefsKeyToken);
+      await prefs.remove(_prefsKeyUser);
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>?> restoreSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jwtToken = prefs.getString(_prefsKeyToken);
+      final userJson = prefs.getString(_prefsKeyUser);
+      if (jwtToken != null && userJson != null && _isUsableToken(jwtToken)) {
+        final userData = jsonDecode(userJson) as Map<String, dynamic>;
+        final expiry = _decodeTokenExpiry(jwtToken);
+        if (expiry != null && !expiry.isAfter(DateTime.now())) {
+          // Token already expired — treat as no active session.
+          await _clearSessionPrefs();
+          return null;
+        }
+        currentUser = userData;
+        token = jwtToken;
+        _scheduleSessionTimer();
+        return {'success': true, 'token': token, 'data': currentUser};
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static void _clearSession(String? message) {
+    currentUser = null;
+    token = null;
+    _sessionTimer?.cancel();
+    _sessionTimer = null;
+    _clearSessionPrefs();
+    onSessionExpired?.call(message);
+  }
+
+  static Future<void> logout() async {
+    _clearSession(null);
+  }
+
+  static bool _isUsableToken(String value) {
+    final candidate = value.trim();
+    return candidate.isNotEmpty && candidate.split('.').length >= 3;
+  }
+
+  static DateTime? _decodeTokenExpiry(String jwt) {
+    try {
+      final parts = jwt.split('.');
+      if (parts.length != 3) return null;
+      String payload = parts[1];
+      String normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+      while (normalized.length % 4 != 0) {
+        normalized += '=';
+      }
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final json = jsonDecode(decoded) as Map<String, dynamic>;
+      final exp = json['exp'] as int?;
+      if (exp == null) return null;
+      return DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _scheduleSessionTimer() {
+    if (token == null) return;
+    final expiry = _decodeTokenExpiry(token!);
+    if (expiry == null) return;
+    final duration = expiry.difference(DateTime.now());
+    if (duration.inMilliseconds > 0) {
+      _sessionTimer?.cancel();
+      _sessionTimer = Timer(duration, () => _clearSession('Session expired'));
+    }
+  }
 
   /// Safely decode JSON — returns empty map on null/empty/malformed body
   static Map<String, dynamic> _safeJsonDecode(String body) {
@@ -94,11 +182,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-<<<<<<< HEAD
         'message': _connectionErrorMessage(),
-=======
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
->>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -130,8 +214,22 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
+        final tokenStr = (decoded['token'] ??
+                data['token'] ??
+                data['access_token'] ??
+                data['accessToken'])
+            ?.toString();
+        if (tokenStr == null || tokenStr.trim().isEmpty) {
+          return {
+            'success': false,
+            'message': 'No session token returned by the server',
+            'statusCode': response.statusCode,
+          };
+        }
         currentUser = data;
-        token = decoded['token'] as String? ?? data['token'] as String?;
+        token = tokenStr;
+        await _saveSession(token!, currentUser ?? {});
+        _scheduleSessionTimer();
         return {
           'success': true,
           'message': decoded['message'] ?? 'Login successful',
@@ -148,11 +246,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-<<<<<<< HEAD
         'message': _connectionErrorMessage(),
-=======
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
->>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -192,11 +286,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-<<<<<<< HEAD
         'message': _connectionErrorMessage(),
-=======
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
->>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -236,11 +326,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-<<<<<<< HEAD
         'message': _connectionErrorMessage(),
-=======
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
->>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -282,11 +368,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-<<<<<<< HEAD
         'message': _connectionErrorMessage(),
-=======
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
->>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -330,11 +412,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-<<<<<<< HEAD
         'message': _connectionErrorMessage(),
-=======
-        'message': 'Failed to connect to backend server. Please verify the backend is running.',
->>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -396,11 +474,7 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-<<<<<<< HEAD
         'message': _connectionErrorMessage(),
-=======
-        'message': 'Failed to submit scan to backend server.',
->>>>>>> origin/front_end
         'error': e,
       };
     }
@@ -450,17 +524,12 @@ class AuthService {
     } catch (e) {
       return {
         'success': false,
-<<<<<<< HEAD
         'message': _connectionErrorMessage(),
-=======
-        'message': 'Failed to connect to backend server.',
->>>>>>> origin/front_end
         'error': e,
         'content': [],
       };
     }
   }
-<<<<<<< HEAD
 
   /// Block a phone number
   /// POST /api/block
@@ -519,8 +588,9 @@ class AuthService {
       };
 
       final response = await http.delete(
-        Uri.parse('$baseUrl/api/block?phoneNumber=$phoneNumber'),
+        Uri.parse('$baseUrl/api/block'),
         headers: headers,
+        body: jsonEncode({'phoneNumber': phoneNumber}),
       );
 
       final decoded = _safeJsonDecode(response.body);
@@ -591,6 +661,4 @@ class AuthService {
       };
     }
   }
-=======
->>>>>>> origin/front_end
 }

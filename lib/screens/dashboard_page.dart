@@ -5,19 +5,20 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import '../services/sms_detection_service.dart';
 import '../services/sms_storage_service.dart';
+import 'package:sms_based_fraud_detection/services/system_blocker.dart';
 import '../services/sms_ingestion_service.dart';
 import '../theme.dart';
 import '../main.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/interactive_threat_chart.dart';
-<<<<<<< HEAD
-=======
+import '../widgets/scam_detected_screen.dart';
 import '../widgets/security_illustrations.dart';
->>>>>>> origin/front_end
 import '../services/safety_tips_service.dart';
 import 'safety_tips_page.dart';
+import 'blocked_numbers_screen.dart';
 import 'auth/login_page.dart';
+import '../widgets/argus_nav_bar.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -26,7 +27,7 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   // Controllers
@@ -55,17 +56,31 @@ class _DashboardPageState extends State<DashboardPage> {
   List<Map<String, dynamic>> _smsLogs = [];
 
   // Blocklist state
-  final List<Map<String, String>> _blockedNumbers = [
-    {'number': '+27829876543', 'date': '2026-08-20'},
-    {'number': '+27831112222', 'date': '2026-08-21'},
-    {'number': '+14155552671', 'date': '2026-08-22'},
-  ];
+  List<Map<String, String>> _blockedNumbers = [];
+  bool _isDefaultSmsApp = false;
 
   StreamSubscription? _smsStreamSubscription;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    AuthService.onSessionExpired = (message) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message ?? 'Your session has expired. Please log in again.'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+        );
+      }
+    };
     _loadStoredData();
     _checkPermissions();
 
@@ -82,10 +97,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scanController.dispose();
     _blockNumberController.dispose();
     _searchController.dispose();
     _smsStreamSubscription?.cancel();
+    AuthService.onSessionExpired = null;
     super.dispose();
   }
 
@@ -102,8 +119,40 @@ class _DashboardPageState extends State<DashboardPage> {
       _notificationThreshold = threshold;
     });
 
+    _loadBlockedNumbers();
+
     // Fetch backend Fraud Scans (GET /api/scans/fraud?page=0&size=20)
     _fetchBackendFraudScans();
+  }
+
+  Future<void> _loadBlockedNumbers() async {
+    final storedBlocked = await SmsStorageService.getBlockedNumberEntries();
+    final isDefault = await SystemBlocker.isDefaultSmsApp();
+    if (!mounted) return;
+    setState(() {
+      _blockedNumbers = storedBlocked
+          .map((e) => {
+                'number': e['number'] ?? '',
+                'date': e['date'] ?? '',
+                'reason': e['reason'] ?? '',
+              })
+          .toList();
+      _isDefaultSmsApp = isDefault;
+    });
+    if (!isDefault) return;
+    await SystemBlocker.syncBlocklistFromSystem();
+    final synced = await SmsStorageService.getBlockedNumberEntries();
+    if (mounted) {
+      setState(() {
+        _blockedNumbers = synced
+            .map((e) => {
+                  'number': e['number'] ?? '',
+                  'date': e['date'] ?? '',
+                  'reason': e['reason'] ?? '',
+                })
+            .toList();
+      });
+    }
   }
 
   Future<void> _fetchBackendFraudScans() async {
@@ -429,6 +478,31 @@ class _DashboardPageState extends State<DashboardPage> {
         _scanResult = '🛡️ Verified Safe ($modelTag):\nMessage evaluated as safe ($safeConfPct% Confidence, $threatPct% Threat Index).\n\n${result.feedback}';
       }
 
+      if (result.classification == 'Fraud') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ScamDetectedScreen(
+              sender: 'Manual Scan',
+              message: text,
+              reasons: result.matchedReasons,
+              onBlock: () {
+                Navigator.pop(context);
+                _blockNumberController.text = 'Manual Scan';
+                _handleAddBlockedNumber(
+                  reason: _deriveBlockReason(result.matchedReasons, text),
+                );
+              },
+              onDismiss: () => Navigator.pop(context),
+              onNavigateToTab: (index) {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+                setState(() => _currentIndex = index);
+              },
+            ),
+          ),
+        );
+      }
+
       _smsLogs.insert(0, logEntry);
     });
   }
@@ -591,15 +665,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-<<<<<<< HEAD
                         color: classificationColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: classificationColor.withValues(alpha: 0.3)),
-=======
-                        color: classificationColor.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: classificationColor.withOpacity(0.3)),
->>>>>>> origin/front_end
                       ),
                       child: Icon(
                         type == 'Safe'
@@ -669,17 +737,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-<<<<<<< HEAD
                     color: classificationColor.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: classificationColor.withValues(alpha: 0.1),
-=======
-                    color: classificationColor.withOpacity(0.04),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: classificationColor.withOpacity(0.1),
->>>>>>> origin/front_end
                     ),
                   ),
                   child: Column(
@@ -767,39 +828,115 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _handleAddBlockedNumber() {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkDefaultSmsStatus();
+    }
+  }
+
+  Future<void> _checkDefaultSmsStatus() async {
+    final isDefault = await SystemBlocker.isDefaultSmsApp();
+    if (!mounted || _isDefaultSmsApp == isDefault) return;
+    setState(() => _isDefaultSmsApp = isDefault);
+    if (isDefault) {
+      await _loadBlockedNumbers();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Argus is now your default SMS app. Real blocking is active.'),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleSetDefaultSmsApp() async {
+    await SystemBlocker.requestDefaultSmsApp();
+  }
+
+  void _handleAddBlockedNumber({String? reason}) async {
     final number = _blockNumberController.text.trim();
     if (number.isEmpty) return;
-    if (number.length < 8) {
+    final digitCount = number.replaceAll(RegExp(r'[^\d+]'), '').length;
+    if (digitCount < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid phone number.')),
       );
       return;
     }
 
+    final normalized = SmsStorageService.normalizeNumber(number);
+    final finalReason = reason ?? 'User blocked';
+    final today = DateTime.now().toIso8601String().split('T').first;
+
     setState(() {
       _blockedNumbers.insert(0, {
-        'number': number,
-        'date': DateTime.now().toString().split(' ')[0],
+        'number': normalized,
+        'date': today,
+        'reason': finalReason,
       });
       _blockNumberController.clear();
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$number added to blocklist.'),
-        backgroundColor: Colors.green.shade600,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    await SmsStorageService.addBlockedNumber(normalized, reason: finalReason);
+
+    try {
+      await AuthService.blockNumber(phoneNumber: normalized);
+    } catch (_) {}
+
+    final isDefault = await SystemBlocker.isDefaultSmsApp();
+    bool systemBlocked = false;
+    if (isDefault) {
+      systemBlocked = await SystemBlocker.blockSystemNumber(normalized);
+    }
+
+    if (!mounted) return;
+
+    if (!isDefault || !systemBlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$normalized added. Enable Argus as default SMS app for real system blocking.'),
+          backgroundColor: Colors.orange.shade700,
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'ENABLE',
+            textColor: Colors.white,
+            onPressed: _handleSetDefaultSmsApp,
+          ),
+        ),
+      );
+      setState(() => _isDefaultSmsApp = false);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$normalized added and blocked system-wide.'),
+          backgroundColor: Colors.green.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
-  void _handleRemoveBlockedNumber(int index) {
-    final number = _blockedNumbers[index]['number'];
+  void _handleRemoveBlockedNumber(int index) async {
+    final number = _blockedNumbers[index]['number'] as String;
     setState(() {
       _blockedNumbers.removeAt(index);
     });
 
+    await SmsStorageService.removeBlockedNumber(number);
+
+    try {
+      await AuthService.unblockNumber(phoneNumber: number);
+    } catch (_) {}
+
+    if (await SystemBlocker.isDefaultSmsApp()) {
+      await SystemBlocker.unblockSystemNumber(number);
+    }
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('$number removed from blocklist.'),
@@ -808,9 +945,31 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  String _deriveBlockReason(List<String> reasons, String message) {
+    final lower = message.toLowerCase();
+    final joinedReasons = reasons.join(' ').toLowerCase();
+    if (lower.contains('http://') ||
+        lower.contains('https://') ||
+        lower.contains('www.') ||
+        lower.contains('bit.ly') ||
+        lower.contains('tinyurl') ||
+        lower.contains('.xyz') ||
+        lower.contains('.info')) {
+      return 'Suspicious link';
+    }
+    if (joinedReasons.contains('phish') ||
+        joinedReasons.contains('credential') ||
+        joinedReasons.contains('account') ||
+        lower.contains('bank') ||
+        lower.contains('verify') ||
+        lower.contains('otp')) {
+      return 'Phishing';
+    }
+    return 'Scam SMS';
+  }
+
   void _handleLogout() {
-    AuthService.currentUser = null;
-    AuthService.token = null;
+    AuthService.logout();
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -826,13 +985,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: _currentIndex == 4
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Back to Dashboard',
-                onPressed: () => setState(() => _currentIndex = 0),
-              )
-            : null,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -861,10 +1013,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   : _currentIndex == 1
                       ? 'Scan Logs'
                       : _currentIndex == 2
-                          ? 'Blocklist'
-                          : _currentIndex == 3
-                              ? 'Safety Tips'
-                              : 'Profile & Settings',
+                          ? 'Blocked'
+                          : 'Profile & Settings',
               style: GoogleFonts.inter(fontWeight: FontWeight.w800),
             ),
           ],
@@ -887,7 +1037,7 @@ class _DashboardPageState extends State<DashboardPage> {
             child: InkWell(
               onTap: () {
                 setState(() {
-                  _currentIndex = 4; // Open Profile & Settings view
+                  _currentIndex = 3; // Open Profile & Settings view
                 });
               },
               borderRadius: BorderRadius.circular(20),
@@ -896,7 +1046,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: _currentIndex == 4
+                    color: _currentIndex == 3
                         ? theme.colorScheme.primary
                         : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                     width: 2,
@@ -904,11 +1054,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 child: CircleAvatar(
                   radius: 15,
-<<<<<<< HEAD
                   backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15),
-=======
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
->>>>>>> origin/front_end
                   child: Text(
                     fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
                     style: GoogleFonts.inter(
@@ -927,39 +1073,12 @@ class _DashboardPageState extends State<DashboardPage> {
         0 => _buildHomeTab(fullName, theme, isDark),
         1 => _buildLogsTab(theme, isDark),
         2 => _buildBlocklistTab(theme, isDark),
-        3 => const SafetyTipsPage(),
-        4 => _buildProfileTab(fullName, user, theme, isDark),
+        3 => _buildProfileTab(fullName, user, theme, isDark),
         _ => const SizedBox(),
       },
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex >= 4 ? 0 : _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: theme.colorScheme.primary,
-        unselectedItemColor: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-        backgroundColor: isDark ? AppTheme.cardDark : AppTheme.cardLight,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history_outlined),
-            activeIcon: Icon(Icons.history),
-            label: 'Logs',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.block_outlined),
-            activeIcon: Icon(Icons.block),
-            label: 'Blocklist',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.lightbulb_outline),
-            activeIcon: Icon(Icons.lightbulb),
-            label: 'Tips',
-          ),
-        ],
+      bottomNavigationBar: ArgusNavBar(
+        currentIndex: _currentIndex,
+        onChanged: (index) => setState(() => _currentIndex = index),
       ),
     );
   }
@@ -986,19 +1105,11 @@ class _DashboardPageState extends State<DashboardPage> {
         color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-<<<<<<< HEAD
           color: Colors.amber.shade700.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
             color: Colors.amber.shade700.withValues(alpha: 0.05),
-=======
-          color: Colors.amber.shade700.withOpacity(0.3),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.amber.shade700.withOpacity(0.05),
->>>>>>> origin/front_end
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1027,9 +1138,12 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               TextButton(
                 onPressed: () {
-                  setState(() {
-                    _currentIndex = 3; // Go to Safety Tips tab
-                  });
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SafetyTipsPage(),
+                    ),
+                  );
                 },
                 child: Text(
                   'View All',
@@ -1113,7 +1227,6 @@ class _DashboardPageState extends State<DashboardPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: _isIngestionEnabled && _hasSmsPermission
-<<<<<<< HEAD
                             ? Colors.green.withValues(alpha: 0.12)
                             : Colors.orange.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
@@ -1121,15 +1234,6 @@ class _DashboardPageState extends State<DashboardPage> {
                           color: _isIngestionEnabled && _hasSmsPermission
                               ? Colors.green.withValues(alpha: 0.3)
                               : Colors.orange.withValues(alpha: 0.3),
-=======
-                            ? Colors.green.withOpacity(0.12)
-                            : Colors.orange.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: _isIngestionEnabled && _hasSmsPermission
-                              ? Colors.green.withOpacity(0.3)
-                              : Colors.orange.withOpacity(0.3),
->>>>>>> origin/front_end
                         ),
                       ),
                       child: Row(
@@ -1427,11 +1531,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     return ChoiceChip(
                       label: Text(type),
                       selected: isSelected,
-<<<<<<< HEAD
                       selectedColor: theme.colorScheme.primary.withValues(alpha: 0.2),
-=======
-                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
->>>>>>> origin/front_end
                       checkmarkColor: theme.colorScheme.primary,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 11,
@@ -1459,11 +1559,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     return ChoiceChip(
                       label: Text(frame),
                       selected: isSelected,
-<<<<<<< HEAD
                       selectedColor: theme.colorScheme.primary.withValues(alpha: 0.2),
-=======
-                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
->>>>>>> origin/front_end
                       checkmarkColor: theme.colorScheme.primary,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 11,
@@ -1532,15 +1628,9 @@ class _DashboardPageState extends State<DashboardPage> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-<<<<<<< HEAD
                                         color: statusColor.withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(color: statusColor.withValues(alpha: 0.2)),
-=======
-                                        color: statusColor.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: statusColor.withOpacity(0.2)),
->>>>>>> origin/front_end
                                       ),
                                       child: Text(
                                         type,
@@ -1608,98 +1698,59 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildBlocklistTab(ThemeData theme, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Blocked Senders',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+    return Column(
+      children: [
+        if (!_isDefaultSmsApp) _buildDefaultSmsBanner(theme, isDark),
+        Expanded(
+          child: BlockedNumbersScreen(
+            blockedNumbers: _blockedNumbers,
+            onUnblock: _handleRemoveBlockedNumber,
+            onBack: () => setState(() => _currentIndex = 0),
           ),
-          const SizedBox(height: 6),
-          Text(
-            'SMS messages from numbers on this blocklist will be automatically rejected and reported.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDefaultSmsBanner(ThemeData theme, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+      color: isDark ? const Color(0xFF16324F) : const Color(0xFFE3F2FD),
+      child: Row(
+        children: [
+          Icon(Icons.phone_android, color: isDark ? Colors.lightBlue.shade300 : Colors.blue.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Enable real blocking',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: isDark ? Colors.white : AppTheme.textBodyLight,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Set Argus as your default SMS app so blocked numbers are intercepted at the system level.',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    height: 1.3,
+                    color: isDark ? Colors.white.withValues(alpha: 0.6) : AppTheme.subtleLight,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Input Card
-          Row(
-            children: [
-              Expanded(
-                child: CustomTextField(
-                  controller: _blockNumberController,
-                  labelText: 'Block Number',
-                  hintText: 'e.g. +27820000000',
-                  prefixIcon: Icons.block,
-                  keyboardType: TextInputType.phone,
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _handleAddBlockedNumber,
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                  ),
-                  child: const Icon(Icons.add, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Numbers List
-          Expanded(
-            child: _blockedNumbers.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline,
-                          size: 48,
-                          color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'No numbers blocked yet',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: _blockedNumbers.length,
-                    itemBuilder: (context, index) {
-                      final item = _blockedNumbers[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        child: ListTile(
-                          leading: const CircleAvatar(
-                            backgroundColor: AppTheme.primaryLight,
-                            child: Icon(Icons.block, color: Colors.white, size: 16),
-                          ),
-                          title: Text(
-                            item['number']!,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Text('Blocked on ${item['date']}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () => _handleRemoveBlockedNumber(index),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+          TextButton(
+            onPressed: _handleSetDefaultSmsApp,
+            style: TextButton.styleFrom(
+              foregroundColor: isDark ? Colors.lightBlue.shade300 : Colors.blue.shade700,
+            ),
+            child: const Text('Set up', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -1813,11 +1864,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       Switch(
                         value: _isIngestionEnabled,
-<<<<<<< HEAD
                         activeThumbColor: theme.colorScheme.primary,
-=======
-                        activeColor: theme.colorScheme.primary,
->>>>>>> origin/front_end
                         onChanged: Platform.isAndroid
                             ? (val) => _updateIngestion(val)
                             : null, // Disabled on iOS
@@ -1871,11 +1918,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   Switch(
                     value: _isNotificationsEnabled,
-<<<<<<< HEAD
                     activeThumbColor: theme.colorScheme.primary,
-=======
-                    activeColor: theme.colorScheme.primary,
->>>>>>> origin/front_end
                     onChanged: (val) => _updateNotifications(val),
                   ),
                 ],

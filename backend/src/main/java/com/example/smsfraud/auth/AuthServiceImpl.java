@@ -1,14 +1,12 @@
 package com.example.smsfraud.auth;
 
 import com.example.smsfraud.auth.dto.LoginRequest;
-import com.example.smsfraud.auth.dto.LoginPendingResponse;
 import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
 import com.example.smsfraud.auth.dto.ResetPasswordRequest;
 import com.example.smsfraud.auth.dto.RegisterRequest;
 import com.example.smsfraud.auth.dto.RegisterResponse;
-import com.example.smsfraud.auth.dto.RefreshResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 import com.example.smsfraud.common.exception.BadRequestException;
 import com.example.smsfraud.common.exception.ConflictException;
@@ -25,6 +23,7 @@ import com.example.smsfraud.user.UserRole;
 import com.example.smsfraud.user.UserRepository;
 import com.example.smsfraud.user.UserRoleRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -44,6 +43,7 @@ public class AuthServiceImpl implements AuthService {
     private final EmailService emailService;
     private final SmsSenderService smsService;
     private final TokenProvider tokenProvider;
+    private final boolean autoVerifyRegistrations;
 
     public AuthServiceImpl(UserRepository userRepository,
                            UserRoleRepository userRoleRepository,
@@ -51,7 +51,8 @@ public class AuthServiceImpl implements AuthService {
                            OtpService otpService,
                            EmailService emailService,
                            SmsSenderService smsService,
-                           TokenProvider tokenProvider) {
+                           TokenProvider tokenProvider,
+                           @Value("${app.auth.auto-verify-registrations:true}") boolean autoVerifyRegistrations) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.passwordEncoder = passwordEncoder;
@@ -59,6 +60,7 @@ public class AuthServiceImpl implements AuthService {
         this.emailService = emailService;
         this.smsService = smsService;
         this.tokenProvider = tokenProvider;
+        this.autoVerifyRegistrations = autoVerifyRegistrations;
     }
 
     @Override
@@ -79,19 +81,23 @@ public class AuthServiceImpl implements AuthService {
         user.setGender(req.gender());
         user.setPasswordHash(passwordEncoder.encode(req.password()));
         user.setRole(role);
-        user.setVerified(false);
+        user.setVerified(autoVerifyRegistrations);
         user.setActive(true);
         userRepository.save(user);
+
+        if (autoVerifyRegistrations) {
+            return new RegisterResponse(user.getUserId());
+        }
 
         String otp = otpService.issueCode(user.getPhone());
         emailService.sendVerificationCode(user.getEmail(), otp);
         smsService.sendSms(user.getPhone(), "ARGUS: Your verification code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
 
-        return new RegisterResponse(user.getUserId(), otp);
+        return new RegisterResponse(user.getUserId());
     }
 
     @Override
-    public LoginPendingResponse login(LoginRequest req) {
+    public LoginResponse login(LoginRequest req) {
         User user;
         if (req.email() != null && !req.email().isBlank()) {
             user = userRepository.findByEmail(req.email())
@@ -116,15 +122,9 @@ public class AuthServiceImpl implements AuthService {
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
-        // Two-step login: credentials are valid, so issue + email the OTP.
-        // No token is returned here — the client must verify the OTP via
-        // verifyLoginOtp() to receive the JWT.
-        if (user.getEmail() != null && !user.getEmail().isBlank()) {
-            String otp = otpService.issueCode(user.getEmail());
-            emailService.sendVerificationCode(user.getEmail(), otp);
-        }
-
-        return new LoginPendingResponse(user.getEmail(), "OTP sent; verify to complete login");
+        String accessToken = tokenProvider.generateAccessToken(user.getUserId(), user.getTokenVersion());
+        String refreshToken = tokenProvider.generateRefreshToken(user.getUserId(), user.getTokenVersion());
+        return new LoginResponse(accessToken, refreshToken, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
     }
 
     @Override
@@ -192,41 +192,5 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = tokenProvider.generateAccessToken(user.getUserId(), user.getTokenVersion());
         String refreshToken = tokenProvider.generateRefreshToken(user.getUserId(), user.getTokenVersion());
         return new LoginResponse(accessToken, refreshToken, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
-    }
-
-    @Override
-    public RefreshResponse refresh(String refreshToken) {
-        TokenClaims claims = tokenProvider.validateToken(refreshToken);
-        if (!"refresh".equals(claims.type())) {
-            throw new UnauthorizedException("Invalid refresh token");
-        }
-        User user = userRepository.findByIdWithRole(claims.userId())
-                .orElseThrow(() -> new UnauthorizedException("Session is no longer valid"));
-        if (!user.isActive() || user.isLocked()) {
-            throw new UnauthorizedException("Account is disabled");
-        }
-        if (claims.tokenVersion() == null || claims.tokenVersion() != user.getTokenVersion()) {
-            throw new UnauthorizedException("Session has been revoked");
-        }
-        String accessToken = tokenProvider.generateAccessToken(user.getUserId(), user.getTokenVersion());
-        return new RefreshResponse(accessToken, refreshToken);
-    }
-
-    @Override
-    public void logout(String refreshToken) {
-        TokenClaims claims;
-        try {
-            claims = tokenProvider.validateToken(refreshToken);
-        } catch (RuntimeException e) {
-            return; // already invalid/expired — nothing to revoke
-        }
-        if (!"refresh".equals(claims.type())) {
-            return;
-        }
-        userRepository.findById(claims.userId()).ifPresent(user -> {
-            user.setTokenVersion(user.getTokenVersion() + 1);
-            user.setUpdatedAt(Instant.now());
-            userRepository.save(user);
-        });
     }
 }

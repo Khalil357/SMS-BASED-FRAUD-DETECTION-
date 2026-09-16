@@ -6,29 +6,22 @@ class SmsStorageService {
   static const String keyIngestionEnabled = 'settings_ingestion_enabled';
   static const String keyNotificationsEnabled = 'settings_notifications_enabled';
   static const String keyNotificationThreshold = 'settings_notification_threshold';
-<<<<<<< HEAD
   static const String keyIsScanned = 'is_scanned';
   static const String keyScannedAt = 'scanned_at';
   static const String keySource = 'source';
   static const String keyIsTrainedModel = 'is_trained_model';
   static const String keyScanVerdict = 'scan_verdict';
   static const String keyBlockedNumbers = 'argus_blocked_numbers';
-=======
->>>>>>> origin/front_end
 
-  /// Helper to get the SharedPreferences instance and force a disk reload
-  /// to sync background process writes with the foreground memory cache.
   static Future<SharedPreferences> _getPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     try {
-      await prefs.reload(); // CRITICAL: force reload from disk to sync background writes
+      await prefs.reload();
     } catch (_) {
-      // SharedPreferences reload can fail in tests or mock environments, ignore safely
     }
     return prefs;
   }
 
-  /// Retrieve all logged SMS records
   static Future<List<Map<String, dynamic>>> getLogs() async {
     final prefs = await _getPrefs();
     final jsonStr = prefs.getString(keySmsLogs);
@@ -43,32 +36,28 @@ class SmsStorageService {
     }
   }
 
-  /// Add a single SMS record to the top of the logs list
   static Future<void> addLog(Map<String, dynamic> log) async {
     final prefs = await _getPrefs();
     final logs = await getLogs();
-    
-    // Check for duplicates to prevent recording the same message twice
-    final exists = logs.any((l) => l['id'] == log['id'] || 
-        (l['sender'] == log['sender'] && 
-         l['message'] == log['message'] && 
-         l['time'] == log['time']));
+
+    final exists = logs.any((l) => l['id'] == log['id'] ||
+        (l['sender'] == log['sender'] &&
+            l['message'] == log['message'] &&
+            l['time'] == log['time']));
     if (exists) return;
 
     logs.insert(0, log);
     await prefs.setString(keySmsLogs, jsonEncode(logs));
   }
 
-  /// Submit correction feedback for a logged SMS
   static Future<void> submitFeedback({required String logId, required String feedbackType}) async {
     final prefs = await _getPrefs();
     final logs = await getLogs();
-    
+
     for (int i = 0; i < logs.length; i++) {
       if (logs[i]['id'] == logId) {
         logs[i]['hasFeedback'] = true;
-        logs[i]['userFeedback'] = feedbackType; // 'Safe', 'Spam', or 'Fraud'
-        // Also update type to match user correction
+        logs[i]['userFeedback'] = feedbackType;
         logs[i]['type'] = feedbackType;
         break;
       }
@@ -76,7 +65,6 @@ class SmsStorageService {
     await prefs.setString(keySmsLogs, jsonEncode(logs));
   }
 
-  // Boolean settings
   static Future<bool> getBoolSetting(String key, bool defaultValue) async {
     final prefs = await _getPrefs();
     return prefs.getBool(key) ?? defaultValue;
@@ -87,7 +75,6 @@ class SmsStorageService {
     await prefs.setBool(key, value);
   }
 
-  // Double settings
   static Future<double> getDoubleSetting(String key, double defaultValue) async {
     final prefs = await _getPrefs();
     return prefs.getDouble(key) ?? defaultValue;
@@ -97,43 +84,72 @@ class SmsStorageService {
     final prefs = await _getPrefs();
     await prefs.setDouble(key, value);
   }
-<<<<<<< HEAD
 
-  /// Get locally stored blocked phone numbers
+  static String normalizeNumber(String number) {
+    String digits = number.replaceAll(RegExp(r'[\s\-()]+'), '');
+    if (!digits.startsWith('+')) {
+      digits = '+$digits';
+    }
+    return digits;
+  }
+
   static Future<List<String>> getBlockedNumbers() async {
+    final entries = await getBlockedNumberEntries();
+    return entries.map((e) => e['number'] ?? '').where((n) => n.isNotEmpty).toList();
+  }
+
+  static Future<List<Map<String, String>>> getBlockedNumberEntries() async {
     final prefs = await _getPrefs();
     final jsonStr = prefs.getString(keyBlockedNumbers);
     if (jsonStr == null || jsonStr.isEmpty) return [];
     try {
       final List<dynamic> decoded = jsonDecode(jsonStr);
-      return decoded.map((item) => item.toString()).toList();
+      final entries = <Map<String, String>>[];
+      for (final item in decoded) {
+        if (item is Map) {
+          final number = normalizeNumber((item['number'] ?? '').toString());
+          if (number.length < 8) continue;
+          entries.add({
+            'number': number,
+            'reason': (item['reason'] ?? '').toString(),
+            'date': (item['date'] ?? '').toString(),
+          });
+        } else {
+          final number = normalizeNumber(item.toString());
+          if (number.length < 8) continue;
+          entries.add({'number': number, 'reason': '', 'date': ''});
+        }
+      }
+      return entries;
     } catch (_) {
       return [];
     }
   }
 
-  /// Add a blocked phone number locally
-  static Future<void> addBlockedNumber(String phoneNumber) async {
-    final blocked = await getBlockedNumbers();
-    if (blocked.contains(phoneNumber)) return;
-    blocked.add(phoneNumber);
+  static Future<void> addBlockedNumber(String phoneNumber, {String? reason}) async {
+    final normalized = normalizeNumber(phoneNumber);
+    final entries = await getBlockedNumberEntries();
+    if (entries.any((e) => e['number'] == normalized)) return;
+    entries.insert(0, {
+      'number': normalized,
+      'reason': reason ?? 'User blocked',
+      'date': DateTime.now().toIso8601String().split('T').first,
+    });
     final prefs = await _getPrefs();
-    await prefs.setString(keyBlockedNumbers, jsonEncode(blocked));
+    await prefs.setString(keyBlockedNumbers, jsonEncode(entries));
   }
 
-  /// Remove a blocked phone number locally
   static Future<void> removeBlockedNumber(String phoneNumber) async {
-    final blocked = await getBlockedNumbers();
-    blocked.remove(phoneNumber);
+    final normalized = normalizeNumber(phoneNumber);
+    final entries = await getBlockedNumberEntries();
+    entries.removeWhere((e) => e['number'] == normalized);
     final prefs = await _getPrefs();
-    await prefs.setString(keyBlockedNumbers, jsonEncode(blocked));
+    await prefs.setString(keyBlockedNumbers, jsonEncode(entries));
   }
 
-  /// Check if a number is locally blocked
   static Future<bool> isNumberBlocked(String phoneNumber) async {
+    final normalized = normalizeNumber(phoneNumber);
     final blocked = await getBlockedNumbers();
-    return blocked.contains(phoneNumber);
+    return blocked.contains(normalized);
   }
-=======
->>>>>>> origin/front_end
 }

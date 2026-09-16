@@ -8,9 +8,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -47,12 +50,26 @@ public class SmsScanController {
     @PostMapping
     public ResponseEntity<Map<String, Object>> query(@Valid @RequestBody ScanQueryRequest req) {
         UUID userId = currentUserId();
-        SmsScan saved = service.queryAndSave(
+        Optional<SmsScan> scan = service.queryAndSave(
                 userId,
                 req.getSender(),
                 req.getMessageBody(),
                 req.getSource() == null ? "MANUAL_QUERY" : req.getSource());
-        return respond(201, "Scan saved", toDto(saved));
+        if (scan.isPresent()) {
+            return respond(201, "Scan saved", toDto(scan.get()));
+        }
+        Map<String, Object> dto = new HashMap<>();
+        dto.put("sender", req.getSender() == null ? "" : req.getSender());
+        dto.put("messageBody", req.getMessageBody());
+        dto.put("message", req.getMessageBody());
+        dto.put("verdict", "SAFE");
+        dto.put("label", "safe");
+        dto.put("confidence", 0.95);
+        dto.put("is_scam", false);
+        dto.put("isScam", false);
+        dto.put("source", req.getSource() == null ? "MANUAL_QUERY" : req.getSource());
+        dto.put("scannedAt", Instant.now().toString());
+        return respond(200, "No risk detected", dto);
     }
 
     private UUID currentUserId() {
@@ -65,12 +82,13 @@ public class SmsScanController {
 
     private Map<String, Object> toDto(SmsScan s) {
         Map<String, Object> dto = new HashMap<>();
+        String verdict = s.getVerdict();
         dto.put("scanId", s.getScanId());
         dto.put("sender", s.getSender() == null ? "" : s.getSender());
         dto.put("messageBody", s.getMessageBody());
         dto.put("message", s.getMessageBody());
-        dto.put("verdict", s.getVerdict());
-        dto.put("label", "FRAUD".equals(s.getVerdict()) ? "scam" : s.getVerdict().toLowerCase(Locale.ROOT));
+        dto.put("verdict", verdict);
+        dto.put("label", verdict == null ? "safe" : ("FRAUD".equals(verdict) ? "scam" : verdict.toLowerCase(Locale.ROOT)));
         dto.put("confidence", s.getConfidence() == null ? 0.0 : s.getConfidence());
         dto.put("is_scam", "FRAUD".equals(s.getVerdict()));
         dto.put("isScam", "FRAUD".equals(s.getVerdict()));

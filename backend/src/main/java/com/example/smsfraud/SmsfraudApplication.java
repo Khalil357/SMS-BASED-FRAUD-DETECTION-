@@ -8,12 +8,6 @@ import org.springframework.stereotype.Component;
 
 
 
-<<<<<<< HEAD
-=======
-
-
-
->>>>>>> origin/front_end
 
 @SpringBootApplication
 public class SmsfraudApplication {

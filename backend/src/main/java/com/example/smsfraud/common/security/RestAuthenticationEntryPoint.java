@@ -29,9 +29,11 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response,
                          AuthenticationException authException) throws IOException {
+        String authError = (String) request.getAttribute("authError");
+        String message = authError != null ? authError : "Unauthorized";
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(),
-                new ErrorResponse("Unauthorized", HttpStatus.UNAUTHORIZED.value()));
+                new ErrorResponse(message, HttpStatus.UNAUTHORIZED.value()));
     }
 }

@@ -4,6 +4,7 @@ import '../../theme.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/fade_slide_transition.dart';
+import '../../services/auth_service.dart';
 import 'verify_code_page.dart';
 
 class CreateAccountPage extends StatefulWidget {
@@ -56,7 +57,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     );
   }
 
-  void _handleCreateAccount() {
+  void _handleCreateAccount() async {
     if (_formKey.currentState!.validate()) {
       if (!_agreedToTerms) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -74,14 +75,29 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         _isLoading = true;
       });
 
-      // Simulate API call
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+      final result = await AuthService.signUp(
+        fullName: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        gender: _selectedGender ?? '',
+        password: _passwordController.text,
+      );
 
-          // Navigate to Verification Screen
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        if (result['success']) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Account created successfully!'),
+              backgroundColor: Colors.green.shade600,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -91,8 +107,17 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
               ),
             ),
           );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Sign up failed'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
         }
-      });
+      }
     }
   }
 
@@ -143,17 +168,10 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                         child: Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-<<<<<<< HEAD
                             color: theme.primaryColor.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: theme.primaryColor.withValues(alpha: 0.15),
-=======
-                            color: theme.primaryColor.withOpacity(0.08),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: theme.primaryColor.withOpacity(0.15),
->>>>>>> origin/front_end
                               width: 2,
                             ),
                           ),

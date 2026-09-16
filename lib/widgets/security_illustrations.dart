@@ -45,11 +45,7 @@ class _ShieldPainter extends CustomPainter {
 
     // 1. Background Radar Circles
     final radarPaint = Paint()
-<<<<<<< HEAD
       ..color = (isDark ? primaryColor.withValues(alpha: 0.12) : primaryColor.withValues(alpha: 0.08))
-=======
-      ..color = (isDark ? primaryColor.withOpacity(0.12) : primaryColor.withOpacity(0.08))
->>>>>>> origin/front_end
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
@@ -58,11 +54,7 @@ class _ShieldPainter extends CustomPainter {
 
     // 2. Shield Glow
     final glowPaint = Paint()
-<<<<<<< HEAD
       ..color = accentColor.withValues(alpha: isDark ? 0.25 : 0.15)
-=======
-      ..color = accentColor.withOpacity(isDark ? 0.25 : 0.15)
->>>>>>> origin/front_end
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
 
     final shieldPath = Path()
@@ -94,11 +86,7 @@ class _ShieldPainter extends CustomPainter {
 
     // 4. Shield Border
     final borderPaint = Paint()
-<<<<<<< HEAD
       ..color = Colors.white.withValues(alpha: 0.4)
-=======
-      ..color = Colors.white.withOpacity(0.4)
->>>>>>> origin/front_end
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
 
@@ -155,11 +143,7 @@ class _PhishingWarningPainter extends CustomPainter {
 
     // Background Warning Circle
     final bgPaint = Paint()
-<<<<<<< HEAD
       ..color = AppTheme.red.withValues(alpha: isDark ? 0.2 : 0.1)
-=======
-      ..color = AppTheme.red.withOpacity(isDark ? 0.2 : 0.1)
->>>>>>> origin/front_end
       ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(width / 2, height / 2), width * 0.45, bgPaint);
 
@@ -231,11 +215,7 @@ class _SafetyBrainPainter extends CustomPainter {
 
     // Outer Light Ring
     final ringPaint = Paint()
-<<<<<<< HEAD
       ..color = primaryColor.withValues(alpha: isDark ? 0.2 : 0.12)
-=======
-      ..color = primaryColor.withOpacity(isDark ? 0.2 : 0.12)
->>>>>>> origin/front_end
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
     canvas.drawCircle(center, width * 0.42, ringPaint);
@@ -297,11 +277,7 @@ class _QuizVictoryPainter extends CustomPainter {
 
     // Inner Ring
     final innerRing = Paint()
-<<<<<<< HEAD
       ..color = Colors.white.withValues(alpha: 0.5)
-=======
-      ..color = Colors.white.withOpacity(0.5)
->>>>>>> origin/front_end
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5;
     canvas.drawCircle(center, width * 0.36, innerRing);
