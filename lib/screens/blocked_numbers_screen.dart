@@ -62,13 +62,30 @@ class BlockedNumbersScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 60),
-                  Text(
-                    'Blocked numbers',
-                    style: GoogleFonts.inter(
-                      color: theme.brightness == Brightness.dark ? Colors.white : AppTheme.textBodyLight,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Argus',
+                          style: GoogleFonts.inter(
+                            color: theme.colorScheme.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.6,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Blocked numbers',
+                          style: GoogleFonts.inter(
+                            color: theme.brightness == Brightness.dark ? Colors.white : AppTheme.textBodyLight,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

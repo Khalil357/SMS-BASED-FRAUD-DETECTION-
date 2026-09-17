@@ -24,7 +24,7 @@ class ScamDetectedScreen extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppTheme.bgDark,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -33,12 +33,12 @@ class ScamDetectedScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
               child: Row(
                 children: [
-                  const Icon(Icons.shield_outlined, color: AppTheme.red, size: 28),
+                  Icon(Icons.shield_outlined, color: theme.colorScheme.primary, size: 28),
                   const SizedBox(width: 12),
                   Text(
                     'Argus',
                     style: GoogleFonts.inter(
-                      color: Colors.white,
+                      color: theme.colorScheme.primary,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                     ),
@@ -48,7 +48,7 @@ class ScamDetectedScreen extends StatelessWidget {
             ),
             
             Expanded(
-              child: SingleChildScrollView(
+              child: SingleScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Column(
                   children: [
@@ -71,7 +71,7 @@ class ScamDetectedScreen extends StatelessWidget {
                     Text(
                       'Scam detected',
                       style: GoogleFonts.inter(
-                        color: Colors.white,
+                        color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
                       ),
@@ -81,7 +81,7 @@ class ScamDetectedScreen extends StatelessWidget {
                       'This message shows strong signs of impersonation and a malicious Intent',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
-                        color: Colors.white.withValues(alpha: 0.7),
+                        color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                         fontSize: 15,
                         height: 1.5,
                       ),
@@ -92,9 +92,10 @@ class ScamDetectedScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: theme.cardTheme.color,
                         borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0), width: 1),
+                        boxShadow: AppTheme.cardShadow(isDark),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,7 +118,7 @@ class ScamDetectedScreen extends StatelessWidget {
                                     Text(
                                       'SENDER',
                                       style: GoogleFonts.inter(
-                                        color: Colors.white.withValues(alpha: 0.5),
+                                        color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 0.5,
@@ -126,7 +127,7 @@ class ScamDetectedScreen extends StatelessWidget {
                                     Text(
                                       sender,
                                       style: GoogleFonts.inter(
-                                        color: Colors.white,
+                                        color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -155,7 +156,7 @@ class ScamDetectedScreen extends StatelessWidget {
                           Text(
                             'MESSAGE PREVIEW',
                             style: GoogleFonts.inter(
-                              color: Colors.white.withValues(alpha: 0.5),
+                              color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.5,
@@ -166,13 +167,13 @@ class ScamDetectedScreen extends StatelessWidget {
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.2),
+                              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Text(
                               message,
                               style: GoogleFonts.inter(
-                                color: Colors.white.withValues(alpha: 0.9),
+                                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
                                 fontSize: 14,
                                 height: 1.5,
                               ),
@@ -187,7 +188,7 @@ class ScamDetectedScreen extends StatelessWidget {
                                 child: Text(
                                   reasons.join(' · '),
                                   style: GoogleFonts.inter(
-                                    color: Colors.white.withValues(alpha: 0.5),
+                                    color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -214,7 +215,7 @@ class ScamDetectedScreen extends StatelessWidget {
                       backgroundColor: AppTheme.red,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(
+                      shape: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
@@ -230,7 +231,7 @@ class ScamDetectedScreen extends StatelessWidget {
                     child: Text(
                       'Dismiss result',
                       style: GoogleFonts.inter(
-                        color: Colors.white.withValues(alpha: 0.6),
+                        color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -243,4 +244,5 @@ class ScamDetectedScreen extends StatelessWidget {
       ),
     );
   }
+}
 }

@@ -2,7 +2,9 @@ package com.example.sms_based_fraud_detection
 
 import android.app.role.RoleManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.provider.Telephony
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -86,8 +88,10 @@ class MainActivity : FlutterActivity() {
                 result.success(isDefaultSmsApp())
             }
             "requestDefaultSmsApp" -> {
-                requestDefaultSmsApp()
-                result.success(true)
+                result.success(requestDefaultSmsApp())
+            }
+            "openNotificationSettings" -> {
+                result.success(openNotificationSettings())
             }
             else -> result.notImplemented()
         }
@@ -101,19 +105,51 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun requestDefaultSmsApp() {
-        try {
-            val intent: Intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    private fun requestDefaultSmsApp(): Boolean {
+        var intent: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
                 val roleManager = getSystemService(RoleManager::class.java)
                 roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
-            } else {
-                Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).apply {
-                    putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-                }
+            } catch (_: Exception) {
+                null
             }
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        } else {
+            Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).apply {
+                putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+            }
+        }
+        if (intent == null) {
+            intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
             startActivity(intent)
+            true
         } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun openNotificationSettings(): Boolean {
+        val notificationIntent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            startActivity(notificationIntent)
+            true
+        } catch (_: Exception) {
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$packageName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                )
+                true
+            } catch (_: Exception) {
+                false
+            }
         }
     }
 }

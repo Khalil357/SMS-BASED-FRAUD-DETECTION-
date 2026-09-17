@@ -111,41 +111,41 @@ class _OtpInputFieldState extends State<OtpInputField> {
                 final isBoxFocused = _focusNode.hasFocus &&
                     (index == text.length || (index == widget.length - 1 && text.length == widget.length));
 
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 5),
-                  width: 45,
-                  height: 55,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
-                    border: Border.all(
-                      color: isBoxFocused
-                          ? theme.primaryColor
-                          : (isDark
-                              ? const Color(0xFF334155)
-                              : const Color(0xFFE2E8F0)),
-                      width: isBoxFocused ? 2.5 : 1.5,
-                    ),
-                    boxShadow: isBoxFocused
-                        ? [
-                            BoxShadow(
-                              color: theme.primaryColor.withOpacity(0.15),
-                              blurRadius: 16,
-                              offset: const Offset(0, 4),
-                            )
-                          ]
-                        : [],
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    char,
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                );
+return Container(
+                   margin: const EdgeInsets.symmetric(horizontal: 5),
+                   width: 45,
+                   height: 55,
+                   decoration: BoxDecoration(
+                     borderRadius: BorderRadius.circular(16),
+                     color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+                     border: Border.all(
+                       color: isBoxFocused
+                           ? theme.primaryColor
+                           : (isDark
+                               ? const Color(0xFF334155)
+                               : const Color(0xFFE2E8F0)),
+                       width: isBoxFocused ? 2.5 : 1.5,
+                     ),
+                     boxShadow: isBoxFocused
+                         ? [
+                             BoxShadow(
+                               color: theme.primaryColor.withValues(alpha: 0.15),
+                               blurRadius: 16,
+                               offset: const Offset(0, 4),
+                             )
+                           ]
+                         : [],
+                   ),
+                   alignment: Alignment.center,
+                   child: Text(
+                     char,
+                     style: GoogleFonts.inter(
+                       fontSize: 20,
+                       fontWeight: FontWeight.bold,
+                       color: theme.colorScheme.primary,
+                     ),
+                   ),
+                 );
               }),
             ),
           ),

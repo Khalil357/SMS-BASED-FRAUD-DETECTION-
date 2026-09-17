@@ -17,17 +17,74 @@ class AuthService {
     defaultValue: '',
   );
 
+  static String _resolvedBaseUrl = '';
+  static Future<void>? _inFlightDiscovery;
+  static DateTime? _lastFailureAt;
+
+  /// Candidate endpoints probed so the app works over the USB cable
+  /// (`adb reverse`), on the same WiFi (laptop LAN IP), or on the emulator —
+  /// without rebuilding whenever the transport changes.
+  static const List<String> _fallbackHosts = <String>[
+    'http://127.0.0.1:8080',
+    'http://192.168.18.15:8080',
+    'http://192.168.100.149:8080',
+    'http://10.0.2.2:8080',
+  ];
+
+  static String _stripSlash(String url) =>
+      url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+
   // Resolve the API endpoint for emulators, desktop targets, and configured devices.
   static String get baseUrl {
+    if (_resolvedBaseUrl.isNotEmpty) {
+      return _resolvedBaseUrl;
+    }
     if (_configuredBaseUrl.isNotEmpty) {
-      return _configuredBaseUrl.endsWith('/')
-          ? _configuredBaseUrl.substring(0, _configuredBaseUrl.length - 1)
-          : _configuredBaseUrl;
+      return _stripSlash(_configuredBaseUrl);
     }
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:8080';
     }
     return 'http://localhost:8080';
+  }
+
+  static List<String> get candidates => <String>{
+        if (_configuredBaseUrl.isNotEmpty) _stripSlash(_configuredBaseUrl),
+        ..._fallbackHosts,
+      }.toList();
+
+  /// Probe candidate backend URLs (2s each) until one answers. Re-probes on
+  /// every call while still unresolved, so plugging the USB cable in later
+  /// (restoring `adb reverse`) just works. Fast no-op once resolved.
+  static Future<void> ensureBackendReachable() async {
+    if (_resolvedBaseUrl.isNotEmpty) return;
+    final inFlight = _inFlightDiscovery;
+    if (inFlight != null) return inFlight;
+    final probe = _discover();
+    _inFlightDiscovery = probe;
+    try {
+      await probe;
+    } finally {
+      _inFlightDiscovery = null;
+    }
+  }
+
+  static Future<void> _discover() async {
+    for (final candidate in candidates) {
+      try {
+        final resp = await http
+            .get(Uri.parse('$candidate/api/health'))
+            .timeout(const Duration(seconds: 2));
+        // Any HTTP response proves a backend is behind that address — even a
+        // 401/404, since the API locks every route behind Spring Security.
+        _resolvedBaseUrl = candidate;
+        _lastFailureAt = null;
+        return;
+      } catch (_) {
+        // Unreachable host — try the next candidate.
+      }
+    }
+    _lastFailureAt = DateTime.now();
   }
 
   // Session variables
@@ -135,9 +192,10 @@ class AuthService {
   }
 
   static String _connectionErrorMessage() {
-    return 'Cannot reach the backend at $baseUrl. '
-        'For a real phone, rebuild with --dart-define=API_BASE_URL=http://<computer-LAN-IP>:8080 '
-        'or use your deployed HTTPS API URL.';
+    final probed = candidates.map((u) => u.split('//').last).join(', ');
+    return 'Cannot reach the backend. Tried: $probed. '
+        'Make sure the backend is running (docker compose up) and the phone is '
+        'either plugged in over USB (adb reverse) or on the same WiFi as the computer.';
   }
 
   /// Register a new user
@@ -149,6 +207,7 @@ class AuthService {
     required String gender,
     required String password,
   }) async {
+    await ensureBackendReachable();
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/auth/register'),
@@ -194,6 +253,7 @@ class AuthService {
     required String identifier,
     required String password,
   }) async {
+    await ensureBackendReachable();
     try {
       final trimmed = identifier.trim();
       final isEmail = trimmed.contains('@');

@@ -7,6 +7,7 @@ import '../services/sms_detection_service.dart';
 import '../services/sms_storage_service.dart';
 import 'package:sms_based_fraud_detection/services/system_blocker.dart';
 import '../services/sms_ingestion_service.dart';
+import '../services/notification_service.dart';
 import '../theme.dart';
 import '../main.dart';
 import '../widgets/custom_button.dart';
@@ -51,6 +52,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   bool _isNotificationsEnabled = true;
   double _notificationThreshold = 0.80;
   bool _hasSmsPermission = false;
+  bool _hasNotificationPermission = true;
 
   // Logs list
   List<Map<String, dynamic>> _smsLogs = [];
@@ -201,8 +203,11 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   Future<void> _checkPermissions() async {
     final hasPerm = await SmsIngestionService.hasSmsPermission();
+    final hasNotifPerm = await NotificationService.hasPermission();
+    if (!mounted) return;
     setState(() {
       _hasSmsPermission = hasPerm;
+      _hasNotificationPermission = hasNotifPerm;
     });
   }
 
@@ -340,9 +345,47 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   Future<void> _updateNotifications(bool val) async {
     await SmsStorageService.saveBoolSetting(SmsStorageService.keyNotificationsEnabled, val);
+    if (!mounted) return;
     setState(() {
       _isNotificationsEnabled = val;
     });
+
+    if (!val || !Platform.isAndroid) return;
+
+    final granted = await NotificationService.requestPermission();
+    if (!mounted) return;
+    setState(() => _hasNotificationPermission = granted);
+    if (!granted) {
+      _showNotificationSettingsPrompt();
+    }
+  }
+
+  void _showNotificationSettingsPrompt() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Notifications are turned off for Argus. Open your phone\'s notification settings to allow them.'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Open settings',
+          onPressed: () => _openNotificationSettings(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openNotificationSettings() async {
+    final opened = await SystemBlocker.openNotificationSettings();
+    if (!mounted) return;
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open notification settings. Enable them manually in phone Settings > Apps > Argus > Notifications.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _updateThreshold(double val) async {
@@ -832,6 +875,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkDefaultSmsStatus();
+      _checkPermissions();
     }
   }
 
@@ -854,7 +898,27 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   }
 
   Future<void> _handleSetDefaultSmsApp() async {
-    await SystemBlocker.requestDefaultSmsApp();
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Opening your system default SMS settings — choose Argus to enable real blocking.'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 4),
+      ),
+    );
+    final opened = await SystemBlocker.requestDefaultSmsApp();
+    if (!mounted) return;
+    if (!opened) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Could not open the settings screen. Please pick Argus as your default SMS app in phone Settings.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      _checkDefaultSmsStatus();
+    }
   }
 
   void _handleAddBlockedNumber({String? reason}) async {
@@ -1078,7 +1142,12 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       },
       bottomNavigationBar: ArgusNavBar(
         currentIndex: _currentIndex,
-        onChanged: (index) => setState(() => _currentIndex = index),
+        onChanged: (index) {
+          setState(() => _currentIndex = index);
+          if (index == 2 || index == 3) {
+            _checkDefaultSmsStatus();
+          }
+        },
       ),
     );
   }
@@ -1700,7 +1769,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   Widget _buildBlocklistTab(ThemeData theme, bool isDark) {
     return Column(
       children: [
-        if (!_isDefaultSmsApp) _buildDefaultSmsBanner(theme, isDark),
+        if (_isDefaultSmsApp)
+          _buildBlockingEnabledBanner(theme, isDark)
+        else
+          _buildBlockingOffHint(theme, isDark),
         Expanded(
           child: BlockedNumbersScreen(
             blockedNumbers: _blockedNumbers,
@@ -1712,21 +1784,54 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     );
   }
 
-  Widget _buildDefaultSmsBanner(ThemeData theme, bool isDark) {
+  Widget _buildBlockingOffHint(ThemeData theme, bool isDark) {
+    return InkWell(
+      onTap: _handleSetDefaultSmsApp,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        color: isDark ? const Color(0xFF3B2F16) : const Color(0xFFFFF4E5),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline,
+                color: Colors.amber.shade800, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Blocking is not enabled. Tap to set Argus as your default SMS app.',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  height: 1.3,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? const Color(0xFFFFE0B2) : Color(0xFF7A4B12),
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                color: isDark ? const Color(0xFFFFE0B2) : Color(0xFF7A4B12),
+                size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlockingEnabledBanner(ThemeData theme, bool isDark) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-      color: isDark ? const Color(0xFF16324F) : const Color(0xFFE3F2FD),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      color: isDark ? const Color(0xFF123B2D) : const Color(0xFFE5F6EC),
       child: Row(
         children: [
-          Icon(Icons.phone_android, color: isDark ? Colors.lightBlue.shade300 : Colors.blue.shade700),
+          Icon(Icons.verified_user,
+              color: isDark ? Colors.greenAccent.shade200 : AppTheme.emerald),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Enable real blocking',
+                  'Blocking is active',
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
@@ -1735,23 +1840,21 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Set Argus as your default SMS app so blocked numbers are intercepted at the system level.',
+                  'Argus is your default SMS app — blocked numbers are intercepted at the system level.',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     height: 1.3,
-                    color: isDark ? Colors.white.withValues(alpha: 0.6) : AppTheme.subtleLight,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.6)
+                        : AppTheme.subtleLight,
                   ),
                 ),
               ],
             ),
           ),
-          TextButton(
-            onPressed: _handleSetDefaultSmsApp,
-            style: TextButton.styleFrom(
-              foregroundColor: isDark ? Colors.lightBlue.shade300 : Colors.blue.shade700,
-            ),
-            child: const Text('Set up', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
+          Icon(Icons.check_circle,
+              size: 18,
+              color: isDark ? Colors.greenAccent.shade200 : AppTheme.emerald),
         ],
       ),
     );
@@ -1830,6 +1933,66 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           ),
           const SizedBox(height: 12),
 
+          // Real SMS blocking (set Argus as default SMS app)
+          Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _isDefaultSmsApp ? Icons.shield_outlined : Icons.info_outline,
+                        color: _isDefaultSmsApp ? AppTheme.emerald : Colors.amber.shade800,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Real SMS blocking',
+                              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              _isDefaultSmsApp
+                                  ? 'Active — Argus is your default SMS app. Blocked numbers are intercepted at the system level.'
+                                  : 'Not enabled — Argus must be your default SMS app to intercept blocked numbers.',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _handleSetDefaultSmsApp,
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: _isDefaultSmsApp
+                              ? AppTheme.emerald.withValues(alpha: 0.5)
+                              : theme.colorScheme.primary.withValues(alpha: 0.5),
+                        ),
+                        foregroundColor: _isDefaultSmsApp ? AppTheme.emerald : theme.colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: Icon(_isDefaultSmsApp ? Icons.manage_accounts_outlined : Icons.phonelink_setup, size: 18),
+                      label: Text(_isDefaultSmsApp ? 'Manage default SMS app' : 'Enable blocking'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           // Auto-Ingestion SMS (Android only permission control)
           Card(
             margin: const EdgeInsets.only(bottom: 10),
@@ -1903,24 +2066,50 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             margin: const EdgeInsets.only(bottom: 10),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.notifications_active_outlined, color: theme.colorScheme.primary),
-                      const SizedBox(width: 14),
-                      Text(
-                        'High Threat Notifications',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      Row(
+                        children: [
+                          Icon(Icons.notifications_active_outlined, color: theme.colorScheme.primary),
+                          const SizedBox(width: 14),
+                          Text(
+                            'High Threat Notifications',
+                            style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                      Switch(
+                        value: _isNotificationsEnabled,
+                        activeThumbColor: theme.colorScheme.primary,
+                        onChanged: (val) => _updateNotifications(val),
                       ),
                     ],
                   ),
-                  Switch(
-                    value: _isNotificationsEnabled,
-                    activeThumbColor: theme.colorScheme.primary,
-                    onChanged: (val) => _updateNotifications(val),
-                  ),
+                  if (Platform.isAndroid && !_hasNotificationPermission) ...[
+                    const Divider(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Notifications are off for Argus. Allow them in your phone settings.',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: Colors.amber.shade800,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _openNotificationSettings,
+                          child: const Text('Open settings'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -15,15 +15,13 @@ import com.example.smsfraud.common.exception.NotFoundException;
 import com.example.smsfraud.common.exception.UnauthorizedException;
 import com.example.smsfraud.common.security.TokenClaims;
 import com.example.smsfraud.common.security.TokenProvider;
-import com.example.smsfraud.email.EmailService;
+import com.example.smsfraud.otp.OtpNotifier;
 import com.example.smsfraud.otp.OtpService;
-import com.example.smsfraud.sms.SmsSenderService;
 import com.example.smsfraud.user.User;
 import com.example.smsfraud.user.UserRole;
 import com.example.smsfraud.user.UserRepository;
 import com.example.smsfraud.user.UserRoleRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -40,27 +38,21 @@ public class AuthServiceImpl implements AuthService {
     private final UserRoleRepository userRoleRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
-    private final EmailService emailService;
-    private final SmsSenderService smsService;
+    private final OtpNotifier otpNotifier;
     private final TokenProvider tokenProvider;
-    private final boolean autoVerifyRegistrations;
 
     public AuthServiceImpl(UserRepository userRepository,
                            UserRoleRepository userRoleRepository,
                            PasswordEncoder passwordEncoder,
                            OtpService otpService,
-                           EmailService emailService,
-                           SmsSenderService smsService,
-                           TokenProvider tokenProvider,
-                           @Value("${app.auth.auto-verify-registrations:true}") boolean autoVerifyRegistrations) {
+                           OtpNotifier otpNotifier,
+                           TokenProvider tokenProvider) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.passwordEncoder = passwordEncoder;
         this.otpService = otpService;
-        this.emailService = emailService;
-        this.smsService = smsService;
+        this.otpNotifier = otpNotifier;
         this.tokenProvider = tokenProvider;
-        this.autoVerifyRegistrations = autoVerifyRegistrations;
     }
 
     @Override
@@ -81,19 +73,14 @@ public class AuthServiceImpl implements AuthService {
         user.setGender(req.gender());
         user.setPasswordHash(passwordEncoder.encode(req.password()));
         user.setRole(role);
-        user.setVerified(autoVerifyRegistrations);
+        user.setVerified(false);
         user.setActive(true);
         userRepository.save(user);
 
-        if (autoVerifyRegistrations) {
-            return new RegisterResponse(user.getUserId());
-        }
-
         String otp = otpService.issueCode(user.getPhone());
-        emailService.sendVerificationCode(user.getEmail(), otp);
-        smsService.sendSms(user.getPhone(), "ARGUS: Your verification code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
+        otpNotifier.sendVerificationCode(user.getEmail(), user.getPhone(), otp);
 
-        return new RegisterResponse(user.getUserId());
+        return new RegisterResponse(user.getUserId(), otp);
     }
 
     @Override
@@ -132,8 +119,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByPhone(req.phoneNumber())
                 .orElseThrow(() -> new NotFoundException("No account found for that phone number"));
         String otp = otpService.issueCode(user.getPhone());
-        emailService.sendVerificationCode(user.getEmail(), otp);
-        smsService.sendSms(user.getPhone(), "ARGUS: Your password reset code is " + otp + ". Do not share this code with anyone. It expires in 5 minutes.");
+        otpNotifier.sendPasswordResetCode(user.getEmail(), user.getPhone(), otp);
         return new OtpResponse(otp);
     }
 
@@ -167,30 +153,5 @@ public class AuthServiceImpl implements AuthService {
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
         otpService.invalidate(req.phoneNumber());
-    }
-
-    @Override
-    public void resendLoginOtp(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("No account found for that email"));
-        String otp = otpService.issueCode(user.getEmail());
-        emailService.sendVerificationCode(user.getEmail(), otp);
-    }
-
-    @Override
-    public LoginResponse verifyLoginOtp(String email, String verificationCode) {
-        if (!otpService.verifyCode(email, verificationCode)) {
-            throw new BadRequestException("Invalid or expired verification code");
-        }
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("No account found for that email"));
-        
-        otpService.invalidate(email);
-        user.setLastLoginAt(Instant.now());
-        userRepository.save(user);
-
-        String accessToken = tokenProvider.generateAccessToken(user.getUserId(), user.getTokenVersion());
-        String refreshToken = tokenProvider.generateRefreshToken(user.getUserId(), user.getTokenVersion());
-        return new LoginResponse(accessToken, refreshToken, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
     }
 }

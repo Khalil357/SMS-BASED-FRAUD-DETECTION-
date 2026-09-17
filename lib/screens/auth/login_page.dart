@@ -22,6 +22,12 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    AuthService.ensureBackendReachable();
+  }
+
+  @override
   void dispose() {
     _identifierController.dispose();
     _passwordController.dispose();

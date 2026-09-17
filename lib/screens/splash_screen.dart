@@ -51,6 +51,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> _navigateToNext() async {
+    await AuthService.ensureBackendReachable();
     await Future.delayed(const Duration(milliseconds: 2800));
     if (!mounted) return;
 

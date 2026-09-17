@@ -17,7 +17,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<OnboardingSlideData> _slides = [
     OnboardingSlideData(
       title: 'Detect SMS Fraud',
-      description: 'Secure Signal automatically scans incoming SMS messages in real-time, instantly alerting you about potential scams, phishing links, and suspicious senders.',
+      description: 'Argus automatically scans incoming SMS messages in real-time, instantly alerting you about potential scams, phishing links, and suspicious senders.',
       icon: Icons.search_off_outlined,
       color: const Color(0xFFD32F2F),
     ),
@@ -66,6 +66,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildFraudScanIllustration(bool isDark) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
     return SizedBox(
       height: 220,
       child: Stack(
@@ -78,7 +80,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: const Color(0xFFD32F2F).withValues(alpha: 0.06 * (3 - i)),
+                  color: primaryColor.withValues(alpha: 0.06 * (3 - i)),
                   width: 2,
                 ),
               ),
@@ -141,11 +143,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFD32F2F),
+                color: primaryColor,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFD32F2F).withValues(alpha: 0.35),
+                    color: primaryColor.withValues(alpha: 0.35),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),

@@ -14,10 +14,24 @@ class SystemBlocker {
     }
   }
 
-  static Future<void> requestDefaultSmsApp() async {
+  static Future<bool> requestDefaultSmsApp() async {
     try {
-      await _roleChannel.invokeMethod('requestDefaultSmsApp');
-    } on PlatformException catch (_) {}
+      final bool? opened = await _roleChannel.invokeMethod<bool>('requestDefaultSmsApp');
+      return opened ?? false;
+    } on PlatformException catch (_) {
+      return false;
+    }
+  }
+
+  /// Deep-link into the phone's notification settings for this app so the user
+  /// can allow high-threat SMS alerts.
+  static Future<bool> openNotificationSettings() async {
+    try {
+      final bool? opened = await _roleChannel.invokeMethod<bool>('openNotificationSettings');
+      return opened ?? false;
+    } on PlatformException catch (_) {
+      return false;
+    }
   }
 
   static Future<bool> blockSystemNumber(String phoneNumber) async {
