@@ -298,8 +298,11 @@ class AuthService {
     }
   }
 
-  /// Login user with Phone Number or Email Address
+  /// Login user with Phone Number or Email Address (step 1 of 2).
   /// POST /api/auth/login
+  ///
+  /// The backend validates credentials, sends an OTP, and returns a pending
+  /// response (no token). Call [verifyLoginOtp] next to receive the JWT.
   static Future<Map<String, dynamic>> login({
     required String identifier,
     required String password,
@@ -319,6 +322,46 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'OTP sent. Verify to complete login.',
+          'data': data,
+          'email': data['email'] as String? ?? (isEmail ? trimmed : null),
+          'pending': true,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Login failed',
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'error': e,
+      };
+    }
+  }
+
+  /// Verify the login OTP (step 2 of 2). On success, stores the session and
+  /// returns the JWT.
+  /// POST /api/auth/verify-login-otp
+  static Future<Map<String, dynamic>> verifyLoginOtp({
+    required String email,
+    required String verificationCode,
+  }) async {
+    try {
+      final response = await _postRequest('/api/auth/verify-login-otp', {
+        'email': email,
+        'verificationCode': verificationCode,
+      });
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
         final tokenStr = decoded['token'] as String? ?? data['token'] as String? ?? '';
 
         await saveSession(tokenStr, data);
@@ -332,7 +375,39 @@ class AuthService {
       } else {
         return {
           'success': false,
-          'message': decoded['message'] ?? 'Login failed',
+          'message': decoded['message'] ?? 'Invalid verification code',
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend server. Please verify the backend is running.',
+        'error': e,
+      };
+    }
+  }
+
+  /// Resend the login OTP.
+  /// POST /api/auth/resend-login-otp
+  static Future<Map<String, dynamic>> resendLoginOtp({required String email}) async {
+    try {
+      final response = await _postRequest('/api/auth/resend-login-otp', {
+        'email': email,
+      });
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': decoded['message'] ?? 'Login OTP resent',
+          'data': decoded['data'] ?? decoded,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Failed to resend code',
           'statusCode': response.statusCode,
         };
       }

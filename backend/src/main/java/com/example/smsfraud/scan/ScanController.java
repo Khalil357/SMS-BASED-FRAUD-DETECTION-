@@ -42,9 +42,9 @@ public class ScanController {
     public ResponseEntity<ApiResponse<SmsScan>> scan(
             Authentication authentication,
             @Valid @RequestBody ScanQueryRequest request) {
-        UUID userId = (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal()))
-                ? authenticatedUserId(authentication)
-                : null;
+        // Authentication is required (enforced by SecurityConfig), so the
+        // authenticated user id is always available.
+        UUID userId = authenticatedUserId(authentication);
         Optional<SmsScan> scan = smsScanService.queryAndSave(
                 userId,
                 request.getSender(),
