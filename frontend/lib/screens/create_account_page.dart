@@ -270,7 +270,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             CustomTextField(
                               controller: _nameController,
                               labelText: 'Full Name',
-                              hintText: 'e.g. John Doe',
+                              hintText: 'e.g. Alex Saidi',
                               prefixIcon: Icons.person_outline,
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {

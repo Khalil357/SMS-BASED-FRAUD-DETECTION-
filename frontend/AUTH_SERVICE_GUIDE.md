@@ -30,7 +30,7 @@ The auth service expects the following endpoints on your backend:
 - **Body:** 
 ```json
 {
-  "full_name": "John Doe",
+  "full_name": "Alex Saidi",
   "email": "john@example.com",
   "phone_number": "+27821234567",
   "gender": "Male",
