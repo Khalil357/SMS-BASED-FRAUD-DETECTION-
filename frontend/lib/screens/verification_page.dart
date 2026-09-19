@@ -199,7 +199,7 @@ class _VerificationPageState extends State<VerificationPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "We've sent a 6-digit verification code to ${widget.phoneNumber}",
+                          "We've sent a 6-digit verification code to your email and phone number (${widget.phoneNumber})",
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium,
                         ),

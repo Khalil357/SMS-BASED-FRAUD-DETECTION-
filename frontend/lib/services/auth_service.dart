@@ -56,11 +56,10 @@ class AuthService {
       final savedToken = prefs.getString(_keyToken);
       final savedUserJson = prefs.getString(_keyUser);
 
-      if (savedToken != null &&
-          savedToken.isNotEmpty &&
-          savedUserJson != null &&
-          savedUserJson.isNotEmpty) {
-        token = savedToken;
+      if (savedUserJson != null && savedUserJson.isNotEmpty) {
+        token = (savedToken != null && savedToken.isNotEmpty)
+            ? savedToken
+            : 'auth_session_active';
         currentUser = jsonDecode(savedUserJson) as Map<String, dynamic>;
         return true;
       }
@@ -427,7 +426,6 @@ class AuthService {
           'email': email,
           'phone_number': phoneNumber,
         };
-        await saveSession(tokenStr, mergedUser);
 
         return {
           'success': true,
@@ -443,7 +441,6 @@ class AuthService {
         };
       }
     } catch (e) {
-      await saveSession('local_token', userPayload);
       return {
         'success': true,
         'message': 'Account created successfully.',

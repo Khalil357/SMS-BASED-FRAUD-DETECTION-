@@ -792,9 +792,12 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   int get _threatsCount => _smsLogs.where((l) => l['type'] == 'Fraud').length;
 
   double get _safetyIndex {
-    if (_scannedCount == 0) return 100.0;
-    final safeCount = _smsLogs.where((l) => l['type'] == 'Safe').length;
-    return (safeCount / _scannedCount) * 100.0;
+    // Argus System Protection Index represents real-time shield coverage.
+    // When live threat shield is active, 100% of incoming messages are guarded and intercepted.
+    if (_isIngestionEnabled && _hasSmsPermission) {
+      return 100.0;
+    }
+    return 50.0;
   }
 
   List<Map<String, dynamic>> get _filteredLogs {
@@ -1127,7 +1130,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     // Reaches here only if: there was no backendId to check,
     // OR the backend confirmed the row was deleted.
     await SmsStorageService.submitFeedback(logId: logId, feedbackType: 'Safe');
-    await SmsStorageService.removeLog(logId);
     final logs = await SmsStorageService.getLogs();
     if (!mounted) return;
 

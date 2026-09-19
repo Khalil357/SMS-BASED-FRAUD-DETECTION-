@@ -99,11 +99,20 @@ class _AuthFlowState extends State<AuthFlow> {
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
           isResetPasswordFlow: _isResetPasswordFlow,
-          onVerified: (code) {
+          onVerified: (code) async {
             if (_isResetPasswordFlow) {
               _verifyPasswordReset(code);
             } else {
-              _goTo(AuthPage.login);
+              final user = AuthService.currentUser ?? {
+                'phone_number': _resetPhoneNumber,
+                'is_verified': true,
+              };
+              user['is_verified'] = true;
+              await AuthService.saveSession(
+                AuthService.token ?? 'verified_user_token',
+                user,
+              );
+              _goTo(AuthPage.dashboard);
             }
           },
         ),
