@@ -16,11 +16,10 @@ public class FraudRecordService {
     }
 
     @Transactional
-    public void deleteRecord(UUID recordId) {
+    public void deleteRecord(UUID recordId, UUID userId) {
 
-        if (!repository.existsById(recordId)) {
+        if (repository.deleteOwnedById(recordId, userId) == 0) {
             throw new RecordNotFoundException(recordId);
         }
-        repository.deleteById(recordId);
     }
 }
