@@ -2,73 +2,112 @@ package com.example.secure_signal
 
 import android.app.Activity
 import android.app.role.RoleManager
+import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.provider.BlockedNumberContract
+import android.provider.Telephony
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
     companion object {
-        private const val REQUEST_CALL_SCREENING_ROLE = 1001
+        private const val CHANNEL = "com.example.secure_signal/sms_block"
+        private const val REQUEST_DEFAULT_SMS_ROLE = 2001
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    private var pendingRoleResult: MethodChannel.Result? = null
 
-        requestCallScreeningRole()
-    }
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
 
-    private fun requestCallScreeningRole() {
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isDefaultSmsApp" -> {
+                    result.success(Telephony.Sms.getDefaultSmsPackage(this) == packageName)
+                }
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            println("ARGUS ROLE: Call screening role requires Android 10 or newer")
-            return
-        }
+                "requestDefaultSmsRole" -> {
+                    pendingRoleResult = result
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val roleManager = getSystemService(RoleManager::class.java)
+                        if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_SMS)) {
+                            if (roleManager.isRoleHeld(RoleManager.ROLE_SMS)) {
+                                pendingRoleResult?.success(true)
+                                pendingRoleResult = null
+                            } else {
+                                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
+                                startActivityForResult(intent, REQUEST_DEFAULT_SMS_ROLE)
+                            }
+                        } else {
+                            pendingRoleResult?.success(false)
+                            pendingRoleResult = null
+                        }
+                    } else {
+                        val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
+                        intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+                        startActivityForResult(intent, REQUEST_DEFAULT_SMS_ROLE)
+                    }
+                }
 
-        val roleManager = getSystemService(RoleManager::class.java)
+                "blockNumber" -> {
+                    val number = call.argument<String>("number")
+                    if (number == null) {
+                        result.error("ARG", "number required", null)
+                        return@setMethodCallHandler
+                    }
+                    if (Telephony.Sms.getDefaultSmsPackage(this) != packageName) {
+                        result.error("NOT_DEFAULT", "App is not the default SMS app", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        val values = ContentValues()
+                        values.put(BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER, number)
+                        contentResolver.insert(BlockedNumberContract.BlockedNumbers.CONTENT_URI, values)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("BLOCK_FAILED", e.message, null)
+                    }
+                }
 
-        if (roleManager == null) {
-            println("ARGUS ROLE: RoleManager unavailable")
-            return
-        }
+                "unblockNumber" -> {
+                    val number = call.argument<String>("number")
+                    if (number == null) {
+                        result.error("ARG", "number required", null)
+                        return@setMethodCallHandler
+                    }
+                    if (Telephony.Sms.getDefaultSmsPackage(this) != packageName) {
+                        result.error("NOT_DEFAULT", "App is not the default SMS app", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        contentResolver.delete(
+                            BlockedNumberContract.BlockedNumbers.CONTENT_URI,
+                            "${BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER} = ?",
+                            arrayOf(number)
+                        )
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("UNBLOCK_FAILED", e.message, null)
+                    }
+                }
 
-        if (!roleManager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) {
-            println("ARGUS ROLE: CALL_SCREENING role is not available")
-            return
-        }
-
-        if (roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
-            println("ARGUS ROLE: Argus already holds CALL_SCREENING role")
-            return
-        }
-
-        println("ARGUS ROLE: Requesting CALL_SCREENING role")
-
-        val intent = roleManager.createRequestRoleIntent(
-            RoleManager.ROLE_CALL_SCREENING
-        )
-
-        startActivityForResult(
-            intent,
-            REQUEST_CALL_SCREENING_ROLE
-        )
-    }
-
-    override fun onActivityResult(
-        requestCode: Int,
-        resultCode: Int,
-        data: Intent?
-    ) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        if (requestCode == REQUEST_CALL_SCREENING_ROLE) {
-
-            if (resultCode == Activity.RESULT_OK) {
-                println("ARGUS ROLE: CALL_SCREENING role GRANTED")
-            } else {
-                println("ARGUS ROLE: CALL_SCREENING role NOT granted")
+                else -> result.notImplemented()
             }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_DEFAULT_SMS_ROLE) {
+            val granted = resultCode == Activity.RESULT_OK ||
+                Telephony.Sms.getDefaultSmsPackage(this) == packageName
+            pendingRoleResult?.success(granted)
+            pendingRoleResult = null
         }
     }
 }

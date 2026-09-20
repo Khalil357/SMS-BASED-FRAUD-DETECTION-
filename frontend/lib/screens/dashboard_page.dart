@@ -20,6 +20,7 @@ import 'safety_tips_page.dart';
 import 'terms_and_conditions_page.dart';
 import 'blocked_numbers_screen.dart';
 import 'history_scan_screen.dart';
+import '../services/native_sms_block_service.dart';
 
 class DashboardPage extends StatefulWidget {
   final Navigate onNavigate;
@@ -352,22 +353,73 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     if (mounted) _loadStoredData();
   }
 
-  void _handleAddBlockedNumber({String? reason}) {
+  void _handleAddBlockedNumber({String? reason}) async {
     final number = _blockNumberController.text.trim();
     if (number.isEmpty) return;
+
     setState(() {
       _blockedNumbers.insert(0, {'number': number, 'date': 'today', 'reason': reason ?? 'Manual block'});
       _blockNumberController.clear();
     });
-    SmsStorageService.saveBlocklist(_blockedNumbers);
+    await SmsStorageService.saveBlocklist(_blockedNumbers);
     _showMessageActionSnackBar('$number added to blocklist.');
+
+    await _maybeOfferFullDeviceBlocking();
+
+    if (await NativeSmsBlockService.isDefaultSmsApp()) {
+      await NativeSmsBlockService.blockNumberOnDevice(number);
+    }
   }
 
-  void _handleRemoveBlockedNumber(int index) {
+  void _handleRemoveBlockedNumber(int index) async {
     final number = _blockedNumbers[index]['number'];
     setState(() { _blockedNumbers.removeAt(index); });
-    SmsStorageService.saveBlocklist(_blockedNumbers);
+    await SmsStorageService.saveBlocklist(_blockedNumbers);
     _showMessageActionSnackBar('$number removed from blocklist.');
+
+    if (number != null && await NativeSmsBlockService.isDefaultSmsApp()) {
+      await NativeSmsBlockService.unblockNumberOnDevice(number);
+    }
+  }
+
+  /// Asks the user, once, whether they want blocked numbers to be stopped
+  /// at the phone level (not just hidden inside this app). Only relevant
+  /// on Android — iOS has no equivalent capability for any app.
+  Future<void> _maybeOfferFullDeviceBlocking() async {
+    if (!Platform.isAndroid) return;
+    if (await NativeSmsBlockService.isDefaultSmsApp()) return;
+
+    final alreadyAsked = await SmsStorageService.getBoolSetting('has_offered_full_block', false);
+    if (alreadyAsked) return;
+    await SmsStorageService.saveBoolSetting('has_offered_full_block', true);
+
+    if (!mounted) return;
+    final wantsFullBlock = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Stop blocked texts completely?'),
+        content: const Text(
+          'Right now, blocked senders are hidden only inside this app — their '
+          'texts still reach your regular messaging app. To stop them from '
+          'reaching your phone at all, set this app as your default messaging '
+          'app. You can skip this and keep app-only blocking instead.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Not now')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enable')),
+        ],
+      ),
+    );
+
+    if (wantsFullBlock == true) {
+      final granted = await NativeSmsBlockService.requestDefaultSmsRole();
+      if (granted) {
+        for (final entry in _blockedNumbers) {
+          final n = entry['number'];
+          if (n != null) await NativeSmsBlockService.blockNumberOnDevice(n);
+        }
+      }
+    }
   }
 
   void _showMessageActionSnackBar(String message, {bool isError = false}) {
