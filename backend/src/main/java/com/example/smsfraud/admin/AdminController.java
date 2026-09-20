@@ -77,8 +77,8 @@ public class AdminController {
 
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserResponse>>> listUsers() {
-        // The portal manages admins only; self-registered USER accounts are not shown here.
-        List<UserResponse> users = userRepository.findAllAdminsWithRoles().stream()
+        // Return both administrators and mobile users. The portal separates them by role.
+        List<UserResponse> users = userRepository.findAllWithRoles().stream()
                 .map(UserResponse::from)
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok("Users retrieved", users));
