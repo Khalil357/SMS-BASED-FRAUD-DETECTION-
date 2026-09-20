@@ -32,13 +32,16 @@ class FraudAlertControllerTest {
     @Mock
     private SmsScanRepository repository;
 
+    @Mock
+    private SmsScanService smsScanService;
+
     private MockMvc mvc;
     private final UUID userId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
         mvc = MockMvcBuilders.standaloneSetup(
-                        new FraudAlertController(new FraudAlertService(repository)))
+                        new FraudAlertController(new FraudAlertService(repository), smsScanService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }

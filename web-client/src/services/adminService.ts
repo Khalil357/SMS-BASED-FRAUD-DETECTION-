@@ -1,4 +1,4 @@
-const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8080';
+const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://54.242.107.64';
 const TOKEN_KEY = 'argus_admin_token';
 
 /** Admin-visible user view, matching the backend `UserResponse` (snake_case). */
@@ -31,8 +31,10 @@ export interface AdminSmsScanResponse {
   id: string;
   sender: string;
   message: string;
-  fraudType: string;
-  riskScore: number;
+  fraud_type?: string;
+  risk_score?: number;
+  fraudType?: string;
+  riskScore?: number;
   timestamp: string;
 }
 
@@ -95,6 +97,14 @@ async function authFetchJson<T>(path: string, init?: RequestInit): Promise<ApiRe
       data?: T;
     } | null;
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        try {
+          localStorage.removeItem(TOKEN_KEY);
+          window.dispatchEvent(new Event('argus:unauthorized'));
+        } catch {
+          // Storage can be unavailable in privacy-restricted browser contexts.
+        }
+      }
       return { success: false, message: body?.message ?? `Request failed (${response.status})` };
     }
     return { success: true, data: body?.data ?? (body as unknown as T), message: body?.message };

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import VerificationPage from "./pages/VerificationPage";
@@ -6,9 +6,12 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import { ThemeProvider } from "./theme/ThemeContext";
 import type { AuthPage } from "./types/auth";
+import { clearToken, hasActiveSession } from "./services/authService";
 
 function App() {
-  const [page, setPage] = useState<AuthPage>("login");
+  const [page, setPage] = useState<AuthPage>(() =>
+    hasActiveSession() ? "dashboard" : "login"
+  );
 
   // Login -> OTP verification flow
   const [loginEmail, setLoginEmail] = useState("");
@@ -16,6 +19,15 @@ function App() {
   // Separate forgot-password flow (kept in the codebase, not currently linked from login)
   const [resetPhone, setResetPhone] = useState("");
   const [resetCode] = useState("");
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      clearToken();
+      setPage("login");
+    };
+    window.addEventListener("argus:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("argus:unauthorized", handleUnauthorized);
+  }, []);
 
   const renderPage = () => {
     switch (page) {

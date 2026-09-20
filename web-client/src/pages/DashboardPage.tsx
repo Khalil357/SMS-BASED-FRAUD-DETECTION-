@@ -3,7 +3,6 @@ import "./DashboardPage.css";
 import type {
   StatCardData,
   SmsRecord,
-  DetectionRule,
 } from "../types/dashboard";
 import type { AuthPage } from "../types/auth";
 import { useTheme } from "../theme/ThemeContext";
@@ -12,7 +11,6 @@ import {
   MessageSquare,
   Users,
   Activity,
-  Plus,
   Trash2,
   Eye,
   EyeOff,
@@ -21,7 +19,6 @@ import {
   Moon,
   Sun,
   LogOut,
-  Sliders,
   UserPlus,
   X,
   Pencil,
@@ -44,7 +41,8 @@ import {
   getFraudTrend,
   getSmsScans,
 } from "../services/adminService";
-import type { AdminUser } from "../services/adminService";
+import type { AdminUser, FraudTrendPoint } from "../services/adminService";
+import { clearToken } from "../services/authService";
 
 interface DashboardPageProps {
   onNavigate: (page: AuthPage) => void;
@@ -69,109 +67,22 @@ function validatePasswordStrength(pass: string): string | null {
   return null;
 }
 
-const mockStats: StatCardData[] = [
+const emptyStats: StatCardData[] = [
   {
     id: "1",
     title: "Total SMS Scanned",
-    value: "14,890",
-    change: "+12.5% this month",
+    value: "0",
+    change: "Database total",
     type: "positive",
     category: "total",
   },
   {
     id: "2",
     title: "Fraud & Scams Detected",
-    value: "2,840",
-    change: "98.4% detection rate",
+    value: "0",
+    change: "0% detection rate",
     type: "negative",
     category: "fraud",
-  },
-];
-
-const initialSmsRecords: SmsRecord[] = [
-  {
-    id: "SMS-8910",
-    sender: "+255746046202",
-    message: "Hongera! Umeshinda TZS 2,500,000 kutoka Vodacom. Bonyeza link http://voda-tuzo.com au piga 0746046202 kudai zawadi yako.",
-    fraudType: "Phishing",
-    riskScore: 96,
-    date: "03 Sep 2026 14:22",
-    status: "Fraud",
-  },
-  {
-    id: "SMS-8909",
-    sender: "+255754123890",
-    message: "Tuma zile pesa elfu 50 kwenye namba hii 0754123890 kwa jina la Juma Kabwe. Usipime namba ile nyingine imefungwa.",
-    fraudType: "Impersonation",
-    riskScore: 91,
-    date: "03 Sep 2026 13:45",
-    status: "Fraud",
-  },
-  {
-    id: "SMS-8908",
-    sender: "+255713456789",
-    message: "LOAN APPROVED! Mkopo wako wa TZS 500,000 umekubaliwa. Lipia ada ya usajili TZS 10,000 kupitia http://mkopo-fast.com",
-    fraudType: "Loan Scam",
-    riskScore: 88,
-    date: "03 Sep 2026 12:10",
-    status: "Fraud",
-  },
-  {
-    id: "SMS-8907",
-    sender: "+255765222111",
-    message: "Ndugu mteja, akaunti yako ya Benki imefungwa kwa muda. Tafadhali thibitisha taarifa zako sasa hivi hapa: http://crdb-verify.org",
-    fraudType: "Phishing",
-    riskScore: 94,
-    date: "03 Sep 2026 11:05",
-    status: "Fraud",
-  },
-  {
-    id: "SMS-8906",
-    sender: "+255789900112",
-    message: "Kaka hio hela ya kodi tuma kwenye hii namba badala ya ile ya mwanzo. Namba mpya ni 0789900112 Asante.",
-    fraudType: "Impersonation",
-    riskScore: 78,
-    date: "03 Sep 2026 09:30",
-    status: "Fraud",
-  },
-];
-
-const initialRules: DetectionRule[] = [
-  {
-    id: "RULE-101",
-    name: "Urgent Payment Redirect Keyword",
-    type: "Keyword",
-    pattern: "(tuma|tumia|lipia)\\s+.*(namba\\s+hii|kodi|pesa)",
-    riskWeight: 85,
-    enabled: true,
-    matchesCount: 1420,
-  },
-  {
-    id: "RULE-102",
-    name: "Suspicious Domain / Phishing URL",
-    type: "Link Analyzer",
-    pattern: "http(s)?://(?!.*(vodacom|airtel|crdbbank|nmb)\\.co\\.tz)",
-    riskWeight: 95,
-    enabled: true,
-    matchesCount: 2310,
-  },
-  {
-    id: "RULE-103",
-    name: "Unsolicited Lottery & Prize Claims",
-    type: "Keyword",
-    pattern: "(umeshinda|zawadi|bahati\\s+nasibu|tuzo)",
-    riskWeight: 90,
-    enabled: true,
-    matchesCount: 890,
-  },
-  {
-    id: "RULE-104",
-    name: "Fake Account Suspension Alert",
-    type: "Sender Spoofing",
-    pattern: "(akaunti|account)\\s+.*(imefungwa|suspended|blocked)",
-    riskWeight: 88,
-    enabled: true,
-    matchesCount: 650,
   },
 ];
 
@@ -185,7 +96,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const TAB_SLUGS: Record<string, string> = {
     "Overview":              "/",
     "SMS Ingestion Logs":    "/logs",
-    "Rules & Threat Engine": "/rules",
     "Team":                  "/team",
     "Users":                 "/users",
   };
@@ -208,9 +118,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   };
 
   // Main Data States
-  const [statsCards, setStatsCards] = useState<StatCardData[]>(mockStats);
-  const [smsList, setSmsList] = useState<SmsRecord[]>(initialSmsRecords);
-  const [rulesList, setRulesList] = useState<DetectionRule[]>(initialRules);
+  const [statsCards, setStatsCards] = useState<StatCardData[]>(emptyStats);
+  const [smsList, setSmsList] = useState<SmsRecord[]>([]);
+  const [fraudTrend, setFraudTrend] = useState<FraudTrendPoint[]>([]);
   const [usersList, setUsersList] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
@@ -235,13 +145,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [logsSearch, setLogsSearch] = useState("");
   const [logsSortField, setLogsSortField] = useState<"id" | "sender" | "date">("date");
   const [logsSortDir, setLogsSortDir] = useState<"asc" | "desc">("desc");
-
-  // 4. Rules & Threat Engine Tab
-  const [rulesSearch, setRulesSearch] = useState("");
-  const [rulesTypeFilter, setRulesTypeFilter] = useState<string>("All");
-  const [rulesStatusFilter, setRulesStatusFilter] = useState<"All" | "Active" | "Disabled">("All");
-  const [rulesSortField, setRulesSortField] = useState<"id" | "name" | "type" | "riskWeight" | "matchesCount" | "enabled">("matchesCount");
-  const [rulesSortDir, setRulesSortDir] = useState<"asc" | "desc">("desc");
 
   // Add Admin form state
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -281,44 +184,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   // Modals
   const [selectedSms, setSelectedSms] = useState<SmsRecord | null>(null);
-  const [isAddRuleOpen, setIsAddRuleOpen] = useState(false);
 
   // Admin Profile state
   const [adminName, setAdminName] = useState("System Admin");
 
   const [hoveredTelemetryIndex, setHoveredTelemetryIndex] = useState<number | null>(null);
-
-  // Form states for rules
-  const [newRuleName, setNewRuleName] = useState("");
-  const [newRulePattern, setNewRulePattern] = useState("");
-  const [newRuleType, setNewRuleType] = useState<DetectionRule["type"]>("Keyword");
-  const [newRuleWeight, setNewRuleWeight] = useState(85);
-
-  const handleToggleRule = (id: string) => {
-    setRulesList((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
-    );
-  };
-
-  const handleAddRule = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRuleName.trim() || !newRulePattern.trim()) return;
-
-    const newRule: DetectionRule = {
-      id: `RULE-${Math.floor(100 + Math.random() * 900)}`,
-      name: newRuleName.trim(),
-      type: newRuleType,
-      pattern: newRulePattern.trim(),
-      riskWeight: newRuleWeight,
-      enabled: true,
-      matchesCount: 0,
-    };
-
-    setRulesList([newRule, ...rulesList]);
-    setNewRuleName("");
-    setNewRulePattern("");
-    setIsAddRuleOpen(false);
-  };
 
   const currentUserId = getCurrentUserId();
 
@@ -352,15 +222,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   }
 
   async function loadFraudTrends() {
-    await getFraudTrend(7);
+    const res = await getFraudTrend(7);
+    setFraudTrend(res.success && res.data ? res.data : []);
   }
 
   async function loadSmsAuditScans() {
     const res = await getSmsScans("Fraud", 0, 100);
     if (res.success && res.data) {
       const records = Array.isArray(res.data) ? res.data : (res.data as any)?.content || [];
-      if (records.length > 0) {
-        const mapped: SmsRecord[] = records.map((item: any, idx: number) => {
+      const mapped: SmsRecord[] = records.map((item: any) => {
           let dateStr = "Recently";
           if (item.timestamp) {
             try {
@@ -376,17 +246,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             }
           }
           return {
-            id: item.id ? `SMS-${String(item.id).substring(0, 6).toUpperCase()}` : `SMS-${8910 - idx}`,
-            sender: item.sender || "+255746046202",
+            id: item.id ? `SMS-${String(item.id).substring(0, 6).toUpperCase()}` : "Unknown",
+            sender: item.sender || "Unknown",
             message: item.message || "",
-            fraudType: (item.fraudType || "Phishing") as SmsRecord["fraudType"],
-            riskScore: Math.round(item.riskScore || 90),
+            fraudType: (item.fraud_type || item.fraudType || "Clean") as SmsRecord["fraudType"],
+            riskScore: Math.round(
+              Number(item.risk_score ?? item.riskScore ?? 0)
+                * (Number(item.risk_score ?? item.riskScore ?? 0) <= 1 ? 100 : 1)
+            ),
             date: dateStr,
             status: "Fraud",
           };
-        });
-        setSmsList(mapped);
-      }
+      });
+      setSmsList(mapped);
     }
   }
 
@@ -414,14 +286,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   }
 
   useEffect(() => {
-    void loadUsers();
-    void loadDashboardStats();
-    void loadFraudTrends();
-    void loadSmsAuditScans();
-  }, []);
-
-  useEffect(() => {
     if (activeTab === "Overview") {
+      void loadUsers();
       void loadDashboardStats();
       void loadFraudTrends();
       void loadSmsAuditScans();
@@ -615,68 +481,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     setLogsSortDir("desc");
   }
 
-  // 4. Rules Engine Logic
-  const filteredRulesList = useMemo(() => {
-    let list = rulesList;
-
-    if (rulesSearch.trim()) {
-      const q = rulesSearch.toLowerCase().trim();
-      list = list.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.pattern.toLowerCase().includes(q) ||
-          r.id.toLowerCase().includes(q)
-      );
-    }
-
-    if (rulesTypeFilter !== "All") {
-      list = list.filter((r) => r.type === rulesTypeFilter);
-    }
-
-    if (rulesStatusFilter !== "All") {
-      const isEnabled = rulesStatusFilter === "Active";
-      list = list.filter((r) => r.enabled === isEnabled);
-    }
-
-    return [...list].sort((a, b) => {
-      let valA: string | number = "";
-      let valB: string | number = "";
-
-      if (rulesSortField === "id") {
-        valA = a.id;
-        valB = b.id;
-      } else if (rulesSortField === "name") {
-        valA = a.name.toLowerCase();
-        valB = b.name.toLowerCase();
-      } else if (rulesSortField === "type") {
-        valA = a.type;
-        valB = b.type;
-      } else if (rulesSortField === "riskWeight") {
-        valA = a.riskWeight;
-        valB = b.riskWeight;
-      } else if (rulesSortField === "matchesCount") {
-        valA = a.matchesCount;
-        valB = b.matchesCount;
-      } else if (rulesSortField === "enabled") {
-        valA = a.enabled ? 1 : 0;
-        valB = b.enabled ? 1 : 0;
-      }
-
-      if (valA < valB) return rulesSortDir === "asc" ? -1 : 1;
-      if (valA > valB) return rulesSortDir === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [rulesList, rulesSearch, rulesTypeFilter, rulesStatusFilter, rulesSortField, rulesSortDir]);
-
-  const isRulesFiltered = rulesSearch !== "" || rulesTypeFilter !== "All" || rulesStatusFilter !== "All" || rulesSortField !== "matchesCount" || rulesSortDir !== "desc";
-  function resetRulesFilters() {
-    setRulesSearch("");
-    setRulesTypeFilter("All");
-    setRulesStatusFilter("All");
-    setRulesSortField("matchesCount");
-    setRulesSortDir("desc");
-  }
-
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
     const errors: Record<string, string> = {};
@@ -845,11 +649,38 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     setDeleteTarget(null);
   }
 
+  const trendChart = useMemo(() => {
+    const counts = fraudTrend.map((point) => Number(point.count) || 0);
+    const maxCount = Math.max(1, ...counts);
+    const points = fraudTrend.map((point, index) => {
+      const x = fraudTrend.length <= 1 ? 375 : 60 + (630 * index) / (fraudTrend.length - 1);
+      const count = Number(point.count) || 0;
+      const y = 190 - (count / maxCount) * 150;
+      return {
+        ...point,
+        count,
+        x,
+        y,
+        peak: count > 0 && count === maxCount,
+      };
+    });
+
+    return {
+      points,
+      maxCount,
+      total: counts.reduce((sum, count) => sum + count, 0),
+      polyline: points.map((point) => `${point.x},${point.y}`).join(" "),
+      area: points.length > 0
+        ? `60,190 ${points.map((point) => `${point.x},${point.y}`).join(" ")} 690,190`
+        : "",
+      ticks: [maxCount, Math.ceil(maxCount * 2 / 3), Math.ceil(maxCount / 3), 0],
+    };
+  }, [fraudTrend]);
+
   // Sidebar Menu items
   const navMenuItems = [
     { name: "Overview", icon: Activity },
     { name: "SMS Ingestion Logs", icon: MessageSquare, badge: smsList.length },
-    { name: "Rules & Threat Engine", icon: Sliders, badge: rulesList.filter((r) => r.enabled).length },
     { name: "Team", icon: UserCheck, badge: filteredTeamList.length },
     { name: "Users", icon: Users, badge: filteredAppUsersList.length },
   ];
@@ -905,7 +736,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
           </button>
 
-          <button type="button" className="logout-btn" onClick={() => onNavigate("login")}>
+          <button type="button" className="logout-btn" onClick={() => {
+            clearToken();
+            onNavigate("login");
+          }}>
             <LogOut size={18} />
             <span>Logout</span>
           </button>
@@ -968,236 +802,153 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               ))}
             </section>
 
-            {/* TRAFFIC OVERVIEW CHART PANEL */}
+            {/* FRAUD TREND CHART PANEL */}
             <section className="middle-dashboard-grid single-column">
               <div className="admin-panel telemetry-chart-panel">
                 <div className="panel-top flex-wrap">
                   <div>
-                    <h3>SMS Traffic & Interception Overview</h3>
-                    <p>Live trend analysis across intercepted SMS message volume</p>
+                    <h3>Fraud Message Trend</h3>
+                    <p>Daily fraud messages stored in the sms_scans table over the last seven days</p>
                   </div>
                   <div className="telemetry-chart-legend">
-                    <span className="legend-pill total-pill">
-                      <span className="pill-dot blue" /> Total SMS (14,890)
-                    </span>
                     <span className="legend-pill fraud-pill">
-                      <span className="pill-dot red" /> Fraud Intercepts (2,840)
+                      <span className="pill-dot red" /> Fraud Intercepts ({trendChart.total.toLocaleString()})
                     </span>
                   </div>
                 </div>
 
                 <div className="telemetry-chart-wrapper">
                   <div className="telemetry-svg-container">
-                    <svg viewBox="0 0 720 220" className="telemetry-svg">
+                    <svg viewBox="0 0 720 220" className="telemetry-svg" role="img" aria-label="Seven-day fraud message trend">
                       <defs>
-                        <linearGradient id="totalSmsGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.22" />
-                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-                        </linearGradient>
                         <linearGradient id="fraudSmsGradient" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#ef4444" stopOpacity="0.28" />
                           <stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" />
                         </linearGradient>
                       </defs>
 
-                      {/* Horizontal Grid Lines */}
                       <g className="grid-lines-horizontal" stroke="var(--border)" strokeDasharray="4 4" strokeWidth="1">
-                        <line x1="55" y1="30" x2="700" y2="30" />
-                        <line x1="55" y1="75" x2="700" y2="75" />
-                        <line x1="55" y1="120" x2="700" y2="120" />
-                        <line x1="55" y1="165" x2="700" y2="165" />
+                        {[40, 90, 140, 190].map((y) => (
+                          <line key={`horizontal-${y}`} x1="55" y1={y} x2="700" y2={y} />
+                        ))}
                       </g>
 
-                      {/* Vertical Day Grid Lines */}
                       <g className="grid-lines-vertical" stroke="var(--border)" strokeDasharray="3 3" strokeWidth="1" opacity="0.5">
-                        <line x1="60" y1="25" x2="60" y2="190" />
-                        <line x1="165" y1="25" x2="165" y2="190" />
-                        <line x1="270" y1="25" x2="270" y2="190" />
-                        <line x1="375" y1="25" x2="375" y2="190" />
-                        <line x1="480" y1="25" x2="480" y2="190" />
-                        <line x1="585" y1="25" x2="585" y2="190" />
-                        <line x1="690" y1="25" x2="690" y2="190" />
+                        {trendChart.points.map((point) => (
+                          <line key={`vertical-${point.day}`} x1={point.x} y1="25" x2={point.x} y2="190" />
+                        ))}
                       </g>
 
-                      {/* Y-Axis Scale Labels */}
                       <g className="y-axis-labels" fill="var(--subtle)" fontSize="10" fontWeight="700" textAnchor="end">
-                        <text x="48" y="34">2,000</text>
-                        <text x="48" y="79">1,500</text>
-                        <text x="48" y="124">1,000</text>
-                        <text x="48" y="169">500</text>
+                        {trendChart.ticks.map((tick, index) => (
+                          <text key={`tick-${index}`} x="48" y={44 + index * 50}>
+                            {tick.toLocaleString()}
+                          </text>
+                        ))}
                       </g>
 
-                      {/* Area Fill 1: Total SMS Ingested */}
-                      <path
-                        d="M 60,110 C 112.5,95 112.5,80 165,80 C 217.5,80 217.5,60 270,60 C 322.5,60 322.5,40 375,40 C 427.5,40 427.5,50 480,50 C 532.5,50 532.5,30 585,30 C 637.5,30 637.5,30 690,30 L 690,190 L 60,190 Z"
-                        fill="url(#totalSmsGradient)"
-                      />
-
-                      {/* Spline Line 1: Total SMS Ingested */}
-                      <path
-                        d="M 60,110 C 112.5,95 112.5,80 165,80 C 217.5,80 217.5,60 270,60 C 322.5,60 322.5,40 375,40 C 427.5,40 427.5,50 480,50 C 532.5,50 532.5,30 585,30 C 637.5,30 637.5,30 690,30"
-                        fill="none"
-                        stroke="#3b82f6"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                      />
-
-                      {/* Area Fill 2: Fraud Intercepts */}
-                      <path
-                        d="M 60,150 C 112.5,140 112.5,130 165,130 C 217.5,130 217.5,95 270,95 C 322.5,95 322.5,45 375,45 C 427.5,45 427.5,110 480,110 C 532.5,110 532.5,50 585,50 C 637.5,50 637.5,80 690,80 L 690,190 L 60,190 Z"
-                        fill="url(#fraudSmsGradient)"
-                      />
-
-                      {/* Spline Line 2: Fraud Intercepts */}
-                      <path
-                        d="M 60,150 C 112.5,140 112.5,130 165,130 C 217.5,130 217.5,95 270,95 C 322.5,95 322.5,45 375,45 C 427.5,45 427.5,110 480,110 C 532.5,110 532.5,50 585,50 C 637.5,50 637.5,80 690,80"
-                        fill="none"
-                        stroke="var(--primary)"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                      />
-
-                      {/* Interactive Hover Crosshair */}
-                      {hoveredTelemetryIndex !== null && (
-                        <line
-                          x1={[60, 165, 270, 375, 480, 585, 690][hoveredTelemetryIndex]}
-                          y1="25"
-                          x2={[60, 165, 270, 375, 480, 585, 690][hoveredTelemetryIndex]}
-                          y2="190"
-                          stroke="var(--primary)"
-                          strokeDasharray="3 3"
-                          strokeWidth="1.5"
-                          opacity="0.9"
-                        />
-                      )}
-
-                      {/* Total SMS Data Node Circles */}
-                      {[
-                        { day: "Mon", x: 60, y: 110 },
-                        { day: "Tue", x: 165, y: 80 },
-                        { day: "Wed", x: 270, y: 60 },
-                        { day: "Thu", x: 375, y: 40 },
-                        { day: "Fri", x: 480, y: 50 },
-                        { day: "Sat", x: 585, y: 30 },
-                        { day: "Sun", x: 690, y: 30 },
-                      ].map((pt, idx) => {
-                        const isHovered = hoveredTelemetryIndex === idx;
-                        return (
-                          <circle
-                            key={`total-node-${pt.day}`}
-                            cx={pt.x}
-                            cy={pt.y}
-                            r={isHovered ? 6 : 4}
-                            fill="#3b82f6"
-                            stroke="var(--card)"
-                            strokeWidth="2"
-                            pointerEvents="none"
+                      {trendChart.points.length === 0 ? (
+                        <text x="375" y="115" fill="var(--subtle)" fontSize="13" textAnchor="middle">
+                          Fraud trend data is unavailable
+                        </text>
+                      ) : (
+                        <>
+                          <polygon points={trendChart.area} fill="url(#fraudSmsGradient)" />
+                          <polyline
+                            points={trendChart.polyline}
+                            fill="none"
+                            stroke="var(--primary)"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
                           />
-                        );
-                      })}
 
-                      {/* Fraud Data Node Circles */}
-                      {[
-                        { day: "Mon", x: 60, y: 150, count: "850 Fraud" },
-                        { day: "Tue", x: 165, y: 130, count: "1,240 Fraud" },
-                        { day: "Wed", x: 270, y: 95, count: "1,100 Fraud" },
-                        { day: "Thu", x: 375, y: 45, count: "1,890 Fraud", peak: true },
-                        { day: "Fri", x: 480, y: 110, count: "1,450 Fraud" },
-                        { day: "Sat", x: 585, y: 50, count: "2,100 Fraud", peak: true },
-                        { day: "Sun", x: 690, y: 80, count: "1,620 Fraud" },
-                      ].map((pt, idx) => {
-                        const isHovered = hoveredTelemetryIndex === idx;
-                        return (
-                          <g
-                            key={`fraud-node-${pt.day}`}
-                            className="interactive-node-group"
-                            onMouseEnter={() => setHoveredTelemetryIndex(idx)}
-                            onMouseLeave={() => setHoveredTelemetryIndex(null)}
-                            style={{ cursor: "pointer" }}
-                          >
-                            {isHovered && (
-                              <circle
-                                cx={pt.x}
-                                cy={pt.y}
-                                r="12"
-                                fill="rgba(239, 68, 68, 0.22)"
-                                stroke="var(--primary)"
-                                strokeWidth="1.5"
-                              />
-                            )}
-                            <circle
-                              cx={pt.x}
-                              cy={pt.y}
-                              r={isHovered ? 7 : pt.peak ? 6 : 5}
-                              fill="var(--primary)"
-                              stroke="var(--card)"
-                              strokeWidth="2.5"
+                          {hoveredTelemetryIndex !== null && trendChart.points[hoveredTelemetryIndex] && (
+                            <line
+                              x1={trendChart.points[hoveredTelemetryIndex].x}
+                              y1="25"
+                              x2={trendChart.points[hoveredTelemetryIndex].x}
+                              y2="190"
+                              stroke="var(--primary)"
+                              strokeDasharray="3 3"
+                              strokeWidth="1.5"
+                              opacity="0.9"
                             />
-                          </g>
-                        );
-                      })}
+                          )}
 
-                      {/* Callout Hover Badges */}
-                      {[
-                        { day: "Mon", x: 60, y: 150, count: "850 Fraud" },
-                        { day: "Tue", x: 165, y: 130, count: "1,240 Fraud" },
-                        { day: "Wed", x: 270, y: 95, count: "1,100 Fraud" },
-                        { day: "Thu", x: 375, y: 45, count: "1,890 Fraud", peak: true },
-                        { day: "Fri", x: 480, y: 110, count: "1,450 Fraud" },
-                        { day: "Sat", x: 585, y: 50, count: "2,100 Fraud", peak: true },
-                        { day: "Sun", x: 690, y: 80, count: "1,620 Fraud" },
-                      ].map((pt, idx) => {
-                        const isHovered = hoveredTelemetryIndex === idx;
-                        if (!isHovered && !pt.peak) return null;
-
-                        return (
-                          <g key={`badge-${pt.day}`} className="callout-badges pointer-events-none">
-                            <rect
-                              x={pt.x - 44}
-                              y={pt.y - 32}
-                              width="88"
-                              height="22"
-                              rx="6"
-                              fill={isHovered ? "#08090d" : "var(--primary)"}
-                              stroke={isHovered ? "var(--primary)" : "none"}
-                              strokeWidth="1"
-                            />
-                            <text
-                              x={pt.x}
-                              y={pt.y - 17}
-                              fill="#ffffff"
-                              fontSize="10"
-                              fontWeight="800"
-                              textAnchor="middle"
-                            >
-                              {pt.count}
-                            </text>
-                          </g>
-                        );
-                      })}
+                          {trendChart.points.map((point, index) => {
+                            const isHovered = hoveredTelemetryIndex === index;
+                            return (
+                              <g
+                                key={`fraud-node-${point.day}`}
+                                className="interactive-node-group"
+                                onMouseEnter={() => setHoveredTelemetryIndex(index)}
+                                onMouseLeave={() => setHoveredTelemetryIndex(null)}
+                                style={{ cursor: "pointer" }}
+                              >
+                                {isHovered && (
+                                  <circle
+                                    cx={point.x}
+                                    cy={point.y}
+                                    r="12"
+                                    fill="rgba(239, 68, 68, 0.22)"
+                                    stroke="var(--primary)"
+                                    strokeWidth="1.5"
+                                  />
+                                )}
+                                <circle
+                                  cx={point.x}
+                                  cy={point.y}
+                                  r={isHovered ? 7 : point.peak ? 6 : 5}
+                                  fill="var(--primary)"
+                                  stroke="var(--card)"
+                                  strokeWidth="2.5"
+                                />
+                                {(isHovered || point.peak) && (
+                                  <g className="callout-badges pointer-events-none">
+                                    <rect
+                                      x={point.x - 42}
+                                      y={Math.max(4, point.y - 32)}
+                                      width="84"
+                                      height="22"
+                                      rx="6"
+                                      fill={isHovered ? "#08090d" : "var(--primary)"}
+                                      stroke={isHovered ? "var(--primary)" : "none"}
+                                      strokeWidth="1"
+                                    />
+                                    <text
+                                      x={point.x}
+                                      y={Math.max(19, point.y - 17)}
+                                      fill="#ffffff"
+                                      fontSize="10"
+                                      fontWeight="800"
+                                      textAnchor="middle"
+                                    >
+                                      {point.count.toLocaleString()} Fraud
+                                    </text>
+                                  </g>
+                                )}
+                              </g>
+                            );
+                          })}
+                        </>
+                      )}
                     </svg>
                   </div>
 
-                  {/* X-Axis Labels Row */}
                   <div className="telemetry-x-labels">
-                    {[
-                      { day: "Mon", val: "850 Scans", idx: 0 },
-                      { day: "Tue", val: "1,240 Scans", idx: 1 },
-                      { day: "Wed", val: "1,100 Scans", idx: 2 },
-                      { day: "Thu", val: "1,890 (Peak)", idx: 3, peak: true },
-                      { day: "Fri", val: "1,450 Scans", idx: 4 },
-                      { day: "Sat", val: "2,100 (Peak)", idx: 5, peak: true },
-                      { day: "Sun", val: "1,620 Scans", idx: 6 },
-                    ].map((lbl) => (
+                    {trendChart.points.map((point, index) => (
                       <div
-                        key={lbl.day}
-                        className={`x-label-item ${lbl.peak ? "active-peak" : ""} ${hoveredTelemetryIndex === lbl.idx ? "hovered-label" : ""}`}
-                        onMouseEnter={() => setHoveredTelemetryIndex(lbl.idx)}
+                        key={point.day}
+                        className={`x-label-item ${point.peak ? "active-peak" : ""} ${hoveredTelemetryIndex === index ? "hovered-label" : ""}`}
+                        onMouseEnter={() => setHoveredTelemetryIndex(index)}
                         onMouseLeave={() => setHoveredTelemetryIndex(null)}
                         style={{ cursor: "pointer" }}
                       >
-                        <span>{lbl.day}</span>
-                        <small className={lbl.peak ? "peak-val" : "subtle-val"}>{lbl.val}</small>
+                        <span>{point.day}</span>
+                        <small className={point.peak ? "peak-val" : "subtle-val"}>
+                          {point.count.toLocaleString()} Fraud
+                        </small>
                       </div>
                     ))}
                   </div>
@@ -1206,6 +957,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             </section>
           </div>
         )}
+
 
         {/* TAB 2: SMS INGESTION LOGS */}
         {activeTab === "SMS Ingestion Logs" && (
@@ -1317,201 +1069,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                             >
                               <Eye size={16} />
                             </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: RULES & THREAT ENGINE */}
-        {activeTab === "Rules & Threat Engine" && (
-          <div className="tab-content fade-slide">
-            <div className="admin-panel">
-              <div className="panel-top">
-                <div>
-                  <h3>Rule-Based Fraud Detection Engine</h3>
-                  <p>Active heuristic algorithms and pattern matching definitions</p>
-                </div>
-                <button type="button" className="btn-primary" onClick={() => setIsAddRuleOpen(true)}>
-                  <Plus size={16} /> Create Detection Rule
-                </button>
-              </div>
-
-              {/* TOOLBAR */}
-              <div className="toolbar-row">
-                <div className="search-input-wrapper">
-                  <Search size={16} className="search-icon" />
-                  <input
-                    type="text"
-                    placeholder="Search rules by name or pattern..."
-                    value={rulesSearch}
-                    onChange={(e) => setRulesSearch(e.target.value)}
-                    className="search-input"
-                  />
-                  {rulesSearch && (
-                    <button type="button" className="clear-search-btn" onClick={() => setRulesSearch("")}>
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-
-                <div className="toolbar-controls">
-                  <div className="flex-align gap-2">
-                    <Filter size={14} className="subtle-text" />
-                    <select
-                      value={rulesTypeFilter}
-                      onChange={(e) => setRulesTypeFilter(e.target.value)}
-                      className="filter-select"
-                    >
-                      <option value="All">All Types</option>
-                      <option value="Keyword">Keyword</option>
-                      <option value="Regex Pattern">Regex Pattern</option>
-                      <option value="Link Analyzer">Link Analyzer</option>
-                      <option value="Sender Spoofing">Sender Spoofing</option>
-                    </select>
-
-                    <select
-                      value={rulesStatusFilter}
-                      onChange={(e) => setRulesStatusFilter(e.target.value as "All" | "Active" | "Disabled")}
-                      className="filter-select"
-                    >
-                      <option value="All">All Statuses</option>
-                      <option value="Active">Active Only</option>
-                      <option value="Disabled">Disabled Only</option>
-                    </select>
-                  </div>
-
-                  {isRulesFiltered && (
-                    <button type="button" className="btn-reset" onClick={resetRulesFilters}>
-                      <RotateCcw size={14} /> Reset Filters
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="table-wrapper">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th
-                        className="sortable"
-                        onClick={() => handleSortToggle("id", rulesSortField, rulesSortDir, setRulesSortField, setRulesSortDir)}
-                      >
-                        <div className="th-content">
-                          <span>Rule ID</span>
-                          {rulesSortField === "id" ? (
-                            <span className="sort-indicator">{rulesSortDir === "asc" ? "▲" : "▼"}</span>
-                          ) : (
-                            <span className="sort-indicator neutral">▲▼</span>
-                          )}
-                        </div>
-                      </th>
-                      <th
-                        className="sortable"
-                        onClick={() => handleSortToggle("name", rulesSortField, rulesSortDir, setRulesSortField, setRulesSortDir)}
-                      >
-                        <div className="th-content">
-                          <span>Rule Name</span>
-                          {rulesSortField === "name" ? (
-                            <span className="sort-indicator">{rulesSortDir === "asc" ? "▲" : "▼"}</span>
-                          ) : (
-                            <span className="sort-indicator neutral">▲▼</span>
-                          )}
-                        </div>
-                      </th>
-                      <th
-                        className="sortable"
-                        onClick={() => handleSortToggle("type", rulesSortField, rulesSortDir, setRulesSortField, setRulesSortDir)}
-                      >
-                        <div className="th-content">
-                          <span>Type</span>
-                          {rulesSortField === "type" ? (
-                            <span className="sort-indicator">{rulesSortDir === "asc" ? "▲" : "▼"}</span>
-                          ) : (
-                            <span className="sort-indicator neutral">▲▼</span>
-                          )}
-                        </div>
-                      </th>
-                      <th>Pattern Definition</th>
-                      <th
-                        className="sortable"
-                        onClick={() => handleSortToggle("riskWeight", rulesSortField, rulesSortDir, setRulesSortField, setRulesSortDir)}
-                      >
-                        <div className="th-content">
-                          <span>Weight</span>
-                          {rulesSortField === "riskWeight" ? (
-                            <span className="sort-indicator">{rulesSortDir === "asc" ? "▲" : "▼"}</span>
-                          ) : (
-                            <span className="sort-indicator neutral">▲▼</span>
-                          )}
-                        </div>
-                      </th>
-                      <th
-                        className="sortable"
-                        onClick={() => handleSortToggle("matchesCount", rulesSortField, rulesSortDir, setRulesSortField, setRulesSortDir)}
-                      >
-                        <div className="th-content">
-                          <span>Detections</span>
-                          {rulesSortField === "matchesCount" ? (
-                            <span className="sort-indicator">{rulesSortDir === "asc" ? "▲" : "▼"}</span>
-                          ) : (
-                            <span className="sort-indicator neutral">▲▼</span>
-                          )}
-                        </div>
-                      </th>
-                      <th
-                        className="sortable"
-                        onClick={() => handleSortToggle("enabled", rulesSortField, rulesSortDir, setRulesSortField, setRulesSortDir)}
-                      >
-                        <div className="th-content">
-                          <span>Status</span>
-                          {rulesSortField === "enabled" ? (
-                            <span className="sort-indicator">{rulesSortDir === "asc" ? "▲" : "▼"}</span>
-                          ) : (
-                            <span className="sort-indicator neutral">▲▼</span>
-                          )}
-                        </div>
-                      </th>
-                      <th>Toggle</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRulesList.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="subtle-text">No rules match your filter criteria.</td>
-                      </tr>
-                    ) : (
-                      filteredRulesList.map((rule) => (
-                        <tr key={rule.id}>
-                          <td><code className="code-tag">{rule.id}</code></td>
-                          <td className="font-semibold">{rule.name}</td>
-                          <td>
-                            <span className="type-tag blue">{rule.type}</span>
-                          </td>
-                          <td><code className="regex-code">{rule.pattern}</code></td>
-                          <td>
-                            <strong style={{ color: "var(--primary)" }}>{rule.riskWeight}%</strong>
-                          </td>
-                          <td>{rule.matchesCount.toLocaleString()}</td>
-                          <td>
-                            <span className={`status-pill ${rule.enabled ? "safe" : "review"}`}>
-                              {rule.enabled ? "Active" : "Disabled"}
-                            </span>
-                          </td>
-                          <td>
-                            <label className="switch-toggle">
-                              <input
-                                type="checkbox"
-                                checked={rule.enabled}
-                                onChange={() => handleToggleRule(rule.id)}
-                              />
-                              <span className="slider round" />
-                            </label>
                           </td>
                         </tr>
                       ))
@@ -1918,79 +1475,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ADD RULE MODAL */}
-      {isAddRuleOpen && (
-        <div className="modal-backdrop" onClick={() => setIsAddRuleOpen(false)}>
-          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Add Detection Rule</h3>
-              <button type="button" className="close-btn" onClick={() => setIsAddRuleOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddRule}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>Rule Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Fake Bank Account Closure"
-                    value={newRuleName}
-                    onChange={(e) => setNewRuleName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Rule Type</label>
-                  <select
-                    value={newRuleType}
-                    onChange={(e) => setNewRuleType(e.target.value as DetectionRule["type"])}
-                  >
-                    <option value="Keyword">Keyword Match</option>
-                    <option value="Regex Pattern">Regex Pattern</option>
-                    <option value="Link Analyzer">Link Analyzer Domain</option>
-                    <option value="Sender Spoofing">Sender Spoofing</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Pattern Definition (Regex or String)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. (tuma|lipia)\s+.*(namba)"
-                    value={newRulePattern}
-                    onChange={(e) => setNewRulePattern(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Threat Weight Index ({newRuleWeight}%)</label>
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    value={newRuleWeight}
-                    onChange={(e) => setNewRuleWeight(Number(e.target.value))}
-                  />
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={() => setIsAddRuleOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  Save Rule
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
