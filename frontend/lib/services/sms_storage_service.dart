@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/phone_utils.dart';
 
 class SmsStorageService {
   static const String _keyLogs = 'sms_logs_v1';
@@ -218,11 +219,7 @@ class SmsStorageService {
 
   static Future<bool> isBlocked(String phoneNumber) async {
     final list = await getBlockedNumbers();
-    final normalized = phoneNumber.replaceAll(RegExp(r'[\s\-()]'), '');
-    return list.any((item) {
-      final itemNum = item['number']?.replaceAll(RegExp(r'[\s\-()]'), '') ?? '';
-      return itemNum == normalized;
-    });
+    return list.any((item) => PhoneUtils.sameNumber(item['number'] ?? '', phoneNumber));
   }
 
   // --- SETTINGS MANAGEMENT ---

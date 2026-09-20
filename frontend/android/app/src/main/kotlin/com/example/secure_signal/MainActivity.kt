@@ -22,6 +22,23 @@ class MainActivity : FlutterActivity() {
 
     private var pendingRoleResult: MethodChannel.Result? = null
 
+    /**
+     * Normalizes Tanzanian numbers to E.164 (+255XXXXXXXXX) before writing to
+     * BlockedNumberContract, so "0712345678", "712345678" and "+255712345678"
+     * all resolve to the same blocked entry regardless of how the number was
+     * typed or how the carrier/OEM reports the sender.
+     */
+    private fun normalizeToE164(raw: String): String {
+        val n = raw.trim().replace(Regex("[\\s\\-()]"), "")
+        return when {
+            n.startsWith("+255") -> n
+            n.startsWith("255") && n.length >= 12 -> "+$n"
+            n.startsWith("0") && n.length == 10 -> "+255" + n.substring(1)
+            n.length == 9 && !n.startsWith("0") -> "+255$n"
+            else -> n
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -66,7 +83,7 @@ class MainActivity : FlutterActivity() {
                     }
                     try {
                         val values = ContentValues()
-                        values.put(BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER, number)
+                        values.put(BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER, normalizeToE164(number))
                         contentResolver.insert(BlockedNumberContract.BlockedNumbers.CONTENT_URI, values)
                         result.success(true)
                     } catch (e: Exception) {
@@ -88,7 +105,7 @@ class MainActivity : FlutterActivity() {
                         contentResolver.delete(
                             BlockedNumberContract.BlockedNumbers.CONTENT_URI,
                             "${BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER} = ?",
-                            arrayOf(number)
+                            arrayOf(normalizeToE164(number))
                         )
                         result.success(true)
                     } catch (e: Exception) {
