@@ -53,16 +53,11 @@ public class ScanController {
 
         if (scan.isEmpty()) {
             return ResponseEntity.ok(
-                    ApiResponse.ok("SMS analyzed", null));
+                    ApiResponse.ok("SMS analyzed; no fraud detected, so nothing was saved", null));
         }
 
-        SmsScan saved = scan.get();
-        String msg = Boolean.TRUE.equals(saved.getIsScam())
-                ? "Fraudulent SMS analyzed and saved successfully"
-                : "Safe SMS analyzed and saved successfully";
-
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(msg, saved));
+                .body(ApiResponse.ok("Fraudulent SMS analyzed and saved successfully", scan.get()));
     }
 
     private UUID authenticatedUserId(Authentication authentication) {

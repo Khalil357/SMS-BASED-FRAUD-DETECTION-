@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the SMS Fraud API certificate twice daily
+
+[Timer]
+OnCalendar=*-*-* 00,12:00:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=sms-fraud-certbot.service
+
+[Install]
+WantedBy=timers.target

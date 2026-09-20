@@ -1,0 +1,6 @@
+# Deployment credentials are local-only and must never be committed.
+server/
+certbot/conf/*
+!certbot/conf/.gitkeep
+.env
+.env.example

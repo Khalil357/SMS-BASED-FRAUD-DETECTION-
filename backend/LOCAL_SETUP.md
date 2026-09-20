@@ -39,10 +39,9 @@ If either command says the role or database already exists, leave it in place
 and continue. If you chose another password for `sms_app`, use that same value
 in step 3.
 
-Do **not** run the SQL migrations yourself. Flyway runs
-`V1__init.sql` and `V2__sms_scans.sql` automatically the first time the backend
-starts. `V1` now enables `pgcrypto`, which supplies `gen_random_uuid()` on
-PostgreSQL versions that require the extension.
+Do **not** run the SQL migrations yourself. Local development currently uses
+Hibernate schema updates. The Docker production profile uses Flyway and applies
+the migrations in `src/main/resources/db/migration` automatically.
 
 ## 3. Set local environment variables
 
