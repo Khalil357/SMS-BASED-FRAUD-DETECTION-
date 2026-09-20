@@ -129,7 +129,7 @@ class _LoginPageState extends State<LoginPage> {
                 key: _formKey,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const SizedBox(height: 30),
-                  FadeSlideTransition(delay: const Duration(milliseconds: 100), child: Center(child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: theme.primaryColor.withOpacity(0.08), shape: BoxShape.circle, border: Border.all(color: theme.primaryColor.withOpacity(0.15), width: 2)), child: Image.asset('assets/images/sms_fraud_inapp_icon.png', width: 80, height: 80, fit: BoxFit.contain)))),
+                  FadeSlideTransition(delay: const Duration(milliseconds: 100), child: Center(child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: theme.primaryColor.withValues(alpha: 0.08), shape: BoxShape.circle, border: Border.all(color: theme.primaryColor.withValues(alpha: 0.15), width: 2)), child: Image.asset('assets/images/sms_fraud_inapp_icon.png', width: 80, height: 80, fit: BoxFit.contain)))),
                   const SizedBox(height: 24),
                   FadeSlideTransition(delay: const Duration(milliseconds: 200), child: Column(children: [Text('Welcome Back!', textAlign: TextAlign.center, style: theme.textTheme.headlineLarge), const SizedBox(height: 8), Text('Secure your inbox and detect fraud SMS messages', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium)])),
                   const SizedBox(height: 36),

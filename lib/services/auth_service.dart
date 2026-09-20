@@ -604,7 +604,7 @@ class AuthService {
       };
       final body = jsonEncode({
         'phoneNumber': phoneNumber,
-        if (reason != null) 'reason': reason,
+        'reason': ?reason,
       });
 
       final response = await http.post(

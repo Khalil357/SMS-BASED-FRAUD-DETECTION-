@@ -172,7 +172,7 @@ class _HistoryScanScreenState extends State<HistoryScanScreen> {
         const SizedBox(height: 32),
         const CircularProgressIndicator(color: AppTheme.red),
         const SizedBox(height: 20),
-        Text('${_scanned} messages analyzed', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
+        Text('$_scanned messages analyzed', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
         if (_fraudFound > 0) ...[
           const SizedBox(height: 6),
           Text('$_fraudFound potential threats found', style: GoogleFonts.inter(fontSize: 13, color: AppTheme.red, fontWeight: FontWeight.w700)),

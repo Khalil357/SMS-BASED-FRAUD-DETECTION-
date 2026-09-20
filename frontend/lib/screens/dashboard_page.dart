@@ -39,8 +39,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   bool? _scanIsSafe;
   double _threatLevel = 0.0;
   String _searchQuery = '';
-  String _filterThreat = 'All';
-  String _filterTimeframe = 'All';
+  final String _filterThreat = 'All';
+  final String _filterTimeframe = 'All';
 
   bool _isIngestionEnabled = true;
   bool _isNotificationsEnabled = true;
@@ -105,7 +105,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           padding: const EdgeInsets.all(24.0),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Center(child: Container(width: 48, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
-            Center(child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppTheme.red.withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.shield_outlined, color: AppTheme.red, size: 44))),
+            Center(child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppTheme.red.withValues(alpha: 0.12), shape: BoxShape.circle), child: const Icon(Icons.shield_outlined, color: AppTheme.red, size: 44))),
             const SizedBox(height: 16),
             Text('Activate Real-Time SMS Protection', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
@@ -137,7 +137,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   Widget _buildOnboardingFeatureItem({required IconData icon, required String title, required String subtitle, required ThemeData theme, required bool isDark}) {
     return Row(children: [
-      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: theme.colorScheme.primary, size: 22)),
+      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: theme.colorScheme.primary, size: 22)),
       const SizedBox(width: 14),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13)),
@@ -246,7 +246,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   Future<void> _showTurnOffIngestionDialog() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final confirmed = await showDialog<bool>(
-      context: context, barrierColor: Colors.black.withOpacity(0.25),
+      context: context, barrierColor: Colors.black.withValues(alpha: 0.25),
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent, elevation: 0, insetPadding: const EdgeInsets.symmetric(horizontal: 36),
         child: Container(
@@ -431,7 +431,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
         ]),
         actions: [
           IconButton(icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded, color: isDark ? Colors.amber : theme.colorScheme.primary), onPressed: () => SecureSignalApp.of(context).toggleTheme()),
-          Padding(padding: const EdgeInsets.only(right: 12.0), child: InkWell(onTap: () => setState(() => _currentIndex = 4), child: CircleAvatar(radius: 15, backgroundColor: theme.colorScheme.primary.withOpacity(0.15), child: Text(fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))))),
+          Padding(padding: const EdgeInsets.only(right: 12.0), child: InkWell(onTap: () => setState(() => _currentIndex = 4), child: CircleAvatar(radius: 15, backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15), child: Text(fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))))),
         ],
       ),
       body: switch (_currentIndex) {
@@ -444,7 +444,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       },
       bottomNavigationBar: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(color: isDark ? const Color(0xFF1E293B) : Colors.white, borderRadius: BorderRadius.circular(28), boxShadow: [BoxShadow(color: isDark ? Colors.black.withOpacity(0.4) : Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, 6))], border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0), width: 1)),
+        decoration: BoxDecoration(color: isDark ? const Color(0xFF1E293B) : Colors.white, borderRadius: BorderRadius.circular(28), boxShadow: [BoxShadow(color: isDark ? Colors.black.withValues(alpha: 0.4) : Colors.black.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, 6))], border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0), width: 1)),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
           _buildNavItem(index: 0, icon: Icons.grid_view_outlined, activeIcon: Icons.grid_view_rounded, label: 'Home', theme: theme, isDark: isDark),
           _buildNavItem(index: 1, icon: Icons.shield_outlined, activeIcon: Icons.shield_rounded, label: 'Scan', badgeCount: _threatsCount, theme: theme, isDark: isDark),
@@ -458,7 +458,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   Widget _buildNavItem({required int index, required IconData icon, required IconData activeIcon, required String label, int badgeCount = 0, required ThemeData theme, required bool isDark}) {
     final isSelected = _currentIndex == index;
     final activeColor = theme.colorScheme.primary;
-    return GestureDetector(onTap: () => setState(() => _currentIndex = index), behavior: HitTestBehavior.opaque, child: AnimatedContainer(duration: const Duration(milliseconds: 250), curve: Curves.easeInOut, padding: EdgeInsets.symmetric(horizontal: isSelected ? 14 : 10, vertical: 8), decoration: BoxDecoration(color: isSelected ? activeColor.withOpacity(isDark ? 0.2 : 0.1) : Colors.transparent, borderRadius: BorderRadius.circular(20)), child: Row(mainAxisSize: MainAxisSize.min, children: [
+    return GestureDetector(onTap: () => setState(() => _currentIndex = index), behavior: HitTestBehavior.opaque, child: AnimatedContainer(duration: const Duration(milliseconds: 250), curve: Curves.easeInOut, padding: EdgeInsets.symmetric(horizontal: isSelected ? 14 : 10, vertical: 8), decoration: BoxDecoration(color: isSelected ? activeColor.withValues(alpha: isDark ? 0.2 : 0.1) : Colors.transparent, borderRadius: BorderRadius.circular(20)), child: Row(mainAxisSize: MainAxisSize.min, children: [
       Stack(clipBehavior: Clip.none, children: [
         Icon(isSelected ? activeIcon : icon, color: isSelected ? activeColor : (isDark ? AppTheme.subtleDark : AppTheme.subtleLight), size: 22),
         if (badgeCount > 0 && index == 1) Positioned(top: -4, right: -6, child: Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: AppTheme.red, shape: BoxShape.circle), child: Text(badgeCount > 9 ? '9+' : '$badgeCount', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)))),
@@ -518,8 +518,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     return Card(margin: const EdgeInsets.only(bottom: 10), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), child: Row(children: [Icon(icon, color: theme.colorScheme.primary), const SizedBox(width: 14), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 11)), Text(value, style: const TextStyle(fontWeight: FontWeight.w700))])])));
   }
 
-  Widget _buildMetricCard({required String title, required String value, required IconData icon, required Color iconColor, required ThemeData theme, required bool isDark, String? subtitle}) {
-    return Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: theme.cardTheme.color, borderRadius: BorderRadius.circular(20), border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))), child: Row(children: [Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: iconColor.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: iconColor, size: 24)), const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 12)), Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))]))]));
+  Widget _buildMetricCard({required String title, required String value, required IconData icon, required Color iconColor, required ThemeData theme, required bool isDark}) {
+    return Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: theme.cardTheme.color, borderRadius: BorderRadius.circular(20), border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))), child: Row(children: [Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, color: iconColor, size: 24)), const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 12)), Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))]))]));
   }
 
   Widget _buildHistoryScanCard(ThemeData theme, bool isDark) {
@@ -554,7 +554,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   Widget _buildTipOfTheDayBanner(ThemeData theme, bool isDark) {
     final tip = SafetyTipsService.getTipOfTheDay();
-    return Container(margin: const EdgeInsets.only(bottom: 20), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: isDark ? AppTheme.cardDark : AppTheme.cardLight, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.amber.shade700.withOpacity(0.3))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    return Container(margin: const EdgeInsets.only(bottom: 20), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: isDark ? AppTheme.cardDark : AppTheme.cardLight, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.3))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Row(children: [Icon(Icons.lightbulb_rounded, color: Colors.amber.shade700, size: 20), const SizedBox(width: 8), const Text('SAFETY TIP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))]), TextButton(onPressed: () => setState(() => _currentIndex = 3), child: const Text('View All'))]),
       Text(tip.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
       const SizedBox(height: 6),

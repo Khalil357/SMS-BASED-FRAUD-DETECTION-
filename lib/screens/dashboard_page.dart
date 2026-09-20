@@ -14,7 +14,6 @@ import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/interactive_threat_chart.dart';
 import '../widgets/scam_detected_screen.dart';
-import '../widgets/security_illustrations.dart';
 import '../services/safety_tips_service.dart';
 import 'safety_tips_page.dart';
 import 'blocked_numbers_screen.dart';
