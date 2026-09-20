@@ -30,9 +30,20 @@ import {
   Search,
   Filter,
   RotateCcw,
+  Menu,
 } from "lucide-react";
 import inAppIcon from "../assets/images/in_app_icon.png";
-import { getUsers, createUser, updateUser, resetUserPassword, deleteUser, getCurrentUserId, getAdminStats, getFraudTrend, getSmsScans } from "../services/adminService";
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  resetUserPassword,
+  deleteUser,
+  getCurrentUserId,
+  getAdminStats,
+  getFraudTrend,
+  getSmsScans,
+} from "../services/adminService";
 import type { AdminUser } from "../services/adminService";
 
 interface DashboardPageProps {
@@ -167,6 +178,8 @@ const initialRules: DetectionRule[] = [
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const { isDark, toggleTheme } = useTheme();
 
+  // Mobile Navigation Drawer Toggle State
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // ── URL ↔ Tab sync ──────────────────────────────────────────────
   const TAB_SLUGS: Record<string, string> = {
@@ -187,6 +200,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<string>(() => tabFromPath());
+
+  // Helper to switch tab & auto-close drawer on mobile
+  const handleTabClick = (tabName: string) => {
+    setActiveTab(tabName);
+    setMobileMenuOpen(false);
+  };
 
   // Main Data States
   const [statsCards, setStatsCards] = useState<StatCardData[]>(mockStats);
@@ -309,28 +328,28 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   }
 
   async function loadDashboardStats() {
-  const res = await getAdminStats();
-  if (res.success && res.data) {
-    setStatsCards([
-      {
-        id: "1",
-        title: "Total SMS Scanned",
-        value: Number(res.data.total_sms).toLocaleString(),
-        change: "Database total",
-        type: "positive",
-        category: "total",
-      },
-      {
-        id: "2",
-        title: "Fraud & Scams Detected",
-        value: Number(res.data.fraud_detected).toLocaleString(),
-        change: `${res.data.total_sms > 0 ? ((res.data.fraud_detected / res.data.total_sms) * 100).toFixed(1) : "0"}% detection rate`,
-        type: "negative",
-        category: "fraud",
-      },
-    ]);
+    const res = await getAdminStats();
+    if (res.success && res.data) {
+      setStatsCards([
+        {
+          id: "1",
+          title: "Total SMS Scanned",
+          value: Number(res.data.total_sms).toLocaleString(),
+          change: "Database total",
+          type: "positive",
+          category: "total",
+        },
+        {
+          id: "2",
+          title: "Fraud & Scams Detected",
+          value: Number(res.data.fraud_detected).toLocaleString(),
+          change: `${res.data.total_sms > 0 ? ((res.data.fraud_detected / res.data.total_sms) * 100).toFixed(1) : "0"}% detection rate`,
+          type: "negative",
+          category: "fraud",
+        },
+      ]);
+    }
   }
-}
 
   async function loadFraudTrends() {
     await getFraudTrend(7);
@@ -439,7 +458,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   // 1. Team Administrators List Logic
   const filteredTeamList = useMemo(() => {
-    let list = usersList.filter((u) => u.role === "ADMIN");
+    let list = usersList.filter((u: any) => {
+      const roleVal = String(u.role || u.role_id || "").toUpperCase();
+      return roleVal === "ADMIN" || roleVal === "ROLE_ADMIN" || roleVal === "1";
+    });
 
     if (teamSearch.trim()) {
       const q = teamSearch.toLowerCase().trim();
@@ -488,7 +510,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   // 2. Mobile App Users List Logic
   const filteredAppUsersList = useMemo(() => {
-    let list = usersList.filter((u) => u.role === "USER" || !u.role);
+    let list = usersList.filter((u: any) => {
+      const roleVal = String(u.role || u.role_id || "").toUpperCase();
+      return roleVal === "USER" || roleVal === "ROLE_USER" || roleVal === "2" || !u.role;
+    });
 
     if (appUsersSearch.trim()) {
       const q = appUsersSearch.toLowerCase().trim();
@@ -820,7 +845,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     setDeleteTarget(null);
   }
 
-  // Sidebar Menu items (Clean list without section header dividers)
+  // Sidebar Menu items
   const navMenuItems = [
     { name: "Overview", icon: Activity },
     { name: "SMS Ingestion Logs", icon: MessageSquare, badge: smsList.length },
@@ -831,8 +856,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   return (
     <div className="admin-portal-container">
-      {/* FLOATING EXECUTIVE SIDEBAR */}
-      <aside className="admin-sidebar">
+      {/* MOBILE BACKDROP OVERLAY */}
+      {mobileMenuOpen && (
+        <div
+          className="sidebar-mobile-overlay"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* FLOATING EXECUTIVE SIDEBAR WITH RESPONSIVE MOBILE DRAWER CLASS */}
+      <aside className={`admin-sidebar ${mobileMenuOpen ? "mobile-open" : ""}`}>
         <div className="sidebar-brand">
           <div className="brand-icon-wrapper">
             <img src={inAppIcon} alt="Argus Logo" className="brand-logo-img" />
@@ -852,7 +885,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 key={item.name}
                 type="button"
                 className={`sidebar-link ${isActive ? "active" : ""}`}
-                onClick={() => setActiveTab(item.name)}
+                onClick={() => handleTabClick(item.name)}
               >
                 <Icon size={18} className="sidebar-link-icon" />
                 <span>{item.name}</span>
@@ -883,9 +916,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       <main className="admin-main">
         {/* EXECUTIVE TOPBAR HEADER */}
         <header className="admin-topbar">
-          <div className="topbar-title">
-            <h1>{activeTab}</h1>
-            <p>Argus Executive SMS Security Console</p>
+          <div className="topbar-left-group">
+            {/* Mobile Hamburger Drawer Toggle Button */}
+            <button
+              type="button"
+              className="mobile-hamburger-btn"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle Navigation Menu"
+            >
+              <Menu size={22} />
+            </button>
+
+            <div className="topbar-title">
+              <h1>{activeTab}</h1>
+              <p>Argus Executive SMS Security Console</p>
+            </div>
           </div>
 
           <div className="topbar-actions">
@@ -963,7 +1008,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                         <line x1="55" y1="165" x2="700" y2="165" />
                       </g>
 
-                      {/* Vertical Day Grid Lines for Pinpoint Alignment */}
+                      {/* Vertical Day Grid Lines */}
                       <g className="grid-lines-vertical" stroke="var(--border)" strokeDasharray="3 3" strokeWidth="1" opacity="0.5">
                         <line x1="60" y1="25" x2="60" y2="190" />
                         <line x1="165" y1="25" x2="165" y2="190" />
@@ -1026,7 +1071,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                         />
                       )}
 
-                      {/* Total SMS Data Node Circles (Blue) */}
+                      {/* Total SMS Data Node Circles */}
                       {[
                         { day: "Mon", x: 60, y: 110 },
                         { day: "Tue", x: 165, y: 80 },
@@ -1051,7 +1096,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                         );
                       })}
 
-                      {/* Fraud Data Node Circles (Red) */}
+                      {/* Fraud Data Node Circles */}
                       {[
                         { day: "Mon", x: 60, y: 150, count: "850 Fraud" },
                         { day: "Tue", x: 165, y: 130, count: "1,240 Fraud" },
@@ -1133,7 +1178,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                     </svg>
                   </div>
 
-                  {/* X-Axis Labels Row Perfectly Aligned with X-Ticks */}
+                  {/* X-Axis Labels Row */}
                   <div className="telemetry-x-labels">
                     {[
                       { day: "Mon", val: "850 Scans", idx: 0 },
@@ -1478,7 +1523,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
         )}
 
-        {/* TAB 4: TEAM (ADMINS) WITH CLICK-TO-SORT & RESET FILTERS */}
+        {/* TAB 4: TEAM (ADMINS) */}
         {activeTab === "Team" && (
           <div className="tab-content fade-slide">
             <div className="admin-panel">
@@ -1641,7 +1686,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
         )}
 
-        {/* TAB 5: USERS (MOBILE APP USERS WITH CLICK-TO-SORT & RESET FILTERS) */}
+        {/* TAB 5: USERS (MOBILE APP USERS) */}
         {activeTab === "Users" && (
           <div className="tab-content fade-slide">
             <div className="admin-panel">
@@ -1819,7 +1864,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         )}
       </main>
 
-      {/* INSPECT SMS LOG DIALOG (READ ONLY) */}
+      {/* INSPECT SMS LOG DIALOG */}
       {selectedSms && (
         <div className="modal-backdrop" onClick={() => setSelectedSms(null)}>
           <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>

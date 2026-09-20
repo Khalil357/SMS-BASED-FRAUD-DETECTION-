@@ -1054,3 +1054,114 @@
 .subtle-text {
   color: var(--subtle);
 }
+
+/* ── MOBILE & TABLET RESPONSIVE OVERRIDES (max-width: 900px) ── */
+@media (max-width: 900px) {
+  /* Container layout */
+  .admin-portal-container {
+    flex-direction: column;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Hide default desktop sidebar off-screen */
+  .admin-sidebar {
+    position: fixed;
+    top: 0;
+    left: -280px;
+    width: 260px;
+    height: 100vh;
+    z-index: 1000;
+    transition: left 0.3s ease-in-out;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Slide in sidebar when open */
+  .admin-sidebar.mobile-open {
+    left: 0;
+  }
+
+  /* Backdrop filter when sidebar is drawer-open */
+  .sidebar-mobile-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+  }
+
+  /* Topbar Hamburger Button */
+  .mobile-hamburger-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--card, #12141d);
+    border: 1px solid var(--border, #2a2d3d);
+    color: var(--text, #ffffff);
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .topbar-left-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Adjust Main Content Area */
+  .admin-main {
+    width: 100% !important;
+    padding: 16px !important;
+    box-sizing: border-box;
+  }
+
+  /* Stack Dashboard Stat Cards */
+  .stats-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  /* Responsive Search & Filter Toolbars */
+  .toolbar-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .toolbar-controls {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .filter-select {
+    flex: 1;
+    min-width: 130px;
+  }
+
+  /* Enable horizontal swipe scrolling for tables */
+  .table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-table {
+    min-width: 650px; /* Forces wide tables to scroll cleanly on mobile */
+  }
+
+  /* Chart Container Adjustments */
+  .telemetry-chart-wrapper {
+    overflow-x: auto;
+  }
+}
+
+/* Hide hamburger toggle on larger screens */
+@media (min-width: 901px) {
+  .mobile-hamburger-btn {
+    display: none;
+  }
+  .sidebar-mobile-overlay {
+    display: none;
+  }
+}
