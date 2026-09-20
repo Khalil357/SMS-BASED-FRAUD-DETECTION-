@@ -12,12 +12,12 @@ export interface AdminUser {
   active: boolean;
 }
 
-/** Backend Admin Stats DTO */
+/** Backend Admin Stats DTO — matches backend's snake_case JSON. */
 export interface AdminStatsResponse {
-  totalSms: number;
-  fraudDetected: number;
-  safeSms: number;
-  pendingReview: number;
+  total_sms: number;
+  fraud_detected: number;
+  safe_sms: number;
+  pending_review: number;
 }
 
 /** Backend Fraud Trend DTO */

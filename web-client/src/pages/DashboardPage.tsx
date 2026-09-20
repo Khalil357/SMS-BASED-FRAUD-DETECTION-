@@ -309,28 +309,28 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   }
 
   async function loadDashboardStats() {
-    const res = await getAdminStats();
-    if (res.success && res.data) {
-      setStatsCards([
-        {
-          id: "1",
-          title: "Total SMS Scanned",
-          value: Number(res.data.totalSms).toLocaleString(),
-          change: "Database total",
-          type: "positive",
-          category: "total",
-        },
-        {
-          id: "2",
-          title: "Fraud & Scams Detected",
-          value: Number(res.data.fraudDetected).toLocaleString(),
-          change: `${res.data.totalSms > 0 ? ((res.data.fraudDetected / res.data.totalSms) * 100).toFixed(1) : "100"}% detection rate`,
-          type: "negative",
-          category: "fraud",
-        },
-      ]);
-    }
+  const res = await getAdminStats();
+  if (res.success && res.data) {
+    setStatsCards([
+      {
+        id: "1",
+        title: "Total SMS Scanned",
+        value: Number(res.data.total_sms).toLocaleString(),
+        change: "Database total",
+        type: "positive",
+        category: "total",
+      },
+      {
+        id: "2",
+        title: "Fraud & Scams Detected",
+        value: Number(res.data.fraud_detected).toLocaleString(),
+        change: `${res.data.total_sms > 0 ? ((res.data.fraud_detected / res.data.total_sms) * 100).toFixed(1) : "0"}% detection rate`,
+        type: "negative",
+        category: "fraud",
+      },
+    ]);
   }
+}
 
   async function loadFraudTrends() {
     await getFraudTrend(7);
