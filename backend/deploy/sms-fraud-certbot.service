@@ -1,0 +1,9 @@
+[Unit]
+Description=Renew the SMS Fraud API IP certificate
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/renew-sms-fraud-certificate
