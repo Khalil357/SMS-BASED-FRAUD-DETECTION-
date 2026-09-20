@@ -176,11 +176,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
           const SizedBox(height: 12),
           _buildDayDetailCard(dailyStats[_selectedDayIndex!], theme, isDark),
         ],
-
-        const SizedBox(height: 20),
-
-        // Category Breakdown Card
-        _buildCategoryBreakdownCard(theme, isDark),
       ],
     );
   }
@@ -324,78 +319,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
     );
   }
 
-  Widget _buildCategoryBreakdownCard(ThemeData theme, bool isDark) {
-    final categories = _calculateCategoryBreakdown();
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Scam & Threat Vectors Breakdown',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 14),
-          ...categories.map((cat) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(cat['icon'] as IconData, size: 16, color: cat['color'] as Color),
-                            const SizedBox(width: 8),
-                            Text(
-                              cat['name'] as String,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          '${cat['count']} cases (${(cat['pct'] as double).toStringAsFixed(0)}%)',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: (cat['pct'] as double) / 100.0,
-                        minHeight: 6,
-                        backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                        valueColor: AlwaysStoppedAnimation<Color>(cat['color'] as Color),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-
   List<Map<String, dynamic>> _calculateDailyStats(int days) {
     final now = DateTime.now();
     final List<Map<String, dynamic>> stats = [];
@@ -437,62 +360,6 @@ class _InteractiveThreatChartState extends State<InteractiveThreatChart> {
     }
 
     return stats;
-  }
-
-  List<Map<String, dynamic>> _calculateCategoryBreakdown() {
-    int bankCount = 0;
-    int deliveryCount = 0;
-    int prizeCount = 0;
-    int impersonationCount = 0;
-
-    for (final log in widget.logs) {
-      final msg = (log['message'] as String? ?? '').toLowerCase();
-      final type = log['type'] as String? ?? '';
-      if (type == 'Fraud') {
-        if (msg.contains('bank') || msg.contains('account') || msg.contains('otp') || msg.contains('card')) {
-          bankCount++;
-        } else if (msg.contains('parcel') || msg.contains('delivery') || msg.contains('package') || msg.contains('tracking')) {
-          deliveryCount++;
-        } else if (msg.contains('win') || msg.contains('prize') || msg.contains('reward') || msg.contains('claim')) {
-          prizeCount++;
-        } else {
-          impersonationCount++;
-        }
-      }
-    }
-
-    final totalScams = max(1, bankCount + deliveryCount + prizeCount + impersonationCount);
-
-    return [
-      {
-        'name': 'Banking & OTP Phishing',
-        'icon': Icons.account_balance_outlined,
-        'count': bankCount,
-        'pct': (bankCount / totalScams) * 100,
-        'color': AppTheme.red,
-      },
-      {
-        'name': 'Delivery & Parcel Scams',
-        'icon': Icons.local_shipping_outlined,
-        'count': deliveryCount,
-        'pct': (deliveryCount / totalScams) * 100,
-        'color': Colors.amber.shade800,
-      },
-      {
-        'name': 'Fake Rewards & Prizes',
-        'icon': Icons.card_giftcard_outlined,
-        'count': prizeCount,
-        'pct': (prizeCount / totalScams) * 100,
-        'color': Colors.purple,
-      },
-      {
-        'name': 'Impersonation & Other',
-        'icon': Icons.person_off_outlined,
-        'count': impersonationCount,
-        'pct': (impersonationCount / totalScams) * 100,
-        'color': Colors.blue,
-      },
-    ];
   }
 
   String _getDayLabel(DateTime dt) {

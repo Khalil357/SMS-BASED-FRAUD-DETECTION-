@@ -1,9 +1,9 @@
 .auth-icon-circle {
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: rgba(211, 47, 47, 0.08);
-  border: 2px solid rgba(211, 47, 47, 0.15);
+  background: var(--primary-alpha);
+  border: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11,17 +11,12 @@
   margin-bottom: 14px;
 }
 
-html.dark .auth-icon-circle {
-  background: rgba(239, 83, 80, 0.1);
-  border-color: rgba(239, 83, 80, 0.2);
-}
-
 .auth-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.5px;
   color: var(--heading);
-  margin: 0 0 8px;
+  margin: 0 0 6px;
 }
 
 .auth-description {
@@ -45,8 +40,8 @@ html.dark .auth-icon-circle {
 }
 
 .field-label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--subtle);
   margin-bottom: 6px;
 }
@@ -55,16 +50,15 @@ html.dark .auth-icon-circle {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--card);
-  border: 1.5px solid var(--border);
-  border-radius: 16px;
-  padding: 12px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
   transition: border-color 0.15s ease;
 }
 
 .field-input:focus-within {
   border-color: var(--primary);
-  border-width: 2px;
 }
 
 .field-input input {
@@ -74,7 +68,7 @@ html.dark .auth-icon-circle {
   outline: none;
   background: transparent;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 14px;
   color: inherit;
 }
 
@@ -95,7 +89,7 @@ html.dark .auth-icon-circle {
 }
 
 .form-message.success {
-  color: #16a34a;
+  color: var(--emerald);
 }
 
 .auth-button {
@@ -103,19 +97,24 @@ html.dark .auth-icon-circle {
   background: var(--primary);
   color: #fff;
   border: none;
-  border-radius: 16px;
-  padding: 17px;
+  border-radius: 10px;
+  padding: 14px;
   font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: 0.2px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 52px;
-  box-shadow: 0 8px 20px rgba(211, 47, 47, 0.35);
+  min-height: 48px;
+  box-shadow: var(--card-shadow);
   margin-top: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.auth-button:hover {
+  background-color: var(--primary-hover);
 }
 
 .auth-button:disabled {

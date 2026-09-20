@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../app_theme.dart';
 import '../auth_flow.dart';
+import '../services/auth_service.dart';
 import 'onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -52,11 +53,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     await Future.delayed(const Duration(milliseconds: 2800));
     if (!mounted) return;
 
+    final hasSession = await AuthService.loadSession();
+    if (!mounted) return;
+
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     final showOnboarding = prefs.getBool('show_onboarding') ?? true;
 
-    if (showOnboarding) {
+    if (!hasSession && showOnboarding) {
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(

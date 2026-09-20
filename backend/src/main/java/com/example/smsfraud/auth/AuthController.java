@@ -1,6 +1,7 @@
 package com.example.smsfraud.auth;
 
 import com.example.smsfraud.auth.dto.LoginRequest;
+import com.example.smsfraud.auth.dto.LoginPendingResponse;
 import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
@@ -8,6 +9,10 @@ import com.example.smsfraud.auth.dto.ResetPasswordRequest;
 import com.example.smsfraud.auth.dto.RegisterRequest;
 import com.example.smsfraud.auth.dto.RegisterResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
+import com.example.smsfraud.auth.dto.VerifyLoginOtpRequest;
+import com.example.smsfraud.auth.dto.ResendLoginOtpRequest;
+import com.example.smsfraud.auth.dto.RefreshRequest;
+import com.example.smsfraud.auth.dto.RefreshResponse;
 import com.example.smsfraud.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -39,8 +44,8 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok("Login successful", authService.login(req)));
+    public ResponseEntity<ApiResponse<LoginPendingResponse>> login(@Valid @RequestBody LoginRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("OTP sent for verification", authService.login(req)));
     }
 
     @PostMapping("/password-resets")
@@ -63,5 +68,28 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
         authService.resetPassword(req);
         return ResponseEntity.ok(ApiResponse.ok("Password reset successfully"));
+    }
+
+    @PostMapping("/verify-login-otp")
+    public ResponseEntity<ApiResponse<LoginResponse>> verifyLoginOtp(@Valid @RequestBody VerifyLoginOtpRequest req) {
+        return ResponseEntity.ok(
+                ApiResponse.ok("Login OTP verified successfully", authService.verifyLoginOtp(req.email(), req.verificationCode())));
+    }
+
+    @PostMapping("/resend-login-otp")
+    public ResponseEntity<ApiResponse<Void>> resendLoginOtp(@Valid @RequestBody ResendLoginOtpRequest req) {
+        authService.resendLoginOtp(req.email());
+        return ResponseEntity.ok(ApiResponse.ok("Login OTP resent successfully"));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<RefreshResponse>> refresh(@Valid @RequestBody RefreshRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Token refreshed successfully", authService.refresh(req.refreshToken())));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(@Valid @RequestBody RefreshRequest req) {
+        authService.logout(req.refreshToken());
+        return ResponseEntity.ok(ApiResponse.ok("Logged out successfully"));
     }
 }

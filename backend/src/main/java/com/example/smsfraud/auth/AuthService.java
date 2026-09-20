@@ -1,12 +1,14 @@
 package com.example.smsfraud.auth;
 
 import com.example.smsfraud.auth.dto.LoginRequest;
+import com.example.smsfraud.auth.dto.LoginPendingResponse;
 import com.example.smsfraud.auth.dto.LoginResponse;
 import com.example.smsfraud.auth.dto.OtpRequest;
 import com.example.smsfraud.auth.dto.OtpResponse;
 import com.example.smsfraud.auth.dto.ResetPasswordRequest;
 import com.example.smsfraud.auth.dto.RegisterRequest;
 import com.example.smsfraud.auth.dto.RegisterResponse;
+import com.example.smsfraud.auth.dto.RefreshResponse;
 import com.example.smsfraud.auth.dto.VerifyCodeRequest;
 
 /**
@@ -18,7 +20,7 @@ public interface AuthService {
 
     RegisterResponse register(RegisterRequest req);
 
-    LoginResponse login(LoginRequest req);
+    LoginPendingResponse login(LoginRequest req);
 
     OtpResponse requestPasswordReset(OtpRequest req);
 
@@ -27,4 +29,12 @@ public interface AuthService {
     void verifyCode(VerifyCodeRequest req);
 
     void resetPassword(ResetPasswordRequest req);
+
+    void resendLoginOtp(String email);
+
+    LoginResponse verifyLoginOtp(String email, String verificationCode);
+
+    RefreshResponse refresh(String refreshToken);
+
+    void logout(String refreshToken);
 }

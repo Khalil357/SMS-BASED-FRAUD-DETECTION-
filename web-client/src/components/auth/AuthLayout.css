@@ -7,21 +7,12 @@
   align-items: center;
   justify-content: center;
   overflow-x: hidden;
+  background-color: var(--bg);
+  color: var(--text-body);
 }
 
 .hero-gradient {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 34vh;
-  min-height: 220px;
-  background: linear-gradient(180deg, #ffebee 0%, #f8fafc 100%);
-  pointer-events: none;
-}
-
-html.dark .hero-gradient {
-  background: linear-gradient(180deg, #1a0000 0%, #0f172a 100%);
+  display: none;
 }
 
 .theme-toggle {

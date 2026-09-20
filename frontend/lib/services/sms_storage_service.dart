@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/phone_utils.dart';
+import 'auth_service.dart';
 
 class SmsStorageService {
   static const String _keyLogs = 'sms_logs_v1';
@@ -24,75 +25,11 @@ class SmsStorageService {
     return _prefs!;
   }
 
-  /// Initialize default logs if storage is empty
+  /// Initialize empty logs list if storage key doesn't exist
   static Future<void> initializeWithMocksIfNeeded() async {
     final prefs = await _getPrefs();
     if (!prefs.containsKey(_keyLogs)) {
-      final mockLogs = [
-        {
-          'id': 'mock_1',
-          'sender': '+27821110000',
-          'message':
-              'Congratulations! You have won a R5000 voucher from Woolworths. Click http://bit.ly/woolies-win to claim now!',
-          'type': 'Fraud',
-          'time': DateTime.now()
-              .subtract(const Duration(minutes: 10))
-              .toIso8601String(),
-          'threat': 0.95,
-          'matchedReasons': [
-            'Contains lottery/financial reward keywords (e.g. win, prize, voucher)',
-            'Contains external hyperlink or link call-to-action'
-          ],
-          'hasFeedback': false,
-          'userFeedback': null
-        },
-        {
-          'id': 'mock_2',
-          'sender': '+27832223333',
-          'message':
-              'FNB Alert: A login attempt was made on your profile. If this was not you, please verify your details here: https://fnb-secure-login.info',
-          'type': 'Fraud',
-          'time': DateTime.now()
-              .subtract(const Duration(hours: 1))
-              .toIso8601String(),
-          'threat': 0.98,
-          'matchedReasons': [
-            'Account credential update/verification request',
-            'Financial institution or login page reference',
-            'Contains external hyperlink or link call-to-action'
-          ],
-          'hasFeedback': false,
-          'userFeedback': null
-        },
-        {
-          'id': 'mock_3',
-          'sender': 'Absa Bank',
-          'message': 'Your OTP is 492010. Do not share this code with anyone.',
-          'type': 'Safe',
-          'time': DateTime.now()
-              .subtract(const Duration(hours: 2))
-              .toIso8601String(),
-          'threat': 0.02,
-          'matchedReasons': ['No suspicious patterns matched'],
-          'hasFeedback': false,
-          'userFeedback': null
-        },
-        {
-          'id': 'mock_5',
-          'sender': '+27829998888',
-          'message':
-              'Hey, are we still meeting for coffee at 3pm today? Let me know.',
-          'type': 'Safe',
-          'time': DateTime.now()
-              .subtract(const Duration(days: 1))
-              .toIso8601String(),
-          'threat': 0.00,
-          'matchedReasons': ['No suspicious patterns matched'],
-          'hasFeedback': false,
-          'userFeedback': null
-        },
-      ];
-      await saveLogs(mockLogs);
+      await saveLogs([]);
     }
   }
 
@@ -103,7 +40,9 @@ class SmsStorageService {
     if (jsonStr == null) return [];
     try {
       final List<dynamic> decoded = jsonDecode(jsonStr);
-      return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+      return decoded
+          .map((e) => AuthService.normalizeScan(Map<String, dynamic>.from(e)))
+          .toList();
     } catch (_) {
       return [];
     }

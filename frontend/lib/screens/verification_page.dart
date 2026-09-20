@@ -10,8 +10,7 @@ class VerificationPage extends StatefulWidget {
   final Navigate onNavigate;
   final String phoneNumber;
   final bool isResetPasswordFlow;
-  final bool isLoginFlow;
-  final String? loginEmail;
+  final bool isLoginVerificationFlow;
   final ValueChanged<String> onVerified;
 
   const VerificationPage({
@@ -19,8 +18,7 @@ class VerificationPage extends StatefulWidget {
     required this.onNavigate,
     required this.phoneNumber,
     this.isResetPasswordFlow = true,
-    this.isLoginFlow = false,
-    this.loginEmail,
+    this.isLoginVerificationFlow = false,
     required this.onVerified,
   });
 
@@ -56,9 +54,9 @@ class _VerificationPageState extends State<VerificationPage> {
       _isLoading = true;
     });
 
-    final result = widget.isLoginFlow
+    final result = widget.isLoginVerificationFlow
         ? await AuthService.verifyLoginOtp(
-            email: widget.loginEmail ?? '',
+            identifier: widget.phoneNumber,
             verificationCode: _otpCode,
           )
         : await AuthService.verifyResetCode(
@@ -75,11 +73,10 @@ class _VerificationPageState extends State<VerificationPage> {
     if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'Code verified successfully!'),
+          content: const Text('User verified successfully'),
           backgroundColor: Colors.green.shade600,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
       widget.onVerified(_otpCode);
@@ -95,11 +92,9 @@ class _VerificationPageState extends State<VerificationPage> {
       _errorMessage = null;
     });
 
-    final destination =
-        widget.isLoginFlow ? (widget.loginEmail ?? '') : widget.phoneNumber;
-    if (destination.isEmpty) {
+    if (widget.phoneNumber.isEmpty) {
       setState(() {
-        _errorMessage = 'Verification destination is missing. Please go back.';
+        _errorMessage = 'Account identifier is missing. Please go back.';
       });
       return;
     }
@@ -108,9 +103,9 @@ class _VerificationPageState extends State<VerificationPage> {
       _isLoading = true;
     });
 
-    final result = widget.isLoginFlow
-        ? await AuthService.resendLoginOtp(email: destination)
-        : await AuthService.resendCode(phoneNumber: destination);
+    final result = widget.isLoginVerificationFlow
+        ? await AuthService.resendLoginOtp(identifier: widget.phoneNumber)
+        : await AuthService.resendCode(phoneNumber: widget.phoneNumber);
 
     setState(() {
       _isLoading = false;
@@ -121,12 +116,10 @@ class _VerificationPageState extends State<VerificationPage> {
     if (result['success']) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-              result['message'] ?? 'Verification code resent successfully!'),
+          content: Text(result['message'] ?? 'Verification code resent successfully!'),
           backgroundColor: Colors.green.shade600,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } else {
@@ -140,6 +133,9 @@ class _VerificationPageState extends State<VerificationPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final destinationLabel = widget.phoneNumber.contains('@')
+        ? 'email address'
+        : 'phone number';
 
     return Scaffold(
       body: Stack(
@@ -161,8 +157,7 @@ class _VerificationPageState extends State<VerificationPage> {
 
           SafeArea(
             child: SingleChildScrollView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -216,7 +211,7 @@ class _VerificationPageState extends State<VerificationPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "We've sent a 6-digit verification code to ${widget.isLoginFlow ? widget.loginEmail : widget.phoneNumber}",
+                          "We've sent a 6-digit verification code to your $destinationLabel (${widget.phoneNumber})",
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium,
                         ),
@@ -234,9 +229,7 @@ class _VerificationPageState extends State<VerificationPage> {
                         color: theme.cardTheme.color,
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: isDark
-                              ? const Color(0xFF334155)
-                              : const Color(0xFFE2E8F0),
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                           width: 1,
                         ),
                         boxShadow: AppTheme.cardShadow(isDark),
@@ -309,8 +302,7 @@ class _VerificationPageState extends State<VerificationPage> {
                       alignment: WrapAlignment.center,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Icon(Icons.arrow_back,
-                            size: 16, color: theme.colorScheme.primary),
+                        Icon(Icons.arrow_back, size: 16, color: theme.colorScheme.primary),
                         const SizedBox(width: 4),
                         TextButton(
                           onPressed: () {

@@ -4,7 +4,7 @@ import "./LoginPage.css";
 import { login } from "../services/authService";
 import { useTheme } from "../theme/ThemeContext";
 import inAppIcon from "../assets/images/in_app_icon.png";
-import { Mail, Lock, Sun, Moon, ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Sun, Moon, Eye, EyeOff } from "lucide-react";
 
 interface LoginPageProps {
   onLoginSuccess: (email: string) => void;
@@ -18,8 +18,8 @@ interface FormErrors {
 const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { isDark, toggleTheme } = useTheme();
 
-  const [email, setEmail] = useState("smsfraud.noreply@gmail.com");
-  const [password, setPassword] = useState("Admin000!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -31,13 +31,21 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     if (!email.trim()) {
       newErrors.email = "Please enter your email address";
     } else if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
-      newErrors.email = "Please enter a valid email address";
+      newErrors.email = "Please enter a valid email address ending with @gmail.com";
     }
 
     if (!password.trim()) {
       newErrors.password = "Please enter your password";
-    } else if (password.trim().length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    } else if (password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters long";
+    } else if (!/[A-Z]/.test(password)) {
+      newErrors.password = "Password must contain at least one uppercase letter (A-Z)";
+    } else if (!/[a-z]/.test(password)) {
+      newErrors.password = "Password must contain at least one lowercase letter (a-z)";
+    } else if (!/[0-9]/.test(password)) {
+      newErrors.password = "Password must contain at least one number (0-9)";
+    } else if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      newErrors.password = "Password must contain at least one special character (!@#$%...)";
     }
 
     setErrors(newErrors);
@@ -73,8 +81,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   return (
     <div className="login-page">
-      <div className="hero-gradient" />
-
       <button
         className="theme-toggle"
         onClick={toggleTheme}
@@ -117,7 +123,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <Mail size={18} className="field-icon" />
                 <input
                   type="email"
-                  placeholder="admin@example.com"
+                  placeholder="admin@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -131,7 +137,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <Lock size={18} className="field-icon" />
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder="•••••••"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -148,13 +154,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </label>
 
             <button type="submit" className="login-button" disabled={isLoading}>
-              {isLoading ? <span className="spinner" /> : "Login to Console"}
+              {isLoading ? <span className="spinner" /> : "Login"}
             </button>
-
-            <div className="login-security-footer">
-              <ShieldCheck size={14} className="security-icon" />
-              <span>256-Bit SSL Encrypted Admin Portal</span>
-            </div>
           </div>
         </form>
       </div>

@@ -8,4 +8,15 @@ package com.example.smsfraud.email;
 public interface EmailService {
 
     void sendVerificationCode(String toEmail, String code);
+
+    /**
+     * Notify a newly-created user that an admin has added them to the platform,
+     * and tell them their assigned role.
+     */
+    void sendWelcomeEmail(String toEmail, String fullName, String role);
+
+    /**
+     * Notify a user that an admin has changed their account (profile, role, or status).
+     */
+    void sendAccountUpdatedEmail(String toEmail, String fullName);
 }

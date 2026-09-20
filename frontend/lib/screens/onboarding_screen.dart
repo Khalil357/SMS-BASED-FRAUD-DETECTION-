@@ -31,7 +31,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       title: 'Secure Account Vault',
       description: 'Create your secure account to customize detection settings, view historical message logs, and manage alerts across your devices.',
       icon: Icons.vpn_key_outlined,
-      color: const Color(0xFF1565C0),
+      color: const Color(0xFFD32F2F),
     ),
   ];
 
@@ -247,7 +247,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             height: 160,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF1565C0).withValues(alpha: 0.05),
+color: const Color(0xFFD32F2F).withValues(alpha: 0.05),
             ),
           ),
           Container(
@@ -274,7 +274,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 const Icon(
                   Icons.vpn_key_rounded,
                   size: 44,
-                  color: Color(0xFF1565C0),
+                  color: Color(0xFFD32F2F),
                 ),
                 const SizedBox(height: 12),
                 Container(
@@ -303,11 +303,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF1565C0),
+                color: const Color(0xFFD32F2F),
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF1565C0).withValues(alpha: 0.3),
+color: const Color(0xFFD32F2F).withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),

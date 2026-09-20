@@ -1,531 +1,733 @@
-import React, { useState } from "react";
-import type { ChangeEvent } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import "./DashboardPage.css";
 import type {
   StatCardData,
-  AlertData,
   SmsRecord,
-  DetectionRule,
-  BlacklistedSender,
-  SystemUser,
 } from "../types/dashboard";
 import type { AuthPage } from "../types/auth";
 import { useTheme } from "../theme/ThemeContext";
 import {
   ShieldAlert,
-  ShieldCheck,
   MessageSquare,
-  AlertTriangle,
   Users,
-  Settings,
   Activity,
-  Plus,
-  Search,
   Trash2,
   Eye,
+  EyeOff,
   CheckCircle2,
   XCircle,
-  Lock,
-  Unlock,
   Moon,
   Sun,
   LogOut,
-  Radio,
-  Sliders,
   UserPlus,
-  Bell,
   X,
-  Terminal,
-  Copy,
-  Check,
-  Download,
+  Pencil,
+  KeyRound,
+  UserCheck,
+  Search,
+  Filter,
+  RotateCcw,
+  Menu,
 } from "lucide-react";
 import inAppIcon from "../assets/images/in_app_icon.png";
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  resetUserPassword,
+  deleteUser,
+  getCurrentUserId,
+  getAdminStats,
+  getFraudTrend,
+  getSmsScans,
+} from "../services/adminService";
+import type { AdminUser, FraudTrendPoint } from "../services/adminService";
+import { clearToken } from "../services/authService";
 
 interface DashboardPageProps {
   onNavigate: (page: AuthPage) => void;
 }
 
-const mockStats: StatCardData[] = [
+/** Strict email format: local@domain.tld ending with valid domain. */
+const EMAIL_PATTERN = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
+
+/** Tanzanian Phone Validation: +255 followed by 9 digits starting with 6 or 7. */
+const TZ_PHONE_PATTERN = /^\+255[67]\d{8}$/;
+
+/** Strict Password Validator: Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character. */
+function validatePasswordStrength(pass: string): string | null {
+  if (!pass) return "Password is required";
+  if (pass.length < 8) return "Password must be at least 8 characters long";
+  if (!/[A-Z]/.test(pass)) return "Password must contain at least one uppercase letter (A-Z)";
+  if (!/[a-z]/.test(pass)) return "Password must contain at least one lowercase letter (a-z)";
+  if (!/[0-9]/.test(pass)) return "Password must contain at least one number (0-9)";
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass)) {
+    return "Password must contain at least one special character (!@#$%...)";
+  }
+  return null;
+}
+
+const emptyStats: StatCardData[] = [
   {
     id: "1",
     title: "Total SMS Scanned",
-    value: "14,890",
-    change: "+12.5% this month",
+    value: "0",
+    change: "Database total",
     type: "positive",
     category: "total",
   },
   {
     id: "2",
-    title: "Fraud & Scams Blocked",
-    value: "2,840",
-    change: "98.4% detection rate",
+    title: "Fraud & Scams Detected",
+    value: "0",
+    change: "0% detection rate",
     type: "negative",
     category: "fraud",
-  },
-  {
-    id: "3",
-    title: "Safe Messages Verified",
-    value: "11,760",
-    change: "+8.2% clean traffic",
-    type: "positive",
-    category: "safe",
-  },
-  {
-    id: "4",
-    title: "Active Device Interceptors",
-    value: "412",
-    change: "Live monitoring active",
-    type: "warning",
-    category: "pending",
-  },
-];
-
-const mockAlerts: AlertData[] = [
-  {
-    id: "1",
-    title: "Critical Phishing Spike Detected",
-    description: "Fraud score 96% on impersonation domain scam-vodacom.co.tz",
-    timeAgo: "3 mins ago",
-    severity: "high",
-  },
-  {
-    id: "2",
-    title: "Bulk Sender Blacklisted",
-    description: "+255 746 099 812 added to global threat registry",
-    timeAgo: "15 mins ago",
-    severity: "medium",
-  },
-  {
-    id: "3",
-    title: "Fake Mobile Money Scam Alert",
-    description: "Fake M-Pesa receipt SMS intercepted across 45 devices",
-    timeAgo: "30 mins ago",
-    severity: "high",
-  },
-  {
-    id: "4",
-    title: "ML Model Weights Sync",
-    description: "Engine updated with 120 new scam vector definitions",
-    timeAgo: "1 hour ago",
-    severity: "low",
-  },
-];
-
-const initialSmsRecords: SmsRecord[] = [
-  {
-    id: "SMS-8910",
-    sender: "+255 746 046 202",
-    message: "Hongera! Umeshinda TZS 2,500,000 kutoka Vodacom. Bonyeza link http://voda-tuzo.com au piga 0746046202 kudai zawadi yako.",
-    fraudType: "Phishing",
-    riskScore: 96,
-    date: "03 Sep 2026 14:22",
-    status: "Fraud",
-  },
-  {
-    id: "SMS-8909",
-    sender: "+255 754 123 890",
-    message: "Tuma zile pesa elfu 50 kwenye namba hii 0754123890 kwa jina la Juma Kabwe. Usipime namba ile nyingine imefungwa.",
-    fraudType: "Impersonation",
-    riskScore: 91,
-    date: "03 Sep 2026 13:45",
-    status: "Fraud",
-  },
-  {
-    id: "SMS-8908",
-    sender: "+255 713 456 789",
-    message: "LOAN APPROVED! Mkopo wako wa TZS 500,000 umekubaliwa. Lipia ada ya usajili TZS 10,000 kupitia http://mkopo-fast.com",
-    fraudType: "Loan Scam",
-    riskScore: 88,
-    date: "03 Sep 2026 12:10",
-    status: "Fraud",
-  },
-  {
-    id: "SMS-8907",
-    sender: "+255 765 222 111",
-    message: "Ndugu mteja, akaunti yako ya Benki imefungwa kwa muda. Tafadhali thibitisha taarifa zako sasa hivi hapa: http://crdb-verify.org",
-    fraudType: "Phishing",
-    riskScore: 94,
-    date: "03 Sep 2026 11:05",
-    status: "Fraud",
-  },
-  {
-    id: "SMS-8906",
-    sender: "+255 789 900 112",
-    message: "Kaka hio hela ya kodi tuma kwenye hii namba badala ya ile ya mwanzo. Namba mpya ni 0789900112 Asante.",
-    fraudType: "Impersonation",
-    riskScore: 78,
-    date: "03 Sep 2026 09:30",
-    status: "Review",
-  },
-  {
-    id: "SMS-8905",
-    sender: "CRDB-BANK",
-    message: "Taarifa: Umepokea TZS 150,000 kwenye akaunti yako ****4812. Salio lako jipya ni TZS 1,820,000.",
-    fraudType: "Clean",
-    riskScore: 5,
-    date: "03 Sep 2026 08:15",
-    status: "Safe",
-  },
-];
-
-const initialRules: DetectionRule[] = [
-  {
-    id: "RULE-101",
-    name: "Urgent Payment Redirect Keyword",
-    type: "Keyword",
-    pattern: "(tuma|tumia|lipia)\\s+.*(namba\\s+hii|kodi|pesa)",
-    riskWeight: 85,
-    enabled: true,
-    matchesCount: 1420,
-  },
-  {
-    id: "RULE-102",
-    name: "Suspicious Domain / Phishing URL",
-    type: "Link Analyzer",
-    pattern: "http(s)?://(?!.*(vodacom|airtel|crdbbank|nmb)\\.co\\.tz)",
-    riskWeight: 95,
-    enabled: true,
-    matchesCount: 2310,
-  },
-  {
-    id: "RULE-103",
-    name: "Unsolicited Lottery & Prize Claims",
-    type: "Keyword",
-    pattern: "(umeshinda|zawadi|bahati\\s+nasibu|tuzo)",
-    riskWeight: 90,
-    enabled: true,
-    matchesCount: 890,
-  },
-  {
-    id: "RULE-104",
-    name: "Fake Account Suspension Alert",
-    type: "Sender Spoofing",
-    pattern: "(akaunti|account)\\s+.*(imefungwa|suspended|blocked)",
-    riskWeight: 88,
-    enabled: true,
-    matchesCount: 650,
-  },
-];
-
-const initialBlacklist: BlacklistedSender[] = [
-  {
-    id: "BLK-01",
-    number: "+255 746 046 202",
-    reason: "Repeated phishing link delivery (voda-tuzo.com)",
-    addedBy: "Admin (Auto-Shield)",
-    dateAdded: "02 Sep 2026",
-  },
-  {
-    id: "BLK-02",
-    number: "+255 754 123 890",
-    reason: "Impersonation scam requesting money transfers",
-    addedBy: "Admin",
-    dateAdded: "01 Sep 2026",
-  },
-  {
-    id: "BLK-03",
-    number: "+255 765 222 111",
-    reason: "Fake CRDB Bank credential harvesting",
-    addedBy: "Admin (Auto-Shield)",
-    dateAdded: "30 Aug 2026",
-  },
-];
-
-const initialUsers: SystemUser[] = [
-  {
-    id: "USR-01",
-    name: "System Administrator",
-    email: "admin@smsfraud.com",
-    phone: "+255 700 000 001",
-    role: "ADMIN",
-    isVerified: true,
-    isLocked: false,
-    lastActive: "Active Now",
-  },
-  {
-    id: "USR-02",
-    name: "Security Analyst",
-    email: "analyst@smsfraud.com",
-    phone: "+255 700 000 002",
-    role: "ADMIN",
-    isVerified: true,
-    isLocked: false,
-    lastActive: "10 mins ago",
-  },
-  {
-    id: "USR-03",
-    name: "Juma Hamisi",
-    email: "juma.hamisi@gmail.com",
-    phone: "+255 712 990 011",
-    role: "USER",
-    isVerified: true,
-    isLocked: false,
-    lastActive: "2 hours ago",
-  },
-  {
-    id: "USR-04",
-    name: "Amina Salum",
-    email: "amina.salum@yahoo.com",
-    phone: "+255 754 881 223",
-    role: "USER",
-    isVerified: false,
-    isLocked: true,
-    lastActive: "1 day ago",
   },
 ];
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const { isDark, toggleTheme } = useTheme();
 
-  // State
-  const [activeTab, setActiveTab] = useState<string>("Overview");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [filterType, setFilterType] = useState<string>("All");
-  const [smsList, setSmsList] = useState<SmsRecord[]>(initialSmsRecords);
-  const [rulesList, setRulesList] = useState<DetectionRule[]>(initialRules);
-  const [blacklist, setBlacklist] = useState<BlacklistedSender[]>(initialBlacklist);
-  const [usersList, setUsersList] = useState<SystemUser[]>(initialUsers);
+  // Mobile Navigation Drawer Toggle State
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Modals & Popovers
+  // ── URL ↔ Tab sync ──────────────────────────────────────────────
+  const TAB_SLUGS: Record<string, string> = {
+    "Overview":              "/",
+    "SMS Ingestion Logs":    "/logs",
+    "Team":                  "/team",
+    "Users":                 "/users",
+  };
+  const SLUG_TABS: Record<string, string> = Object.fromEntries(
+    Object.entries(TAB_SLUGS).map(([tab, slug]) => [slug, tab])
+  );
+
+  function tabFromPath(): string {
+    const slug = window.location.pathname;
+    return SLUG_TABS[slug] ?? "Overview";
+  }
+
+  // Active Tab
+  const [activeTab, setActiveTab] = useState<string>(() => tabFromPath());
+
+  // Helper to switch tab & auto-close drawer on mobile
+  const handleTabClick = (tabName: string) => {
+    setActiveTab(tabName);
+    setMobileMenuOpen(false);
+  };
+
+  // Main Data States
+  const [statsCards, setStatsCards] = useState<StatCardData[]>(emptyStats);
+  const [smsList, setSmsList] = useState<SmsRecord[]>([]);
+  const [fraudTrend, setFraudTrend] = useState<FraudTrendPoint[]>([]);
+  const [usersList, setUsersList] = useState<AdminUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // SEARCH, FILTER & CLICK-TO-SORT STATES
+
+  // 1. Team Tab
+  const [teamSearch, setTeamSearch] = useState("");
+  const [teamStatusFilter, setTeamStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
+  const [teamSortField, setTeamSortField] = useState<"full_name" | "email" | "active">("full_name");
+  const [teamSortDir, setTeamSortDir] = useState<"asc" | "desc">("asc");
+
+  // 2. Users Tab
+  const [appUsersSearch, setAppUsersSearch] = useState("");
+  const [appUsersVerificationFilter, setAppUsersVerificationFilter] = useState<"All" | "Verified" | "Pending">("All");
+  const [appUsersStatusFilter, setAppUsersStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
+  const [appUsersSortField, setAppUsersSortField] = useState<"user_id" | "full_name" | "email" | "verified" | "active">("full_name");
+  const [appUsersSortDir, setAppUsersSortDir] = useState<"asc" | "desc">("asc");
+
+  // 3. SMS Ingestion Logs Tab
+  const [logsSearch, setLogsSearch] = useState("");
+  const [logsSortField, setLogsSortField] = useState<"id" | "sender" | "date">("date");
+  const [logsSortDir, setLogsSortDir] = useState<"asc" | "desc">("desc");
+
+  // Add Admin form state
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [addUserBusy, setAddUserBusy] = useState(false);
+  const [addUserFullName, setAddUserFullName] = useState("");
+  const [addUserEmail, setAddUserEmail] = useState("");
+  const [addUserPhone, setAddUserPhone] = useState("+255");
+  const [addUserPassword, setAddUserPassword] = useState("");
+  const [addUserConfirmPassword, setAddUserConfirmPassword] = useState("");
+  const [addUserGender, setAddUserGender] = useState<"MALE" | "FEMALE" | "">("");
+  const [showAddUserPassword, setShowAddUserPassword] = useState(false);
+  const [showAddUserConfirmPassword, setShowAddUserConfirmPassword] = useState(false);
+  const [addUserErrors, setAddUserErrors] = useState<Record<string, string>>({});
+
+  // Edit User form state
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [editUserBusy, setEditUserBusy] = useState(false);
+  const [editUserId, setEditUserId] = useState<string>("");
+  const [editUserFullName, setEditUserFullName] = useState("");
+  const [editUserEmail, setEditUserEmail] = useState("");
+  const [editUserPhone, setEditUserPhone] = useState("+255");
+  const [editUserActive, setEditUserActive] = useState(true);
+  const [editUserErrors, setEditUserErrors] = useState<Record<string, string>>({});
+
+  // Reset Password state
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+  const [resetPasswordBusy, setResetPasswordBusy] = useState(false);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
+  const [resetPasswordErrors, setResetPasswordErrors] = useState<Record<string, string>>({});
+
+  // Delete User state
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  // Modals
   const [selectedSms, setSelectedSms] = useState<SmsRecord | null>(null);
-  const [isAddRuleOpen, setIsAddRuleOpen] = useState(false);
-  const [isAddBlacklistOpen, setIsAddBlacklistOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [copiedCommandId, setCopiedCommandId] = useState<string | null>(null);
 
   // Admin Profile state
-  const [adminProfile, setAdminProfile] = useState({
-    name: "System Admin",
-    email: "smsfraud.noreply@gmail.com",
-    phone: "+255 700 000 001",
-    role: "ADMINISTRATOR",
-    initials: "AD",
-  });
+  const [adminName, setAdminName] = useState("System Admin");
 
-  const [hoveredDonutKey, setHoveredDonutKey] = useState<string | null>(null);
   const [hoveredTelemetryIndex, setHoveredTelemetryIndex] = useState<number | null>(null);
 
-  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
-  const [editName, setEditName] = useState(adminProfile.name);
-  const [editEmail, setEditEmail] = useState(adminProfile.email);
-  const [editPhone, setEditPhone] = useState(adminProfile.phone);
+  const currentUserId = getCurrentUserId();
 
-  const handleOpenEditProfile = () => {
-    setEditName(adminProfile.name);
-    setEditEmail(adminProfile.email);
-    setEditPhone(adminProfile.phone);
-    setIsEditProfileOpen(true);
-  };
+  function showToast(type: "success" | "error", message: string) {
+    setToast({ type, message });
+    window.setTimeout(() => setToast(null), 3500);
+  }
 
-  const handleSaveProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editName.trim() || !editEmail.trim()) return;
-
-    const initials = editName
-      .trim()
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .substring(0, 2)
-      .toUpperCase() || "AD";
-
-    setAdminProfile({
-      ...adminProfile,
-      name: editName.trim(),
-      email: editEmail.trim(),
-      phone: editPhone.trim(),
-      initials: initials,
-    });
-
-    setIsEditProfileOpen(false);
-  };
-
-  const handleCopyCommand = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCommandId(id);
-    setTimeout(() => setCopiedCommandId(null), 2000);
-  };
-
-  // Form states
-  const [newRuleName, setNewRuleName] = useState("");
-  const [newRulePattern, setNewRulePattern] = useState("");
-  const [newRuleType, setNewRuleType] = useState<DetectionRule["type"]>("Keyword");
-  const [newRuleWeight, setNewRuleWeight] = useState(85);
-
-  const [newBlacklistNumber, setNewBlacklistNumber] = useState("");
-  const [newBlacklistReason, setNewBlacklistReason] = useState("");
-
-  // Filtering
-  const filteredSms = smsList.filter((item) => {
-    const matchesSearch =
-      item.sender.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.fraudType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.id.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesFilter = filterType === "All" || item.status === filterType;
-    return matchesSearch && matchesFilter;
-  });
-
-  // Action handlers
-  const handleToggleRule = (id: string) => {
-    setRulesList((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
-    );
-  };
-
-  const handleAddRule = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRuleName.trim() || !newRulePattern.trim()) return;
-
-    const newRule: DetectionRule = {
-      id: `RULE-${Math.floor(100 + Math.random() * 900)}`,
-      name: newRuleName.trim(),
-      type: newRuleType,
-      pattern: newRulePattern.trim(),
-      riskWeight: newRuleWeight,
-      enabled: true,
-      matchesCount: 0,
-    };
-
-    setRulesList([newRule, ...rulesList]);
-    setNewRuleName("");
-    setNewRulePattern("");
-    setIsAddRuleOpen(false);
-  };
-
-  const handleAddBlacklist = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newBlacklistNumber.trim()) return;
-
-    const newEntry: BlacklistedSender = {
-      id: `BLK-0${blacklist.length + 1}`,
-      number: newBlacklistNumber.trim(),
-      reason: newBlacklistReason.trim() || "Manual admin blacklist entry",
-      addedBy: "Admin",
-      dateAdded: "Today",
-    };
-
-    setBlacklist([newEntry, ...blacklist]);
-    setNewBlacklistNumber("");
-    setNewBlacklistReason("");
-    setIsAddBlacklistOpen(false);
-  };
-
-  const handleRemoveBlacklist = (id: string) => {
-    setBlacklist((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const handleToggleUserLock = (id: string) => {
-    setUsersList((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, isLocked: !u.isLocked } : u))
-    );
-  };
-
-  const handleMarkSafe = (smsId: string) => {
-    setSmsList((prev) =>
-      prev.map((s) => (s.id === smsId ? { ...s, status: "Safe", fraudType: "Clean", riskScore: 5 } : s))
-    );
-    setSelectedSms(null);
-  };
-
-  const handleBlacklistFromModal = (sms: SmsRecord) => {
-    if (!blacklist.some((b) => b.number === sms.sender)) {
-      setBlacklist([
+  async function loadDashboardStats() {
+    const res = await getAdminStats();
+    if (res.success && res.data) {
+      setStatsCards([
         {
-          id: `BLK-0${blacklist.length + 1}`,
-          number: sms.sender,
-          reason: `Flagged from SMS ${sms.id} (${sms.fraudType})`,
-          addedBy: "Admin (Shield)",
-          dateAdded: "Just now",
+          id: "1",
+          title: "Total SMS Scanned",
+          value: Number(res.data.total_sms).toLocaleString(),
+          change: "Database total",
+          type: "positive",
+          category: "total",
         },
-        ...blacklist,
+        {
+          id: "2",
+          title: "Fraud & Scams Detected",
+          value: Number(res.data.fraud_detected).toLocaleString(),
+          change: `${res.data.total_sms > 0 ? ((res.data.fraud_detected / res.data.total_sms) * 100).toFixed(1) : "0"}% detection rate`,
+          type: "negative",
+          category: "fraud",
+        },
       ]);
     }
-    setSmsList((prev) =>
-      prev.map((s) => (s.id === sms.id ? { ...s, status: "Fraud", riskScore: 99 } : s))
-    );
-    setSelectedSms(null);
-  };
+  }
 
-  const getBadgeClass = (type: SmsRecord["fraudType"]): string => {
-    switch (type) {
-      case "Phishing":
-        return "phishing";
-      case "Impersonation":
-        return "impersonation";
-      case "Fake Promotion":
-        return "promotion";
-      case "Loan Scam":
-        return "loan";
-      default:
-        return "safe";
+  async function loadFraudTrends() {
+    const res = await getFraudTrend(7);
+    setFraudTrend(res.success && res.data ? res.data : []);
+  }
+
+  async function loadSmsAuditScans() {
+    const res = await getSmsScans("Fraud", 0, 100);
+    if (res.success && res.data) {
+      const records = Array.isArray(res.data) ? res.data : (res.data as any)?.content || [];
+      const mapped: SmsRecord[] = records.map((item: any) => {
+          let dateStr = "Recently";
+          if (item.timestamp) {
+            try {
+              dateStr = new Date(item.timestamp).toLocaleString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+            } catch {
+              dateStr = item.timestamp;
+            }
+          }
+          return {
+            id: item.id ? `SMS-${String(item.id).substring(0, 6).toUpperCase()}` : "Unknown",
+            sender: item.sender || "Unknown",
+            message: item.message || "",
+            fraudType: (item.fraud_type || item.fraudType || "Clean") as SmsRecord["fraudType"],
+            riskScore: Math.round(
+              Number(item.risk_score ?? item.riskScore ?? 0)
+                * (Number(item.risk_score ?? item.riskScore ?? 0) <= 1 ? 100 : 1)
+            ),
+            date: dateStr,
+            status: "Fraud",
+          };
+      });
+      setSmsList(mapped);
     }
-  };
+  }
+
+  async function loadUsers() {
+    setUsersLoading(true);
+    setUsersError(null);
+    const res = await getUsers();
+    setUsersLoading(false);
+    if (res.success && res.data) {
+      setUsersList(res.data);
+
+      if (currentUserId) {
+        const currentUser = res.data.find((u) => u.user_id === currentUserId);
+        if (currentUser && currentUser.full_name) {
+          setAdminName(currentUser.full_name);
+        } else if (currentUser && currentUser.email) {
+          setAdminName(currentUser.email);
+        }
+      } else if (res.data.length > 0 && res.data[0].full_name) {
+        setAdminName(res.data[0].full_name);
+      }
+    } else {
+      setUsersError(res.message ?? "Failed to load users");
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === "Overview") {
+      void loadUsers();
+      void loadDashboardStats();
+      void loadFraudTrends();
+      void loadSmsAuditScans();
+    } else if (activeTab === "SMS Ingestion Logs") {
+      void loadSmsAuditScans();
+    } else if (activeTab === "Team" || activeTab === "Users") {
+      void loadUsers();
+    }
+  }, [activeTab]);
+
+  // ── Keep browser URL in sync with active tab ─────────────────────
+  useEffect(() => {
+    const slug = TAB_SLUGS[activeTab] ?? "/";
+    if (window.location.pathname !== slug) {
+      window.history.pushState(null, "", slug);
+    }
+  }, [activeTab]);
+
+  // Click-to-Sort Handler Helper
+  function handleSortToggle<T extends string>(
+    field: T,
+    currentField: T,
+    currentDir: "asc" | "desc",
+    setField: (f: T) => void,
+    setDir: (d: "asc" | "desc") => void
+  ) {
+    if (currentField === field) {
+      setDir(currentDir === "asc" ? "desc" : "asc");
+    } else {
+      setField(field);
+      setDir("asc");
+    }
+  }
+
+  // 1. Team Administrators List Logic
+  const filteredTeamList = useMemo(() => {
+    let list = usersList.filter((u: any) => {
+      const roleVal = String(u.role || u.role_id || "").toUpperCase();
+      return roleVal === "ADMIN" || roleVal === "ROLE_ADMIN" || roleVal === "1";
+    });
+
+    if (teamSearch.trim()) {
+      const q = teamSearch.toLowerCase().trim();
+      list = list.filter(
+        (u) =>
+          (u.full_name && u.full_name.toLowerCase().includes(q)) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.phone && u.phone.includes(q))
+      );
+    }
+
+    if (teamStatusFilter !== "All") {
+      const isActive = teamStatusFilter === "Active";
+      list = list.filter((u) => u.active === isActive);
+    }
+
+    return [...list].sort((a, b) => {
+      let valA: string | number | boolean = "";
+      let valB: string | number | boolean = "";
+
+      if (teamSortField === "full_name") {
+        valA = (a.full_name || a.email).toLowerCase();
+        valB = (b.full_name || b.email).toLowerCase();
+      } else if (teamSortField === "email") {
+        valA = a.email.toLowerCase();
+        valB = b.email.toLowerCase();
+      } else if (teamSortField === "active") {
+        valA = a.active ? 1 : 0;
+        valB = b.active ? 1 : 0;
+      }
+
+      if (valA < valB) return teamSortDir === "asc" ? -1 : 1;
+      if (valA > valB) return teamSortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [usersList, teamSearch, teamStatusFilter, teamSortField, teamSortDir]);
+
+  // Reset Team Filters
+  const isTeamFiltered = teamSearch !== "" || teamStatusFilter !== "All" || teamSortField !== "full_name" || teamSortDir !== "asc";
+  function resetTeamFilters() {
+    setTeamSearch("");
+    setTeamStatusFilter("All");
+    setTeamSortField("full_name");
+    setTeamSortDir("asc");
+  }
+
+  // 2. Mobile App Users List Logic
+  const filteredAppUsersList = useMemo(() => {
+    let list = usersList.filter((u: any) => {
+      const roleVal = String(u.role || u.role_id || "").toUpperCase();
+      return roleVal === "USER" || roleVal === "ROLE_USER" || roleVal === "2" || !u.role;
+    });
+
+    if (appUsersSearch.trim()) {
+      const q = appUsersSearch.toLowerCase().trim();
+      list = list.filter(
+        (u) =>
+          (u.full_name && u.full_name.toLowerCase().includes(q)) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.phone && u.phone.includes(q)) ||
+          u.user_id.toLowerCase().includes(q)
+      );
+    }
+
+    if (appUsersVerificationFilter !== "All") {
+      const isVerified = appUsersVerificationFilter === "Verified";
+      list = list.filter((u) => u.verified === isVerified);
+    }
+
+    if (appUsersStatusFilter !== "All") {
+      const isActive = appUsersStatusFilter === "Active";
+      list = list.filter((u) => u.active === isActive);
+    }
+
+    return [...list].sort((a, b) => {
+      let valA: string | number | boolean = "";
+      let valB: string | number | boolean = "";
+
+      if (appUsersSortField === "user_id") {
+        valA = a.user_id;
+        valB = b.user_id;
+      } else if (appUsersSortField === "full_name") {
+        valA = (a.full_name || a.email).toLowerCase();
+        valB = (b.full_name || b.email).toLowerCase();
+      } else if (appUsersSortField === "email") {
+        valA = a.email.toLowerCase();
+        valB = b.email.toLowerCase();
+      } else if (appUsersSortField === "verified") {
+        valA = a.verified ? 1 : 0;
+        valB = b.verified ? 1 : 0;
+      } else if (appUsersSortField === "active") {
+        valA = a.active ? 1 : 0;
+        valB = b.active ? 1 : 0;
+      }
+
+      if (valA < valB) return appUsersSortDir === "asc" ? -1 : 1;
+      if (valA > valB) return appUsersSortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [usersList, appUsersSearch, appUsersVerificationFilter, appUsersStatusFilter, appUsersSortField, appUsersSortDir]);
+
+  // Reset Users Filters
+  const isAppUsersFiltered = appUsersSearch !== "" || appUsersVerificationFilter !== "All" || appUsersStatusFilter !== "All" || appUsersSortField !== "full_name" || appUsersSortDir !== "asc";
+  function resetAppUsersFilters() {
+    setAppUsersSearch("");
+    setAppUsersVerificationFilter("All");
+    setAppUsersStatusFilter("All");
+    setAppUsersSortField("full_name");
+    setAppUsersSortDir("asc");
+  }
+
+  // 3. SMS Ingestion Logs Logic
+  const filteredLogsList = useMemo(() => {
+    let list = smsList;
+
+    if (logsSearch.trim()) {
+      const q = logsSearch.toLowerCase().trim();
+      list = list.filter(
+        (s) =>
+          s.id.toLowerCase().includes(q) ||
+          s.sender.toLowerCase().includes(q) ||
+          s.message.toLowerCase().includes(q)
+      );
+    }
+
+    return [...list].sort((a, b) => {
+      let valA: string = "";
+      let valB: string = "";
+
+      if (logsSortField === "id") {
+        valA = a.id;
+        valB = b.id;
+      } else if (logsSortField === "sender") {
+        valA = a.sender;
+        valB = b.sender;
+      } else if (logsSortField === "date") {
+        valA = a.date;
+        valB = b.date;
+      }
+
+      if (valA < valB) return logsSortDir === "asc" ? -1 : 1;
+      if (valA > valB) return logsSortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [smsList, logsSearch, logsSortField, logsSortDir]);
+
+  const isLogsFiltered = logsSearch !== "" || logsSortField !== "date" || logsSortDir !== "desc";
+  function resetLogsFilters() {
+    setLogsSearch("");
+    setLogsSortField("date");
+    setLogsSortDir("desc");
+  }
+
+  async function handleCreateUser(e: React.FormEvent) {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+
+    if (!addUserFullName.trim()) errors.fullName = "Full name is required";
+
+    if (!addUserEmail.trim()) {
+      errors.email = "Email is required";
+    } else if (!EMAIL_PATTERN.test(addUserEmail.trim())) {
+      errors.email = "Enter a valid email address (e.g. admin@gmail.com)";
+    }
+
+    const cleanPhone = addUserPhone.trim().replace(/\s+/g, "");
+    if (!cleanPhone || cleanPhone === "+255") {
+      errors.phone = "Phone number is required";
+    } else if (!TZ_PHONE_PATTERN.test(cleanPhone)) {
+      errors.phone = "Enter a valid Tanzanian phone number (e.g. +255754000000)";
+    }
+
+    if (!addUserGender) {
+      errors.gender = "Please select gender";
+    }
+
+    const passErr = validatePasswordStrength(addUserPassword);
+    if (passErr) {
+      errors.password = passErr;
+    }
+
+    if (addUserConfirmPassword !== addUserPassword) {
+      errors.confirmPassword = "Passwords do not match";
+    }
+
+    setAddUserErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setAddUserBusy(true);
+    const res = await createUser({
+      full_name: addUserFullName.trim(),
+      email: addUserEmail.trim(),
+      phone_number: cleanPhone,
+      password: addUserPassword,
+      gender: addUserGender || undefined,
+    });
+    setAddUserBusy(false);
+    if (res.success && res.data) {
+      setUsersList((prev) => [...prev, res.data!]);
+      showToast("success", `Admin ${res.data.email} created`);
+      setAddUserFullName("");
+      setAddUserEmail("");
+      setAddUserPhone("+255");
+      setAddUserPassword("");
+      setAddUserConfirmPassword("");
+      setAddUserGender("");
+      setAddUserErrors({});
+      setIsAddUserOpen(false);
+    } else {
+      showToast("error", res.message ?? "Failed to create admin");
+    }
+  }
+
+  function openEditUser(user: AdminUser) {
+    setEditUserId(user.user_id);
+    setEditUserFullName(user.full_name ?? "");
+    setEditUserEmail(user.email ?? "");
+    setEditUserPhone(user.phone || "+255");
+    setEditUserActive(user.active);
+    setEditUserErrors({});
+    setIsEditUserOpen(true);
+  }
+
+  async function handleUpdateUser(e: React.FormEvent) {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+
+    if (!editUserFullName.trim()) errors.fullName = "Full name is required";
+
+    if (!editUserEmail.trim()) {
+      errors.email = "Email is required";
+    } else if (!EMAIL_PATTERN.test(editUserEmail.trim())) {
+      errors.email = "Enter a valid email address (e.g. admin@gmail.com)";
+    }
+
+    const cleanPhone = editUserPhone.trim().replace(/\s+/g, "");
+    if (!cleanPhone || cleanPhone === "+255") {
+      errors.phone = "Phone number is required";
+    } else if (!TZ_PHONE_PATTERN.test(cleanPhone)) {
+      errors.phone = "Enter a valid Tanzanian phone number (e.g. +255754000000)";
+    }
+
+    setEditUserErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setEditUserBusy(true);
+    const res = await updateUser(editUserId, {
+      full_name: editUserFullName.trim(),
+      email: editUserEmail.trim(),
+      phone_number: cleanPhone,
+      active: editUserActive,
+    });
+    setEditUserBusy(false);
+    if (res.success && res.data) {
+      setUsersList((prev) => prev.map((u) => (u.user_id === res.data!.user_id ? res.data! : u)));
+      showToast("success", `${res.data.email} updated`);
+      setIsEditUserOpen(false);
+    } else {
+      showToast("error", res.message ?? "Failed to update user");
+    }
+  }
+
+  function openResetPassword() {
+    setResetPasswordValue("");
+    setResetPasswordConfirm("");
+    setResetPasswordErrors({});
+    setShowResetPassword(false);
+    setShowResetPasswordConfirm(false);
+    setIsResetPasswordOpen(true);
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+
+    const passErr = validatePasswordStrength(resetPasswordValue);
+    if (passErr) {
+      errors.password = passErr;
+    }
+
+    if (resetPasswordConfirm !== resetPasswordValue) {
+      errors.confirmPassword = "Passwords do not match";
+    }
+
+    setResetPasswordErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setResetPasswordBusy(true);
+    const res = await resetUserPassword(editUserId, resetPasswordValue);
+    setResetPasswordBusy(false);
+    if (res.success) {
+      showToast("success", "Password reset successfully");
+      setIsResetPasswordOpen(false);
+    } else {
+      showToast("error", res.message ?? "Failed to reset password");
+    }
+  }
+
+  function handleDeleteClick(user: AdminUser) {
+    if (user.user_id === currentUserId) {
+      showToast("error", "You cannot delete your own account");
+      return;
+    }
+    setDeleteTarget(user);
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteBusy(true);
+    const res = await deleteUser(target.user_id);
+    setDeleteBusy(false);
+    if (res.success) {
+      setUsersList((prev) => prev.filter((u) => u.user_id !== target.user_id));
+      showToast("success", `${target.email} deleted`);
+    } else {
+      showToast("error", res.message ?? "Failed to delete user");
+    }
+    setDeleteTarget(null);
+  }
+
+  const trendChart = useMemo(() => {
+    const counts = fraudTrend.map((point) => Number(point.count) || 0);
+    const maxCount = Math.max(1, ...counts);
+    const points = fraudTrend.map((point, index) => {
+      const x = fraudTrend.length <= 1 ? 375 : 60 + (630 * index) / (fraudTrend.length - 1);
+      const count = Number(point.count) || 0;
+      const y = 190 - (count / maxCount) * 150;
+      return {
+        ...point,
+        count,
+        x,
+        y,
+        peak: count > 0 && count === maxCount,
+      };
+    });
+
+    return {
+      points,
+      maxCount,
+      total: counts.reduce((sum, count) => sum + count, 0),
+      polyline: points.map((point) => `${point.x},${point.y}`).join(" "),
+      area: points.length > 0
+        ? `60,190 ${points.map((point) => `${point.x},${point.y}`).join(" ")} 690,190`
+        : "",
+      ticks: [maxCount, Math.ceil(maxCount * 2 / 3), Math.ceil(maxCount / 3), 0],
+    };
+  }, [fraudTrend]);
+
+  // Sidebar Menu items
+  const navMenuItems = [
+    { name: "Overview", icon: Activity },
+    { name: "SMS Ingestion Logs", icon: MessageSquare, badge: smsList.length },
+    { name: "Team", icon: UserCheck, badge: filteredTeamList.length },
+    { name: "Users", icon: Users, badge: filteredAppUsersList.length },
+  ];
 
   return (
     <div className="admin-portal-container">
-      {/* SIDEBAR */}
-      <aside className="admin-sidebar">
+      {/* MOBILE BACKDROP OVERLAY */}
+      {mobileMenuOpen && (
+        <div
+          className="sidebar-mobile-overlay"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* FLOATING EXECUTIVE SIDEBAR WITH RESPONSIVE MOBILE DRAWER CLASS */}
+      <aside className={`admin-sidebar ${mobileMenuOpen ? "mobile-open" : ""}`}>
         <div className="sidebar-brand">
           <div className="brand-icon-wrapper">
             <img src={inAppIcon} alt="Argus Logo" className="brand-logo-img" />
           </div>
           <div className="brand-text">
             <h2>Argus</h2>
-            <span className="version-tag">v2.4 Enterprise</span>
           </div>
         </div>
 
+        {/* Clean, uninterrupted navbar list */}
         <nav className="sidebar-menu">
-          {[
-            {
-              category: "MAIN TELEMETRY",
-              items: [
-                { name: "Overview", icon: Activity },
-                { name: "SMS Ingestion Logs", icon: MessageSquare, badge: smsList.filter((s) => s.status === "Fraud").length },
-              ],
-            },
-            {
-              category: "SECURITY ENGINE",
-              items: [
-                { name: "Rules & Threat Engine", icon: Sliders, badge: rulesList.filter((r) => r.enabled).length },
-                { name: "Blacklist Management", icon: ShieldAlert, badge: blacklist.length },
-              ],
-            },
-            {
-              category: "ADMINISTRATION",
-              items: [
-                { name: "Users & Devices", icon: Users, badge: usersList.length },
-                { name: "System Settings", icon: Settings },
-              ],
-            },
-          ].map((group) => (
-            <div key={group.category} className="sidebar-nav-group">
-              <span className="sidebar-group-title">{group.category}</span>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.name;
-                return (
-                  <button
-                    key={item.name}
-                    type="button"
-                    className={`sidebar-link ${isActive ? "active" : ""}`}
-                    onClick={() => setActiveTab(item.name)}
-                  >
-                    <Icon size={18} className="sidebar-link-icon" />
-                    <span>{item.name}</span>
-                    {item.badge !== undefined && item.badge > 0 && (
-                      <span className={`menu-badge ${item.name === "Blacklist Management" ? "dark" : "danger"}`}>
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          {navMenuItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.name;
+            return (
+              <button
+                key={item.name}
+                type="button"
+                className={`sidebar-link ${isActive ? "active" : ""}`}
+                onClick={() => handleTabClick(item.name)}
+              >
+                <Icon size={18} className="sidebar-link-icon" />
+                <span>{item.name}</span>
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="menu-badge danger">
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="sidebar-footer">
@@ -534,15 +736,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
           </button>
 
-          <div className="system-health-card">
-            <span className="pulse-indicator"></span>
-            <div>
-              <strong>Gateway Connected</strong>
-              <small>Gmail SMTP • PostgreSQL Active</small>
-            </div>
-          </div>
-
-          <button type="button" className="logout-btn" onClick={() => onNavigate("login")}>
+          <button type="button" className="logout-btn" onClick={() => {
+            clearToken();
+            onNavigate("login");
+          }}>
             <LogOut size={18} />
             <span>Logout</span>
           </button>
@@ -551,117 +748,50 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
       {/* MAIN CONTENT AREA */}
       <main className="admin-main">
-        {/* TOPBAR HEADER */}
+        {/* EXECUTIVE TOPBAR HEADER */}
         <header className="admin-topbar">
-          <div className="topbar-title">
-            <h1>{activeTab}</h1>
-            <p>Argus SMS Fraud Interception Platform</p>
+          <div className="topbar-left-group">
+            {/* Mobile Hamburger Drawer Toggle Button */}
+            <button
+              type="button"
+              className="mobile-hamburger-btn"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle Navigation Menu"
+            >
+              <Menu size={20} />
+            </button>
+
+            <div className="topbar-title">
+              <h1>{activeTab}</h1>
+              <p className="topbar-subtitle">Argus Executive SMS Security Console</p>
+            </div>
           </div>
 
           <div className="topbar-actions">
-            {/* SEARCH */}
-            <div className="global-search-input">
-              <Search size={16} className="search-icon" />
-              <input
-                type="text"
-                placeholder="Search SMS, senders, rules..."
-                value={searchQuery}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button type="button" className="clear-search" onClick={() => setSearchQuery("")}>
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            {/* NOTIFICATION BELL */}
-            <div className="notification-wrapper">
-              <button
-                type="button"
-                className="icon-btn-circle"
-                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-              >
-                <Bell size={18} />
-                <span className="bell-badge">4</span>
-              </button>
-
-              {isNotificationsOpen && (
-                <div className="notifications-popover">
-                  <div className="popover-header">
-                    <h4>Recent Security Alerts</h4>
-                    <span className="popover-count">4 New</span>
-                  </div>
-                  <div className="popover-body">
-                    {mockAlerts.map((alt) => (
-                      <div key={alt.id} className={`popover-item ${alt.severity}`}>
-                        <AlertTriangle size={16} className="alert-item-icon" />
-                        <div>
-                          <strong>{alt.title}</strong>
-                          <p>{alt.description}</p>
-                          <small>{alt.timeAgo}</small>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ADMIN PROFILE PILL */}
-            <button
-              type="button"
-              className="admin-profile-pill clickable"
-              onClick={handleOpenEditProfile}
-              title="Click to Edit Admin Profile"
-            >
-              <div className="admin-avatar">{adminProfile.initials}</div>
-              <div className="admin-info">
-                <strong>{adminProfile.name}</strong>
-                <small>{adminProfile.role}</small>
+            <div className="admin-profile-pill">
+              <div className="admin-avatar">
+                {adminName.substring(0, 2).toUpperCase()}
               </div>
-            </button>
+              <div className="admin-info">
+                <strong>{adminName}</strong>
+                <small>ADMINISTRATOR</small>
+              </div>
+            </div>
           </div>
         </header>
 
         {/* TAB 1: OVERVIEW */}
         {activeTab === "Overview" && (
           <div className="tab-content fade-slide">
-            {/* HERO SECURITY BANNER */}
-            <section className="dashboard-hero-banner">
-              <div className="hero-banner-content">
-                <div className="hero-text-block">
-                  <div className="hero-status-pill">
-                    <span className="pulse-indicator"></span>
-                    <span>Argus Neural Threat Engine Active</span>
-                  </div>
-                  <h2>Welcome back, {adminProfile.name}! 👋</h2>
-                  <p>
-                    Real-time SMS interception, fraud pattern matching, and global threat registry active.
-                  </p>
-                </div>
-                <div className="hero-banner-actions">
-                  <button type="button" className="btn-primary" onClick={() => setIsAddRuleOpen(true)}>
-                    <Plus size={16} /> New Rule
-                  </button>
-                  <button type="button" className="btn-secondary dark" onClick={() => setIsAddBlacklistOpen(true)}>
-                    <ShieldAlert size={16} /> Blacklist Number
-                  </button>
-                </div>
-              </div>
-            </section>
-
             {/* STATS GRID */}
             <section className="stats-cards-grid">
-              {mockStats.map((stat) => (
-                <div key={stat.id} className={`stat-card-box gradient-${stat.category}`}>
+              {statsCards.map((stat) => (
+                <div key={stat.id} className={`stat-card-box category-${stat.category}`}>
                   <div className="stat-header">
                     <span className="stat-title">{stat.title}</span>
                     <div className={`stat-icon-badge ${stat.category}`}>
                       {stat.category === "total" && <MessageSquare size={18} />}
                       {stat.category === "fraud" && <ShieldAlert size={18} />}
-                      {stat.category === "safe" && <ShieldCheck size={18} />}
-                      {stat.category === "pending" && <Radio size={18} />}
                     </div>
                   </div>
                   <h2 className="stat-number">{stat.value}</h2>
@@ -672,507 +802,162 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               ))}
             </section>
 
-            {/* MIDDLE PANELS GRID */}
-            <section className="middle-dashboard-grid">
-              {/* PROFESSIONAL TELEMETRY AREA CHART PANEL */}
+            {/* FRAUD TREND CHART PANEL */}
+            <section className="middle-dashboard-grid single-column">
               <div className="admin-panel telemetry-chart-panel">
-                <div className="panel-top">
+                <div className="panel-top flex-wrap">
                   <div>
-                    <h3>SMS Traffic & Threat Telemetry</h3>
-                    <p>Hover data points for live crosshair inspection</p>
+                    <h3>Fraud Message Trend</h3>
+                    <p>Daily fraud messages stored in the sms_scans table over the last seven days</p>
                   </div>
                   <div className="telemetry-chart-legend">
-                    <span className="legend-pill total-pill">
-                      <span className="pill-dot blue" /> Total SMS
-                    </span>
                     <span className="legend-pill fraud-pill">
-                      <span className="pill-dot red" /> Fraud Intercepts
+                      <span className="pill-dot red" /> Fraud Intercepts ({trendChart.total.toLocaleString()})
                     </span>
                   </div>
                 </div>
 
                 <div className="telemetry-chart-wrapper">
                   <div className="telemetry-svg-container">
-                    <svg viewBox="0 0 720 220" className="telemetry-svg">
+                    <svg viewBox="0 0 720 220" className="telemetry-svg" role="img" aria-label="Seven-day fraud message trend">
                       <defs>
-                        {/* Total SMS Gradient */}
-                        <linearGradient id="totalSmsGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
-                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-                        </linearGradient>
-                        {/* Fraud Intercepts Gradient */}
                         <linearGradient id="fraudSmsGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#dc2626" stopOpacity="0.3" />
-                          <stop offset="100%" stopColor="#dc2626" stopOpacity="0.0" />
+                          <stop offset="0%" stopColor="#ef4444" stopOpacity="0.28" />
+                          <stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" />
                         </linearGradient>
                       </defs>
 
-                      {/* Grid Lines */}
-                      <g className="grid-lines" stroke="var(--border)" strokeDasharray="4 4" strokeWidth="1">
-                        <line x1="50" y1="30" x2="700" y2="30" />
-                        <line x1="50" y1="75" x2="700" y2="75" />
-                        <line x1="50" y1="120" x2="700" y2="120" />
-                        <line x1="50" y1="165" x2="700" y2="165" />
+                      <g className="grid-lines-horizontal" stroke="var(--border)" strokeDasharray="4 4" strokeWidth="1">
+                        {[40, 90, 140, 190].map((y) => (
+                          <line key={`horizontal-${y}`} x1="55" y1={y} x2="700" y2={y} />
+                        ))}
                       </g>
 
-                      {/* Y-Axis Labels */}
-                      <g className="y-axis-labels" fill="var(--subtle)" fontSize="10" fontWeight="600" textAnchor="end">
-                        <text x="42" y="34">100%</text>
-                        <text x="42" y="79">75%</text>
-                        <text x="42" y="124">50%</text>
-                        <text x="42" y="169">25%</text>
+                      <g className="grid-lines-vertical" stroke="var(--border)" strokeDasharray="3 3" strokeWidth="1" opacity="0.5">
+                        {trendChart.points.map((point) => (
+                          <line key={`vertical-${point.day}`} x1={point.x} y1="25" x2={point.x} y2="190" />
+                        ))}
                       </g>
 
-                      {/* Area Fill 1: Total SMS Ingested */}
-                      <path
-                        d="M 60,110 C 130,90 200,80 270,60 C 340,40 410,50 480,40 C 550,30 620,45 690,30 L 690,190 L 60,190 Z"
-                        fill="url(#totalSmsGradient)"
-                      />
+                      <g className="y-axis-labels" fill="var(--subtle)" fontSize="10" fontWeight="700" textAnchor="end">
+                        {trendChart.ticks.map((tick, index) => (
+                          <text key={`tick-${index}`} x="48" y={44 + index * 50}>
+                            {tick.toLocaleString()}
+                          </text>
+                        ))}
+                      </g>
 
-                      {/* Spline Line 1: Total SMS Ingested */}
-                      <path
-                        d="M 60,110 C 130,90 200,80 270,60 C 340,40 410,50 480,40 C 550,30 620,45 690,30"
-                        fill="none"
-                        stroke="#3b82f6"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                      />
+                      {trendChart.points.length === 0 ? (
+                        <text x="375" y="115" fill="var(--subtle)" fontSize="13" textAnchor="middle">
+                          Fraud trend data is unavailable
+                        </text>
+                      ) : (
+                        <>
+                          <polygon points={trendChart.area} fill="url(#fraudSmsGradient)" />
+                          <polyline
+                            points={trendChart.polyline}
+                            fill="none"
+                            stroke="var(--primary)"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
 
-                      {/* Area Fill 2: Fraud Intercepts */}
-                      <path
-                        d="M 60,150 C 130,130 200,115 270,95 C 340,45 410,70 480,110 C 550,50 620,60 690,80 L 690,190 L 60,190 Z"
-                        fill="url(#fraudSmsGradient)"
-                      />
+                          {hoveredTelemetryIndex !== null && trendChart.points[hoveredTelemetryIndex] && (
+                            <line
+                              x1={trendChart.points[hoveredTelemetryIndex].x}
+                              y1="25"
+                              x2={trendChart.points[hoveredTelemetryIndex].x}
+                              y2="190"
+                              stroke="var(--primary)"
+                              strokeDasharray="3 3"
+                              strokeWidth="1.5"
+                              opacity="0.9"
+                            />
+                          )}
 
-                      {/* Spline Line 2: Fraud Intercepts */}
-                      <path
-                        d="M 60,150 C 130,130 200,115 270,95 C 340,45 410,70 480,110 C 550,50 620,60 690,80"
-                        fill="none"
-                        stroke="#dc2626"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                      />
-
-                      {/* Interactive Hover Crosshair */}
-                      {hoveredTelemetryIndex !== null && (
-                        <line
-                          x1={[60, 165, 270, 340, 480, 585, 690][hoveredTelemetryIndex]}
-                          y1="25"
-                          x2={[60, 165, 270, 340, 480, 585, 690][hoveredTelemetryIndex]}
-                          y2="190"
-                          stroke="var(--primary)"
-                          strokeDasharray="3 3"
-                          strokeWidth="1.5"
-                          opacity="0.8"
-                        />
+                          {trendChart.points.map((point, index) => {
+                            const isHovered = hoveredTelemetryIndex === index;
+                            return (
+                              <g
+                                key={`fraud-node-${point.day}`}
+                                className="interactive-node-group"
+                                onMouseEnter={() => setHoveredTelemetryIndex(index)}
+                                onMouseLeave={() => setHoveredTelemetryIndex(null)}
+                                style={{ cursor: "pointer" }}
+                              >
+                                {isHovered && (
+                                  <circle
+                                    cx={point.x}
+                                    cy={point.y}
+                                    r="12"
+                                    fill="rgba(239, 68, 68, 0.22)"
+                                    stroke="var(--primary)"
+                                    strokeWidth="1.5"
+                                  />
+                                )}
+                                <circle
+                                  cx={point.x}
+                                  cy={point.y}
+                                  r={isHovered ? 7 : point.peak ? 6 : 5}
+                                  fill="var(--primary)"
+                                  stroke="var(--card)"
+                                  strokeWidth="2.5"
+                                />
+                                {(isHovered || point.peak) && (
+                                  <g className="callout-badges pointer-events-none">
+                                    <rect
+                                      x={point.x - 42}
+                                      y={Math.max(4, point.y - 32)}
+                                      width="84"
+                                      height="22"
+                                      rx="6"
+                                      fill={isHovered ? "#08090d" : "var(--primary)"}
+                                      stroke={isHovered ? "var(--primary)" : "none"}
+                                      strokeWidth="1"
+                                    />
+                                    <text
+                                      x={point.x}
+                                      y={Math.max(19, point.y - 17)}
+                                      fill="#ffffff"
+                                      fontSize="10"
+                                      fontWeight="800"
+                                      textAnchor="middle"
+                                    >
+                                      {point.count.toLocaleString()} Fraud
+                                    </text>
+                                  </g>
+                                )}
+                              </g>
+                            );
+                          })}
+                        </>
                       )}
-
-                      {/* Data Point Markers - Fraud */}
-                      {[
-                        { day: "Mon", x: 60, y: 150, rate: "42%", count: "850 SMS" },
-                        { day: "Tue", x: 165, y: 130, rate: "65%", count: "1,240 SMS" },
-                        { day: "Wed", x: 270, y: 95, rate: "54%", count: "1,100 SMS" },
-                        { day: "Thu", x: 340, y: 45, rate: "88%", count: "1,890 SMS", peak: true },
-                        { day: "Fri", x: 480, y: 110, rate: "70%", count: "1,450 SMS" },
-                        { day: "Sat", x: 585, y: 50, rate: "94%", count: "2,100 SMS", peak: true },
-                        { day: "Sun", x: 690, y: 80, rate: "76%", count: "1,620 SMS" },
-                      ].map((pt, idx) => {
-                        const isHovered = hoveredTelemetryIndex === idx;
-                        return (
-                          <g
-                            key={pt.day}
-                            className="interactive-node-group"
-                            onMouseEnter={() => setHoveredTelemetryIndex(idx)}
-                            onMouseLeave={() => setHoveredTelemetryIndex(null)}
-                            style={{ cursor: "pointer" }}
-                          >
-                            {/* Hover Pulsing Outer Ring */}
-                            {isHovered && (
-                              <circle
-                                cx={pt.x}
-                                cy={pt.y}
-                                r="12"
-                                fill="rgba(220, 38, 38, 0.2)"
-                                stroke="#dc2626"
-                                strokeWidth="1.5"
-                              />
-                            )}
-                            <circle
-                              cx={pt.x}
-                              cy={pt.y}
-                              r={isHovered ? 7 : pt.peak ? 6 : 5}
-                              fill="#dc2626"
-                              stroke="var(--card)"
-                              strokeWidth="2.5"
-                            />
-                          </g>
-                        );
-                      })}
-
-                      {/* Peak Callout & Interactive Tooltip Badges */}
-                      {[
-                        { day: "Mon", x: 60, y: 150, rate: "42%", count: "850 SMS" },
-                        { day: "Tue", x: 165, y: 130, rate: "65%", count: "1,240 SMS" },
-                        { day: "Wed", x: 270, y: 95, rate: "54%", count: "1,100 SMS" },
-                        { day: "Thu", x: 340, y: 45, rate: "88%", count: "1,890 SMS", peak: true },
-                        { day: "Fri", x: 480, y: 110, rate: "70%", count: "1,450 SMS" },
-                        { day: "Sat", x: 585, y: 50, rate: "94%", count: "2,100 SMS", peak: true },
-                        { day: "Sun", x: 690, y: 80, rate: "76%", count: "1,620 SMS" },
-                      ].map((pt, idx) => {
-                        const isHovered = hoveredTelemetryIndex === idx;
-                        if (!isHovered && !pt.peak) return null;
-
-                        return (
-                          <g key={`badge-${pt.day}`} className="callout-badges pointer-events-none">
-                            <rect
-                              x={pt.x - 36}
-                              y={pt.y - 32}
-                              width="72"
-                              height="22"
-                              rx="6"
-                              fill={isHovered ? "#0f172a" : "#dc2626"}
-                              stroke={isHovered ? "#dc2626" : "none"}
-                              strokeWidth="1"
-                            />
-                            <text
-                              x={pt.x}
-                              y={pt.y - 17}
-                              fill="#ffffff"
-                              fontSize="10"
-                              fontWeight="800"
-                              textAnchor="middle"
-                            >
-                              {pt.rate} {isHovered ? "Threat" : "Peak"}
-                            </text>
-                          </g>
-                        );
-                      })}
                     </svg>
                   </div>
 
-                  {/* X-Axis Labels Row */}
                   <div className="telemetry-x-labels">
-                    {[
-                      { day: "Mon", val: "42% Fraud", idx: 0 },
-                      { day: "Tue", val: "65% Fraud", idx: 1 },
-                      { day: "Wed", val: "54% Fraud", idx: 2 },
-                      { day: "Thu", val: "88% (Peak)", idx: 3, peak: true },
-                      { day: "Fri", val: "70% Fraud", idx: 4 },
-                      { day: "Sat", val: "94% (Peak)", idx: 5, peak: true },
-                      { day: "Sun", val: "76% Fraud", idx: 6 },
-                    ].map((lbl) => (
+                    {trendChart.points.map((point, index) => (
                       <div
-                        key={lbl.day}
-                        className={`x-label-item ${lbl.peak ? "active-peak" : ""} ${hoveredTelemetryIndex === lbl.idx ? "hovered-label" : ""}`}
-                        onMouseEnter={() => setHoveredTelemetryIndex(lbl.idx)}
+                        key={point.day}
+                        className={`x-label-item ${point.peak ? "active-peak" : ""} ${hoveredTelemetryIndex === index ? "hovered-label" : ""}`}
+                        onMouseEnter={() => setHoveredTelemetryIndex(index)}
                         onMouseLeave={() => setHoveredTelemetryIndex(null)}
                         style={{ cursor: "pointer" }}
                       >
-                        <span>{lbl.day}</span>
-                        <small className={lbl.peak ? "peak-val" : "subtle-val"}>{lbl.val}</small>
+                        <span>{point.day}</span>
+                        <small className={point.peak ? "peak-val" : "subtle-val"}>
+                          {point.count.toLocaleString()} Fraud
+                        </small>
                       </div>
                     ))}
                   </div>
                 </div>
-              </div>
-
-              {/* PIE / DONUT CHART BREAKDOWN PANEL */}
-              <div className="admin-panel pie-chart-panel">
-                <div className="panel-top">
-                  <div>
-                    <h3>Threat Category Breakdown</h3>
-                    <p>Hover segments or legend to inspect details</p>
-                  </div>
-                  <span className="type-tag phishing">2,840 Intercepts</span>
-                </div>
-
-                <div className="pie-donut-wrapper">
-                  <div className="donut-svg-box">
-                    <svg viewBox="0 0 160 160" className="donut-chart-svg">
-                      {/* Phishing (42%) */}
-                      <circle
-                        cx="80"
-                        cy="80"
-                        r="58"
-                        stroke="#dc2626"
-                        strokeWidth={hoveredDonutKey === "phishing" ? "24" : "20"}
-                        fill="none"
-                        strokeDasharray="153 211"
-                        strokeDashoffset="0"
-                        className={`donut-segment ${hoveredDonutKey && hoveredDonutKey !== "phishing" ? "dimmed" : ""}`}
-                        onMouseEnter={() => setHoveredDonutKey("phishing")}
-                        onMouseLeave={() => setHoveredDonutKey(null)}
-                      />
-                      {/* Impersonation (28%) */}
-                      <circle
-                        cx="80"
-                        cy="80"
-                        r="58"
-                        stroke="#f59e0b"
-                        strokeWidth={hoveredDonutKey === "impersonation" ? "24" : "20"}
-                        fill="none"
-                        strokeDasharray="102 262"
-                        strokeDashoffset="-153"
-                        className={`donut-segment ${hoveredDonutKey && hoveredDonutKey !== "impersonation" ? "dimmed" : ""}`}
-                        onMouseEnter={() => setHoveredDonutKey("impersonation")}
-                        onMouseLeave={() => setHoveredDonutKey(null)}
-                      />
-                      {/* Fake Promotion (18%) */}
-                      <circle
-                        cx="80"
-                        cy="80"
-                        r="58"
-                        stroke="#a855f7"
-                        strokeWidth={hoveredDonutKey === "promotion" ? "24" : "20"}
-                        fill="none"
-                        strokeDasharray="66 298"
-                        strokeDashoffset="-255"
-                        className={`donut-segment ${hoveredDonutKey && hoveredDonutKey !== "promotion" ? "dimmed" : ""}`}
-                        onMouseEnter={() => setHoveredDonutKey("promotion")}
-                        onMouseLeave={() => setHoveredDonutKey(null)}
-                      />
-                      {/* Loan Scam (12%) */}
-                      <circle
-                        cx="80"
-                        cy="80"
-                        r="58"
-                        stroke="#3b82f6"
-                        strokeWidth={hoveredDonutKey === "loan" ? "24" : "20"}
-                        fill="none"
-                        strokeDasharray="43 321"
-                        strokeDashoffset="-321"
-                        className={`donut-segment ${hoveredDonutKey && hoveredDonutKey !== "loan" ? "dimmed" : ""}`}
-                        onMouseEnter={() => setHoveredDonutKey("loan")}
-                        onMouseLeave={() => setHoveredDonutKey(null)}
-                      />
-                    </svg>
-
-                    <div className="donut-center-text">
-                      <strong>
-                        {hoveredDonutKey === "phishing"
-                          ? "1,192"
-                          : hoveredDonutKey === "impersonation"
-                          ? "795"
-                          : hoveredDonutKey === "promotion"
-                          ? "511"
-                          : hoveredDonutKey === "loan"
-                          ? "342"
-                          : "2,840"}
-                      </strong>
-                      <small>
-                        {hoveredDonutKey === "phishing"
-                          ? "Phishing (42%)"
-                          : hoveredDonutKey === "impersonation"
-                          ? "Bank Scam (28%)"
-                          : hoveredDonutKey === "promotion"
-                          ? "Promo (18%)"
-                          : hoveredDonutKey === "loan"
-                          ? "Loan Scam (12%)"
-                          : "Threats"}
-                      </small>
-                    </div>
-                  </div>
-
-                  <div className="pie-legend-list">
-                    <div
-                      className={`legend-row ${hoveredDonutKey === "phishing" ? "active-legend" : ""}`}
-                      onMouseEnter={() => setHoveredDonutKey("phishing")}
-                      onMouseLeave={() => setHoveredDonutKey(null)}
-                    >
-                      <span className="legend-dot red" />
-                      <div className="legend-info">
-                        <strong>Phishing URLs</strong>
-                        <small>1,192 (42%)</small>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`legend-row ${hoveredDonutKey === "impersonation" ? "active-legend" : ""}`}
-                      onMouseEnter={() => setHoveredDonutKey("impersonation")}
-                      onMouseLeave={() => setHoveredDonutKey(null)}
-                    >
-                      <span className="legend-dot amber" />
-                      <div className="legend-info">
-                        <strong>Bank Impersonation</strong>
-                        <small>795 (28%)</small>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`legend-row ${hoveredDonutKey === "promotion" ? "active-legend" : ""}`}
-                      onMouseEnter={() => setHoveredDonutKey("promotion")}
-                      onMouseLeave={() => setHoveredDonutKey(null)}
-                    >
-                      <span className="legend-dot purple" />
-                      <div className="legend-info">
-                        <strong>Fake Promotions</strong>
-                        <small>511 (18%)</small>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`legend-row ${hoveredDonutKey === "loan" ? "active-legend" : ""}`}
-                      onMouseEnter={() => setHoveredDonutKey("loan")}
-                      onMouseLeave={() => setHoveredDonutKey(null)}
-                    >
-                      <span className="legend-dot blue" />
-                      <div className="legend-info">
-                        <strong>Loan Scams</strong>
-                        <small>342 (12%)</small>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* RECENT INTERCEPTED SMS TABLE */}
-            <section className="admin-panel sms-table-panel">
-              <div className="panel-top">
-                <div>
-                  <h3>Live SMS Interception Stream</h3>
-                  <p>Recent incoming messages scanned by ML & rule engine</p>
-                </div>
-                <button type="button" className="btn-primary" onClick={() => setActiveTab("SMS Ingestion Logs")}>
-                  Full Log Inspection
-                </button>
-              </div>
-
-              <div className="table-wrapper">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Sender</th>
-                      <th>Message Body</th>
-                      <th>Classification</th>
-                      <th>Risk Score</th>
-                      <th>Date / Time</th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSms.slice(0, 5).map((sms) => (
-                      <tr key={sms.id}>
-                        <td><code className="code-tag">{sms.id}</code></td>
-                        <td className="font-semibold">{sms.sender}</td>
-                        <td className="message-cell">{sms.message}</td>
-                        <td>
-                          <span className={`type-tag ${getBadgeClass(sms.fraudType)}`}>
-                            {sms.fraudType}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="risk-meter">
-                            <span className="risk-val">{sms.riskScore}%</span>
-                            <div className="meter-track">
-                              <div
-                                className={`meter-fill ${sms.riskScore > 80 ? "high" : sms.riskScore > 50 ? "medium" : "low"}`}
-                                style={{ width: `${sms.riskScore}%` }}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="subtle-text">{sms.date}</td>
-                        <td>
-                          <span className={`status-pill ${sms.status.toLowerCase()}`}>
-                            {sms.status}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="icon-action-btn"
-                            onClick={() => setSelectedSms(sms)}
-                            title="Inspect Details"
-                          >
-                            <Eye size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {/* SYSTEM COMMANDS CONSOLE INSPECTOR */}
-            <section className="admin-panel command-console-panel">
-              <div className="panel-top">
-                <div className="flex-align">
-                  <Terminal size={22} style={{ color: "var(--primary)" }} />
-                  <div>
-                    <h3>System Command Console Inspector</h3>
-                    <p>Copy & execute core backend, mobile listener, and dev server commands</p>
-                  </div>
-                </div>
-                <span className="status-pill safe">Live Terminal Sync</span>
-              </div>
-
-              <div className="command-cards-grid">
-                {[
-                  {
-                    id: "cmd-backend",
-                    label: "Spring Boot Backend (Gmail SMTP)",
-                    cmd: ".\\mvnw.cmd spring-boot:run",
-                    dir: "backend/",
-                    desc: "Launches Java API server on port 8080 with Gmail SMTP OTP delivery",
-                  },
-                  {
-                    id: "cmd-dev-web",
-                    label: "React Web Client (Admin Console)",
-                    cmd: "cmd.exe /c \"npm run dev\"",
-                    dir: "web-client/",
-                    desc: "Launches React 19 Vite dev server on http://localhost:5173",
-                  },
-                  {
-                    id: "cmd-adb-reverse",
-                    label: "ADB Reverse Gateway Forwarding",
-                    cmd: "adb reverse tcp:8080 tcp:8080",
-                    dir: "android/",
-                    desc: "Forwards localhost:8080 traffic to connected Android phone/emulator",
-                  },
-                  {
-                    id: "cmd-flutter-app",
-                    label: "Argus Flutter Mobile App",
-                    cmd: "flutter run -d 45141JEKB13899",
-                    dir: "frontend/",
-                    desc: "Runs mobile client with live SMS interception background service",
-                  },
-                ].map((item) => (
-                  <div key={item.id} className="command-card-box">
-                    <div className="command-card-header">
-                      <strong>{item.label}</strong>
-                      <span className="dir-tag">{item.dir}</span>
-                    </div>
-                    <p className="command-desc">{item.desc}</p>
-                    <div className="command-code-row">
-                      <code>{item.cmd}</code>
-                      <button
-                        type="button"
-                        className="copy-cmd-btn"
-                        onClick={() => handleCopyCommand(item.id, item.cmd)}
-                      >
-                        {copiedCommandId === item.id ? (
-                          <>
-                            <Check size={14} style={{ color: "var(--emerald)" }} />
-                            <span style={{ color: "var(--emerald)" }}>Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={14} />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                ))}
               </div>
             </section>
           </div>
         )}
+
 
         {/* TAB 2: SMS INGESTION LOGS */}
         {activeTab === "SMS Ingestion Logs" && (
@@ -1181,99 +966,113 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <div className="panel-top flex-wrap">
                 <div>
                   <h3>SMS Ingestion Audit Logs</h3>
-                  <p>Filter, search, and verify all intercepted messages ({filteredSms.length} records)</p>
+                  <p>Audit trail of all intercepted fraud messages ({filteredLogsList.length} records)</p>
+                </div>
+              </div>
+
+              {/* TOOLBAR */}
+              <div className="toolbar-row">
+                <div className="search-input-wrapper">
+                  <Search size={16} className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search logs by ID, sender, or message body..."
+                    value={logsSearch}
+                    onChange={(e) => setLogsSearch(e.target.value)}
+                    className="search-input"
+                  />
+                  {logsSearch && (
+                    <button type="button" className="clear-search-btn" onClick={() => setLogsSearch("")}>
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex-align gap-3">
-                  <div className="filter-button-group">
-                    {["All", "Fraud", "Review", "Safe"].map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        className={`filter-btn ${filterType === t ? "active" : ""}`}
-                        onClick={() => setFilterType(t)}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    className="btn-secondary dark"
-                    onClick={() => alert("Exporting intercepted SMS logs to CSV...")}
-                  >
-                    <Download size={15} /> Export CSV
+                {isLogsFiltered && (
+                  <button type="button" className="btn-reset" onClick={resetLogsFilters}>
+                    <RotateCcw size={14} /> Reset Filters
                   </button>
-                </div>
+                )}
               </div>
 
               <div className="table-wrapper">
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Record ID</th>
-                      <th>Sender</th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("id", logsSortField, logsSortDir, setLogsSortField, setLogsSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Record ID</span>
+                          {logsSortField === "id" ? (
+                            <span className="sort-indicator">{logsSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("sender", logsSortField, logsSortDir, setLogsSortField, setLogsSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Sender</span>
+                          {logsSortField === "sender" ? (
+                            <span className="sort-indicator">{logsSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
                       <th>Message Body</th>
-                      <th>Fraud Category</th>
-                      <th>Risk Score</th>
-                      <th>Intercept Time</th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("date", logsSortField, logsSortDir, setLogsSortField, setLogsSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Scan Time</span>
+                          {logsSortField === "date" ? (
+                            <span className="sort-indicator">{logsSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
                       <th>Status</th>
-                      <th>Inspect & Actions</th>
+                      <th>Inspect</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredSms.map((sms) => (
-                      <tr key={sms.id}>
-                        <td><code className="code-tag">{sms.id}</code></td>
-                        <td className="font-semibold">{sms.sender}</td>
-                        <td className="message-cell">{sms.message}</td>
-                        <td>
-                          <span className={`type-tag ${getBadgeClass(sms.fraudType)}`}>
-                            {sms.fraudType}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="risk-meter">
-                            <span className="risk-val">{sms.riskScore}%</span>
-                            <div className="meter-track">
-                              <div
-                                className={`meter-fill ${sms.riskScore > 80 ? "high" : sms.riskScore > 50 ? "medium" : "low"}`}
-                                style={{ width: `${sms.riskScore}%` }}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="subtle-text">{sms.date}</td>
-                        <td>
-                          <span className={`status-pill ${sms.status.toLowerCase()}`}>
-                            {sms.status}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="action-buttons-row">
+                    {filteredLogsList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="subtle-text">No audit logs match your search.</td>
+                      </tr>
+                    ) : (
+                      filteredLogsList.map((sms) => (
+                        <tr key={sms.id}>
+                          <td><code className="code-tag">{sms.id}</code></td>
+                          <td className="font-semibold">{sms.sender}</td>
+                          <td className="message-cell">{sms.message}</td>
+                          <td className="subtle-text">{sms.date}</td>
+                          <td>
+                            <span className="status-pill fraud">
+                              FRAUD
+                            </span>
+                          </td>
+                          <td>
                             <button
                               type="button"
                               className="icon-action-btn"
                               onClick={() => setSelectedSms(sms)}
-                              title="Inspect SMS"
+                              title="Inspect Log Payload"
                             >
                               <Eye size={16} />
                             </button>
-                            {sms.status !== "Safe" && (
-                              <button
-                                type="button"
-                                className="icon-action-btn success"
-                                onClick={() => handleMarkSafe(sms.id)}
-                                title="Mark Safe"
-                              >
-                                <CheckCircle2 size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1281,117 +1080,162 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
         )}
 
-        {/* TAB 3: RULES & THREAT ENGINE */}
-        {activeTab === "Rules & Threat Engine" && (
+        {/* TAB 4: TEAM (ADMINS) */}
+        {activeTab === "Team" && (
           <div className="tab-content fade-slide">
             <div className="admin-panel">
               <div className="panel-top">
                 <div>
-                  <h3>Rule-Based Fraud Detection Engine</h3>
-                  <p>Active heuristic algorithms and pattern matching definitions</p>
+                  <h3>Team Administrators</h3>
+                  <p>Authorized platform admins ({filteredTeamList.length} members)</p>
                 </div>
-                <button type="button" className="btn-primary" onClick={() => setIsAddRuleOpen(true)}>
-                  <Plus size={16} /> Create Detection Rule
+                <button type="button" className="btn-primary" onClick={() => {
+                  setAddUserPhone("+255");
+                  setAddUserGender("");
+                  setAddUserErrors({});
+                  setIsAddUserOpen(true);
+                }}>
+                  <UserPlus size={16} /> Add Admin
                 </button>
+              </div>
+
+              {/* TOOLBAR */}
+              <div className="toolbar-row">
+                <div className="search-input-wrapper">
+                  <Search size={16} className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search admins by name, email, or phone..."
+                    value={teamSearch}
+                    onChange={(e) => setTeamSearch(e.target.value)}
+                    className="search-input"
+                  />
+                  {teamSearch && (
+                    <button type="button" className="clear-search-btn" onClick={() => setTeamSearch("")}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="toolbar-controls">
+                  <div className="flex-align gap-2">
+                    <Filter size={14} className="subtle-text" />
+                    <select
+                      value={teamStatusFilter}
+                      onChange={(e) => setTeamStatusFilter(e.target.value as "All" | "Active" | "Inactive")}
+                      className="filter-select"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="Active">Active Only</option>
+                      <option value="Inactive">Inactive Only</option>
+                    </select>
+                  </div>
+
+                  {isTeamFiltered && (
+                    <button type="button" className="btn-reset" onClick={resetTeamFilters}>
+                      <RotateCcw size={14} /> Reset Filters
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="table-wrapper">
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Rule ID</th>
-                      <th>Rule Name</th>
-                      <th>Type</th>
-                      <th>Pattern Definition</th>
-                      <th>Weight</th>
-                      <th>Detections</th>
-                      <th>Status</th>
-                      <th>Toggle</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rulesList.map((rule) => (
-                      <tr key={rule.id}>
-                        <td><code className="code-tag">{rule.id}</code></td>
-                        <td className="font-semibold">{rule.name}</td>
-                        <td>
-                          <span className="type-tag blue">{rule.type}</span>
-                        </td>
-                        <td><code className="regex-code">{rule.pattern}</code></td>
-                        <td>
-                          <strong style={{ color: "var(--primary)" }}>{rule.riskWeight}%</strong>
-                        </td>
-                        <td>{rule.matchesCount.toLocaleString()}</td>
-                        <td>
-                          <span className={`status-pill ${rule.enabled ? "safe" : "review"}`}>
-                            {rule.enabled ? "Active" : "Disabled"}
-                          </span>
-                        </td>
-                        <td>
-                          <label className="switch-toggle">
-                            <input
-                              type="checkbox"
-                              checked={rule.enabled}
-                              onChange={() => handleToggleRule(rule.id)}
-                            />
-                            <span className="slider round" />
-                          </label>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: BLACKLIST MANAGEMENT */}
-        {activeTab === "Blacklist Management" && (
-          <div className="tab-content fade-slide">
-            <div className="admin-panel">
-              <div className="panel-top">
-                <div>
-                  <h3>Global Blacklisted Senders</h3>
-                  <p>Phone numbers and shortcodes blocked from reaching end-users</p>
-                </div>
-                <button type="button" className="btn-primary" onClick={() => setIsAddBlacklistOpen(true)}>
-                  <Plus size={16} /> Blacklist Number
-                </button>
-              </div>
-
-              <div className="table-wrapper">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Blocked Sender Number</th>
-                      <th>Reason for Blacklisting</th>
-                      <th>Added By</th>
-                      <th>Date Added</th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("full_name", teamSortField, teamSortDir, setTeamSortField, setTeamSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Admin Name</span>
+                          {teamSortField === "full_name" ? (
+                            <span className="sort-indicator">{teamSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("email", teamSortField, teamSortDir, setTeamSortField, setTeamSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Email / Contact</span>
+                          {teamSortField === "email" ? (
+                            <span className="sort-indicator">{teamSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("active", teamSortField, teamSortDir, setTeamSortField, setTeamSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Status</span>
+                          {teamSortField === "active" ? (
+                            <span className="sort-indicator">{teamSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {blacklist.map((item) => (
-                      <tr key={item.id}>
-                        <td><code className="code-tag">{item.id}</code></td>
-                        <td className="font-semibold">{item.number}</td>
-                        <td>{item.reason}</td>
-                        <td><span className="type-tag dark">{item.addedBy}</span></td>
-                        <td className="subtle-text">{item.dateAdded}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className="icon-action-btn danger"
-                            onClick={() => handleRemoveBlacklist(item.id)}
-                            title="Remove from Blacklist"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                    {usersLoading ? (
+                      <tr>
+                        <td colSpan={4} className="subtle-text">Loading admin team…</td>
+                      </tr>
+                    ) : usersError ? (
+                      <tr>
+                        <td colSpan={4} className="subtle-text" style={{ color: "var(--primary)" }}>
+                          {usersError}
                         </td>
                       </tr>
-                    ))}
+                    ) : filteredTeamList.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="subtle-text">No administrators match your search/filter criteria.</td>
+                      </tr>
+                    ) : (
+                      filteredTeamList.map((user) => (
+                        <tr key={user.user_id}>
+                          <td className="font-semibold">{user.full_name || "—"}</td>
+                          <td>
+                            <div>{user.email}</div>
+                            <small className="subtle-text">{user.phone}</small>
+                          </td>
+                          <td>
+                            <span className={`status-pill ${user.active ? "safe" : "danger"}`}>
+                              {user.active ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="action-buttons-row">
+                              <button
+                                type="button"
+                                className="icon-action-btn"
+                                onClick={() => openEditUser(user)}
+                                title="Edit Admin"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-action-btn danger"
+                                onClick={() => handleDeleteClick(user)}
+                                title="Delete Admin"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1399,175 +1243,192 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
         )}
 
-        {/* TAB 5: USERS & DEVICES */}
-        {activeTab === "Users & Devices" && (
+        {/* TAB 5: USERS (MOBILE APP USERS) */}
+        {activeTab === "Users" && (
           <div className="tab-content fade-slide">
             <div className="admin-panel">
               <div className="panel-top">
                 <div>
-                  <h3>User & Device Registry</h3>
-                  <p>Registered users, device authorization, and account security</p>
+                  <h3>Registered Mobile Users</h3>
+                  <p>Mobile app users synchronized from database ({filteredAppUsersList.length} users)</p>
                 </div>
-                <button type="button" className="btn-primary" onClick={() => alert("Creating new system user...")}>
-                  <UserPlus size={16} /> Add User
-                </button>
+              </div>
+
+              {/* TOOLBAR */}
+              <div className="toolbar-row">
+                <div className="search-input-wrapper">
+                  <Search size={16} className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search mobile users by name, email, phone, or ID..."
+                    value={appUsersSearch}
+                    onChange={(e) => setAppUsersSearch(e.target.value)}
+                    className="search-input"
+                  />
+                  {appUsersSearch && (
+                    <button type="button" className="clear-search-btn" onClick={() => setAppUsersSearch("")}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="toolbar-controls">
+                  <div className="flex-align gap-2">
+                    <Filter size={14} className="subtle-text" />
+                    <select
+                      value={appUsersVerificationFilter}
+                      onChange={(e) => setAppUsersVerificationFilter(e.target.value as "All" | "Verified" | "Pending")}
+                      className="filter-select"
+                    >
+                      <option value="All">All Verifications</option>
+                      <option value="Verified">Verified Only</option>
+                      <option value="Pending">Pending Only</option>
+                    </select>
+
+                    <select
+                      value={appUsersStatusFilter}
+                      onChange={(e) => setAppUsersStatusFilter(e.target.value as "All" | "Active" | "Inactive")}
+                      className="filter-select"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="Active">Active Only</option>
+                      <option value="Inactive">Inactive Only</option>
+                    </select>
+                  </div>
+
+                  {isAppUsersFiltered && (
+                    <button type="button" className="btn-reset" onClick={resetAppUsersFilters}>
+                      <RotateCcw size={14} /> Reset Filters
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="table-wrapper">
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>User ID</th>
-                      <th>Full Name</th>
-                      <th>Email / Contact</th>
-                      <th>Role</th>
-                      <th>Email Verified</th>
-                      <th>Status</th>
-                      <th>Last Active</th>
-                      <th>Account Lock</th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("user_id", appUsersSortField, appUsersSortDir, setAppUsersSortField, setAppUsersSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>User ID</span>
+                          {appUsersSortField === "user_id" ? (
+                            <span className="sort-indicator">{appUsersSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("full_name", appUsersSortField, appUsersSortDir, setAppUsersSortField, setAppUsersSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Full Name</span>
+                          {appUsersSortField === "full_name" ? (
+                            <span className="sort-indicator">{appUsersSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("email", appUsersSortField, appUsersSortDir, setAppUsersSortField, setAppUsersSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Email Address</span>
+                          {appUsersSortField === "email" ? (
+                            <span className="sort-indicator">{appUsersSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
+                      <th>Phone Number</th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("verified", appUsersSortField, appUsersSortDir, setAppUsersSortField, setAppUsersSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Verification</span>
+                          {appUsersSortField === "verified" ? (
+                            <span className="sort-indicator">{appUsersSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="sortable"
+                        onClick={() => handleSortToggle("active", appUsersSortField, appUsersSortDir, setAppUsersSortField, setAppUsersSortDir)}
+                      >
+                        <div className="th-content">
+                          <span>Status</span>
+                          {appUsersSortField === "active" ? (
+                            <span className="sort-indicator">{appUsersSortDir === "asc" ? "▲" : "▼"}</span>
+                          ) : (
+                            <span className="sort-indicator neutral">▲▼</span>
+                          )}
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {usersList.map((user) => (
-                      <tr key={user.id}>
-                        <td><code className="code-tag">{user.id}</code></td>
-                        <td className="font-semibold">{user.name}</td>
-                        <td>
-                          <div>{user.email}</div>
-                          <small className="subtle-text">{user.phone}</small>
-                        </td>
-                        <td>
-                          <span className={`type-tag ${user.role === "ADMIN" ? "impersonation" : "blue"}`}>
-                            {user.role}
-                          </span>
-                        </td>
-                        <td>
-                          {user.isVerified ? (
-                            <span className="badge-inline green"><CheckCircle2 size={14} /> Verified</span>
-                          ) : (
-                            <span className="badge-inline amber"><XCircle size={14} /> Pending</span>
-                          )}
-                        </td>
-                        <td>
-                          <span className={`status-pill ${user.isLocked ? "danger" : "safe"}`}>
-                            {user.isLocked ? "Locked" : "Active"}
-                          </span>
-                        </td>
-                        <td className="subtle-text">{user.lastActive}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className={`icon-action-btn ${user.isLocked ? "success" : "danger"}`}
-                            onClick={() => handleToggleUserLock(user.id)}
-                            title={user.isLocked ? "Unlock Account" : "Lock Account"}
-                          >
-                            {user.isLocked ? <Unlock size={16} /> : <Lock size={16} />}
-                          </button>
+                    {usersLoading ? (
+                      <tr>
+                        <td colSpan={6} className="subtle-text">Loading registered users…</td>
+                      </tr>
+                    ) : usersError ? (
+                      <tr>
+                        <td colSpan={6} className="subtle-text" style={{ color: "var(--primary)" }}>
+                          {usersError}
                         </td>
                       </tr>
-                    ))}
+                    ) : filteredAppUsersList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="subtle-text">No registered mobile users match your search/filter criteria.</td>
+                      </tr>
+                    ) : (
+                      filteredAppUsersList.map((user) => (
+                        <tr key={user.user_id}>
+                          <td><code className="code-tag">{user.user_id.substring(0, 8)}</code></td>
+                          <td className="font-semibold">{user.full_name || "Mobile User"}</td>
+                          <td>{user.email}</td>
+                          <td className="font-semibold">{user.phone || "—"}</td>
+                          <td>
+                            {user.verified ? (
+                              <span className="badge-inline green"><CheckCircle2 size={14} /> Verified</span>
+                            ) : (
+                              <span className="badge-inline amber"><XCircle size={14} /> Pending</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`status-pill ${user.active ? "safe" : "danger"}`}>
+                              {user.active ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 6: SYSTEM SETTINGS */}
-        {activeTab === "System Settings" && (
-          <div className="tab-content fade-slide">
-            <div className="settings-grid">
-              <div className="admin-panel">
-                <div className="panel-top">
-                  <div>
-                    <h3>SMTP Email Configuration</h3>
-                    <p>Active OTP delivery channel via Gmail SMTP</p>
-                  </div>
-                  <span className="status-pill safe">Active</span>
-                </div>
-
-                <div className="settings-form">
-                  <div className="setting-item">
-                    <label>SMTP Host</label>
-                    <input type="text" value="smtp.gmail.com" readOnly className="readonly-input" />
-                  </div>
-                  <div className="setting-item">
-                    <label>SMTP Port</label>
-                    <input type="text" value="587 (STARTTLS)" readOnly className="readonly-input" />
-                  </div>
-                  <div className="setting-item">
-                    <label>Sending Email Address</label>
-                    <input type="text" value="smsfraud.noreply@gmail.com" readOnly className="readonly-input" />
-                  </div>
-                  <div className="setting-item">
-                    <label>App Password Status</label>
-                    <input type="text" value="•••••••••••• (Configured via ${MAIL_APP_PASSWORD})" readOnly className="readonly-input" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="admin-panel">
-                <div className="panel-top">
-                  <div>
-                    <h3>SMS Interception Gateway</h3>
-                    <p>Android device listener & backend sync status</p>
-                  </div>
-                  <span className="status-pill safe">Online</span>
-                </div>
-
-                <div className="settings-form">
-                  <div className="setting-item">
-                    <label>Interception Mode</label>
-                    <input type="text" value="Automatic Background Ingestion" readOnly className="readonly-input" />
-                  </div>
-                  <div className="setting-item">
-                    <label>Default Threat Alert Threshold</label>
-                    <input type="text" value="80% Risk Index" readOnly className="readonly-input" />
-                  </div>
-                  <div className="setting-item">
-                    <label>PostgreSQL Database</label>
-                    <input type="text" value="jdbc:postgresql://localhost:5432/sms_fraud" readOnly className="readonly-input" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="admin-panel">
-                <div className="panel-top">
-                  <div>
-                    <h3>Real-Time Webhook Gateway</h3>
-                    <p>Mobile app scan ingestion & push broadcast API</p>
-                  </div>
-                  <span className="status-pill safe">Listening</span>
-                </div>
-
-                <div className="settings-form">
-                  <div className="setting-item">
-                    <label>Mobile Ingestion API</label>
-                    <input type="text" value="POST http://localhost:8080/api/scans" readOnly className="readonly-input" />
-                  </div>
-                  <div className="setting-item">
-                    <label>System Fallback UUID</label>
-                    <input type="text" value="00000000-0000-0000-0000-000000000001" readOnly className="readonly-input" />
-                  </div>
-                  <div className="setting-item">
-                    <label>Auto-Blacklist Trigger</label>
-                    <input type="text" value="90% Risk Weight Index" readOnly className="readonly-input" />
-                  </div>
-                </div>
               </div>
             </div>
           </div>
         )}
       </main>
 
-      {/* INSPECT SMS MODAL */}
+      {/* INSPECT SMS LOG DIALOG */}
       {selectedSms && (
         <div className="modal-backdrop" onClick={() => setSelectedSms(null)}>
           <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="flex-align">
                 <ShieldAlert size={22} style={{ color: "var(--primary)" }} />
-                <h3>SMS Payload Inspection</h3>
+                <h3>SMS Log Inspection Payload</h3>
               </div>
               <button type="button" className="close-btn" onClick={() => setSelectedSms(null)}>
                 <X size={18} />
@@ -1592,231 +1453,349 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
               <div className="modal-field">
                 <label>INTERCEPTED MESSAGE BODY</label>
-                <div className="message-box">{selectedSms.message}</div>
+                <div className="message-box" style={{
+                  backgroundColor: "var(--bg)",
+                  padding: "14px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--border)",
+                  fontSize: "0.875rem",
+                  lineHeight: 1.5,
+                  marginTop: "6px"
+                }}>
+                  {selectedSms.message}
+                </div>
               </div>
 
               <div className="modal-info-row margin-top">
                 <div>
                   <small>CLASSIFICATION</small>
-                  <span className={`type-tag ${getBadgeClass(selectedSms.fraudType)}`}>
-                    {selectedSms.fraudType}
+                  <span className="status-pill fraud" style={{ marginTop: "4px" }}>
+                    FRAUD
                   </span>
                 </div>
-                <div>
-                  <small>CALCULATED THREAT SCORE</small>
-                  <div className="risk-meter">
-                    <strong style={{ color: selectedSms.riskScore > 80 ? "var(--primary)" : "var(--amber)" }}>
-                      {selectedSms.riskScore}%
-                    </strong>
-                  </div>
-                </div>
               </div>
-            </div>
-
-            <div className="modal-footer">
-              <button type="button" className="btn-secondary" onClick={() => handleMarkSafe(selectedSms.id)}>
-                <CheckCircle2 size={16} /> Mark as Safe
-              </button>
-              <button type="button" className="btn-primary danger" onClick={() => handleBlacklistFromModal(selectedSms)}>
-                <ShieldAlert size={16} /> Confirm Fraud & Blacklist Sender
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ADD RULE MODAL */}
-      {isAddRuleOpen && (
-        <div className="modal-backdrop" onClick={() => setIsAddRuleOpen(false)}>
-          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Add Detection Rule</h3>
-              <button type="button" className="close-btn" onClick={() => setIsAddRuleOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddRule}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>Rule Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Fake Bank Account Closure"
-                    value={newRuleName}
-                    onChange={(e) => setNewRuleName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Rule Type</label>
-                  <select
-                    value={newRuleType}
-                    onChange={(e) => setNewRuleType(e.target.value as DetectionRule["type"])}
-                  >
-                    <option value="Keyword">Keyword Match</option>
-                    <option value="Regex Pattern">Regex Pattern</option>
-                    <option value="Link Analyzer">Link Analyzer Domain</option>
-                    <option value="Sender Spoofing">Sender Spoofing</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Pattern Definition (Regex or String)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. (tuma|lipia)\s+.*(namba)"
-                    value={newRulePattern}
-                    onChange={(e) => setNewRulePattern(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Threat Weight Index ({newRuleWeight}%)</label>
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    value={newRuleWeight}
-                    onChange={(e) => setNewRuleWeight(Number(e.target.value))}
-                  />
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={() => setIsAddRuleOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  Save Rule
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ADD BLACKLIST MODAL */}
-      {isAddBlacklistOpen && (
-        <div className="modal-backdrop" onClick={() => setIsAddBlacklistOpen(false)}>
-          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Blacklist Sender Number</h3>
-              <button type="button" className="close-btn" onClick={() => setIsAddBlacklistOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddBlacklist}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>Phone Number or Sender ID</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. +255 712 345 678"
-                    value={newBlacklistNumber}
-                    onChange={(e) => setNewBlacklistNumber(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Reason for Blacklisting</label>
-                  <textarea
-                    placeholder="e.g. Repeated phishing attempt with scam URL"
-                    value={newBlacklistReason}
-                    onChange={(e) => setNewBlacklistReason(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={() => setIsAddBlacklistOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary danger">
-                  Add to Blacklist
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {/* EDIT PROFILE MODAL */}
-      {isEditProfileOpen && (
-        <div className="modal-backdrop" onClick={() => setIsEditProfileOpen(false)}>
+      {/* ADD ADMIN MODAL */}
+      {isAddUserOpen && (
+        <div className="modal-backdrop" onClick={() => !addUserBusy && setIsAddUserOpen(false)}>
           <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="flex-align">
-                <div className="admin-avatar">{adminProfile.initials}</div>
-                <div>
-                  <h3 style={{ margin: 0 }}>Edit Admin Profile</h3>
-                  <small style={{ color: "var(--subtle)" }}>Update administrator details & preferences</small>
-                </div>
+                <UserPlus size={20} style={{ color: "var(--primary)" }} />
+                <h3>Add New Admin</h3>
               </div>
-              <button type="button" className="close-btn" onClick={() => setIsEditProfileOpen(false)}>
+              <button type="button" className="close-btn" onClick={() => setIsAddUserOpen(false)} disabled={addUserBusy}>
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProfile}>
+            <form onSubmit={handleCreateUser} noValidate>
+              <div className="modal-body">
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Juma Kabwe"
+                      value={addUserFullName}
+                      onChange={(e) => setAddUserFullName(e.target.value)}
+                      className={addUserErrors.fullName ? "input-error" : ""}
+                    />
+                    {addUserErrors.fullName && <span className="form-error">{addUserErrors.fullName}</span>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="admin@gmail.com"
+                      value={addUserEmail}
+                      onChange={(e) => setAddUserEmail(e.target.value)}
+                      className={addUserErrors.email ? "input-error" : ""}
+                    />
+                    {addUserErrors.email && <span className="form-error">{addUserErrors.email}</span>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Phone Number (Tanzania)</label>
+                    <input
+                      type="tel"
+                      placeholder="+255754000000"
+                      value={addUserPhone}
+                      onChange={(e) => setAddUserPhone(e.target.value)}
+                      className={addUserErrors.phone ? "input-error" : ""}
+                    />
+                    {addUserErrors.phone && <span className="form-error">{addUserErrors.phone}</span>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Gender</label>
+                    <select
+                      value={addUserGender}
+                      onChange={(e) => setAddUserGender(e.target.value as "MALE" | "FEMALE")}
+                      className={addUserErrors.gender ? "input-error" : ""}
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="MALE">Male</option>
+                      <option value="FEMALE">Female</option>
+                    </select>
+                    {addUserErrors.gender && <span className="form-error">{addUserErrors.gender}</span>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Password</label>
+                    <div className="password-input-wrapper">
+                      <input
+                        type={showAddUserPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={addUserPassword}
+                        onChange={(e) => setAddUserPassword(e.target.value)}
+                        className={addUserErrors.password ? "input-error" : ""}
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle-btn"
+                        onClick={() => setShowAddUserPassword(!showAddUserPassword)}
+                        aria-label="Toggle password visibility"
+                      >
+                        {showAddUserPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {addUserErrors.password && <span className="form-error">{addUserErrors.password}</span>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Confirm Password</label>
+                    <div className="password-input-wrapper">
+                      <input
+                        type={showAddUserConfirmPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={addUserConfirmPassword}
+                        onChange={(e) => setAddUserConfirmPassword(e.target.value)}
+                        className={addUserErrors.confirmPassword ? "input-error" : ""}
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle-btn"
+                        onClick={() => setShowAddUserConfirmPassword(!showAddUserConfirmPassword)}
+                        aria-label="Toggle password visibility"
+                      >
+                        {showAddUserConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {addUserErrors.confirmPassword && <span className="form-error">{addUserErrors.confirmPassword}</span>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setIsAddUserOpen(false)} disabled={addUserBusy}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={addUserBusy}>
+                  {addUserBusy ? "Creating…" : "Add Admin"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT USER MODAL */}
+      {isEditUserOpen && (
+        <div className="modal-backdrop" onClick={() => !editUserBusy && setIsEditUserOpen(false)}>
+          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex-align">
+                <Pencil size={20} style={{ color: "var(--primary)" }} />
+                <h3>Edit Admin Account</h3>
+              </div>
+              <button type="button" className="close-btn" onClick={() => setIsEditUserOpen(false)} disabled={editUserBusy}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateUser} noValidate>
               <div className="modal-body">
                 <div className="form-group">
-                  <label>Full Display Name</label>
+                  <label>Full Name</label>
                   <input
                     type="text"
-                    placeholder="e.g. System Administrator"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    required
+                    value={editUserFullName}
+                    onChange={(e) => setEditUserFullName(e.target.value)}
+                    className={editUserErrors.fullName ? "input-error" : ""}
                   />
+                  {editUserErrors.fullName && <span className="form-error">{editUserErrors.fullName}</span>}
                 </div>
 
                 <div className="form-group">
                   <label>Email Address</label>
                   <input
                     type="email"
-                    placeholder="e.g. admin@smsfraud.com"
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    required
+                    value={editUserEmail}
+                    onChange={(e) => setEditUserEmail(e.target.value)}
+                    className={editUserErrors.email ? "input-error" : ""}
                   />
+                  {editUserErrors.email && <span className="form-error">{editUserErrors.email}</span>}
                 </div>
 
                 <div className="form-group">
-                  <label>Phone Contact Number</label>
+                  <label>Phone Number (Tanzania)</label>
                   <input
                     type="tel"
-                    placeholder="e.g. +255 700 000 001"
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
+                    value={editUserPhone}
+                    onChange={(e) => setEditUserPhone(e.target.value)}
+                    className={editUserErrors.phone ? "input-error" : ""}
                   />
+                  {editUserErrors.phone && <span className="form-error">{editUserErrors.phone}</span>}
                 </div>
 
                 <div className="form-group">
-                  <label>System Role & Permissions</label>
-                  <input
-                    type="text"
-                    value={adminProfile.role}
-                    readOnly
-                    className="readonly-input"
-                  />
+                  <label className="flex-align" style={{ gap: "8px", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={editUserActive}
+                      onChange={(e) => setEditUserActive(e.target.checked)}
+                      style={{ width: "auto" }}
+                    />
+                    Account active
+                  </label>
                 </div>
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={() => setIsEditProfileOpen(false)}>
-                  Cancel
+                <button type="button" className="btn-secondary" onClick={openResetPassword} disabled={editUserBusy}>
+                  <KeyRound size={16} /> Reset Password
                 </button>
-                <button type="submit" className="btn-primary">
-                  Save Changes
+                <button type="submit" className="btn-primary" disabled={editUserBusy}>
+                  {editUserBusy ? "Saving…" : "Save Changes"}
                 </button>
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* RESET PASSWORD MODAL */}
+      {isResetPasswordOpen && (
+        <div className="modal-backdrop" onClick={() => !resetPasswordBusy && setIsResetPasswordOpen(false)}>
+          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex-align">
+                <KeyRound size={20} style={{ color: "var(--primary)" }} />
+                <h3>Reset Password</h3>
+              </div>
+              <button type="button" className="close-btn" onClick={() => setIsResetPasswordOpen(false)} disabled={resetPasswordBusy}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPassword} noValidate>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>New Password</label>
+                  <div className="password-input-wrapper">
+                    <input
+                      type={showResetPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={resetPasswordValue}
+                      onChange={(e) => setResetPasswordValue(e.target.value)}
+                      className={resetPasswordErrors.password ? "input-error" : ""}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowResetPassword(!showResetPassword)}
+                      aria-label="Toggle password visibility"
+                    >
+                      {showResetPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  {resetPasswordErrors.password && <span className="form-error">{resetPasswordErrors.password}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Confirm New Password</label>
+                  <div className="password-input-wrapper">
+                    <input
+                      type={showResetPasswordConfirm ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={resetPasswordConfirm}
+                      onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                      className={resetPasswordErrors.confirmPassword ? "input-error" : ""}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowResetPasswordConfirm(!showResetPasswordConfirm)}
+                      aria-label="Toggle password visibility"
+                    >
+                      {showResetPasswordConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  {resetPasswordErrors.confirmPassword && <span className="form-error">{resetPasswordErrors.confirmPassword}</span>}
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setIsResetPasswordOpen(false)} disabled={resetPasswordBusy}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={resetPasswordBusy}>
+                  {resetPasswordBusy ? "Saving…" : "Set New Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE USER CONFIRM MODAL */}
+      {deleteTarget && (
+        <div className="modal-backdrop" onClick={() => !deleteBusy && setDeleteTarget(null)}>
+          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex-align">
+                <Trash2 size={20} style={{ color: "var(--primary)" }} />
+                <h3>Delete Account</h3>
+              </div>
+              <button type="button" className="close-btn" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>
+                Are you sure you want to delete{" "}
+                <strong>{deleteTarget.full_name || deleteTarget.email}</strong>?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary danger"
+                onClick={() => void handleDeleteUser()}
+                disabled={deleteBusy}
+              >
+                {deleteBusy ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST NOTIFICATION */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.type === "success" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+          <span>{toast.message}</span>
         </div>
       )}
     </div>

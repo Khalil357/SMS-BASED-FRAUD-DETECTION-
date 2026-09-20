@@ -82,8 +82,11 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+    final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
           // Background Gradient accent at the top
@@ -91,7 +94,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             top: 0,
             left: 0,
             right: 0,
-            height: MediaQuery.of(context).size.height * 0.32,
+            height: MediaQuery.of(context).size.height * 0.35,
             child: Container(
               decoration: BoxDecoration(
                 gradient: isDark
@@ -109,52 +112,92 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 30),
 
                     // Logo Icon with entrance animation
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 100),
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.all(22),
+                          padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
-                            color: theme.primaryColor.withValues(alpha: 0.08),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: theme.primaryColor.withValues(alpha: 0.15),
-                              width: 2,
-                            ),
+color: isDark ? AppTheme.cyberCard : Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark ? AppTheme.cyberRed.withOpacity(0.4) : theme.colorScheme.primary.withOpacity(0.3),
+                            width: 2.5,
+                          ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (isDark ? AppTheme.cyberRed : theme.colorScheme.primary).withOpacity(0.15),
+                                blurRadius: 20,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
                           child: Icon(
-                            Icons.lock_reset_outlined,
-                            size: 64,
-                            color: theme.primaryColor,
+                            Icons.lock_reset_rounded,
+                            size: 48,
+                            color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
-                    // Titles
+                    // Cyber Badge & Titles
                     FadeSlideTransition(
                       delay: const Duration(milliseconds: 200),
                       child: Column(
                         children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppTheme.cyberGreen.withOpacity(0.12) : theme.colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark ? AppTheme.cyberGreen.withOpacity(0.3) : theme.colorScheme.primary.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.security_rounded,
+                                  size: 13,
+                                  color: isDark ? AppTheme.cyberGreen : theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'ARGUS • PASSWORD RESET',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                    color: isDark ? AppTheme.cyberGreen : theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           Text(
                             'Reset Password',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.headlineLarge,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Text(
                             'Create a new, strong password to secure your account',
                             textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 28),
 
                     // Reset Password Input Card
                     FadeSlideTransition(
@@ -162,10 +205,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       child: Container(
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: theme.cardTheme.color,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            color: borderColor,
                             width: 1,
                           ),
                           boxShadow: AppTheme.cardShadow(isDark),
@@ -223,7 +266,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
 
                     // Back to Login Link
                     FadeSlideTransition(
@@ -231,13 +274,19 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.arrow_back, size: 16, color: theme.colorScheme.primary),
+                          Icon(Icons.arrow_back, size: 16, color: isDark ? AppTheme.cyberCyan : theme.colorScheme.primary),
                           const SizedBox(width: 4),
                           TextButton(
                             onPressed: () {
                               widget.onNavigate(AuthPage.login);
                             },
-                            child: const Text('Cancel'),
+                            child: Text(
+                              'Cancel & Return to Login',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? AppTheme.cyberCyan : theme.colorScheme.primary,
+                              ),
+                            ),
                           ),
                         ],
                       ),

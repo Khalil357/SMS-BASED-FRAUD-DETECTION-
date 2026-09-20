@@ -33,18 +33,24 @@ const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!phone.trim()) {
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) {
       setErrorMessage("Please enter your phone number");
       return;
     }
 
+    if (!/^\+255[67]\d{8}$/.test(cleanPhone)) {
+      setErrorMessage("Please enter a valid Tanzanian phone number (e.g. +255754000000)");
+      return;
+    }
+
     setIsLoading(true);
-    const result = await requestPasswordReset({ phoneNumber: phone.trim() });
+    const result = await requestPasswordReset({ phoneNumber: cleanPhone });
     setIsLoading(false);
 
     if (result.success) {
       setSuccessMessage(result.message ?? "Reset code sent");
-      setTimeout(() => onResetRequested(phone.trim()), 1000);
+      setTimeout(() => onResetRequested(cleanPhone), 1000);
     } else {
       setErrorMessage(result.message ?? "Something went wrong");
     }
@@ -55,14 +61,14 @@ const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
       <AuthCard>
         <AuthIcon icon={KeyRound} size={40} />
         <AuthTitle>Forgot Password</AuthTitle>
-        <AuthDescription>Enter your phone number to receive a reset code.</AuthDescription>
+        <AuthDescription>Enter your Tanzanian phone number to receive a reset code.</AuthDescription>
 
         <form onSubmit={handleSendCode} noValidate>
           <AuthField
             label="Phone Number"
             icon={Phone}
             type="tel"
-            placeholder="+27 82 123 4567"
+            placeholder="+255754000000"
             value={phone}
             onChange={setPhone}
           />

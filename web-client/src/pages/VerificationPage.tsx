@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { MailCheck } from "lucide-react";
 import AuthLayout from "../components/auth/AuthLayout";
 import AuthCard from "../components/auth/AuthCard";
@@ -30,15 +30,9 @@ const VerificationPage: React.FC<VerificationPageProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (email && email !== "your email") {
-      resendLoginOtp({ email }).then((res) => {
-        if (res.success) {
-          setInfoMessage("Verification code dispatched to " + email);
-        }
-      });
-    }
-  }, [email]);
+  // NOTE: the login endpoint already sends the OTP. We deliberately do NOT resend
+  // it on mount here — that used to fire (twice under StrictMode) on top of the
+  // login email, so users received three codes. Resend only happens explicitly.
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();

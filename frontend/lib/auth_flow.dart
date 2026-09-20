@@ -24,8 +24,7 @@ class _AuthFlowState extends State<AuthFlow> {
   String? _resetPhoneNumber;
   String? _resetVerificationCode;
   bool _isResetPasswordFlow = true;
-  bool _isLoginFlow = false;
-  String? _loginEmail;
+  bool _isLoginVerificationFlow = false;
   bool _isCheckingSession = true;
   StreamSubscription? _sessionSubscription;
 
@@ -68,7 +67,7 @@ class _AuthFlowState extends State<AuthFlow> {
       _resetPhoneNumber = phoneNumber;
       _resetVerificationCode = null;
       _isResetPasswordFlow = true;
-      _isLoginFlow = false;
+      _isLoginVerificationFlow = false;
       _page = AuthPage.verification;
     });
   }
@@ -78,17 +77,17 @@ class _AuthFlowState extends State<AuthFlow> {
       _resetPhoneNumber = phoneNumber;
       _resetVerificationCode = null;
       _isResetPasswordFlow = false;
-      _isLoginFlow = false;
+      _isLoginVerificationFlow = false;
       _page = AuthPage.verification;
     });
   }
 
-  void _beginLoginVerification(String email) {
+  void _beginLoginVerification(String identifier) {
     setState(() {
-      _loginEmail = email;
-      _resetPhoneNumber = null;
+      _resetPhoneNumber = identifier;
+      _resetVerificationCode = null;
       _isResetPasswordFlow = false;
-      _isLoginFlow = true;
+      _isLoginVerificationFlow = true;
       _page = AuthPage.verification;
     });
   }
@@ -113,8 +112,7 @@ class _AuthFlowState extends State<AuthFlow> {
     final page = switch (_page) {
       AuthPage.login => LoginPage(
           onNavigate: _goTo,
-          onLoginOtpRequired: _beginLoginVerification,
-          onUnverifiedAccount: _beginSignUpVerification,
+          onUnverifiedAccount: _beginLoginVerification,
         ),
       AuthPage.signUp => SignUpPage(
           onNavigate: _goTo,
@@ -126,14 +124,15 @@ class _AuthFlowState extends State<AuthFlow> {
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
           isResetPasswordFlow: _isResetPasswordFlow,
-          isLoginFlow: _isLoginFlow,
-          loginEmail: _loginEmail,
-          onVerified: (code) {
-            if (_isLoginFlow) {
-              _goTo(AuthPage.dashboard);
-            } else if (_isResetPasswordFlow) {
+          isLoginVerificationFlow: _isLoginVerificationFlow,
+          onVerified: (code) async {
+            if (_isResetPasswordFlow) {
               _verifyPasswordReset(code);
+            } else if (_isLoginVerificationFlow) {
+              _goTo(AuthPage.dashboard);
             } else {
+              // Registration verification does not issue a JWT. Require a real
+              // login instead of creating a placeholder authenticated session.
               _goTo(AuthPage.login);
             }
           },

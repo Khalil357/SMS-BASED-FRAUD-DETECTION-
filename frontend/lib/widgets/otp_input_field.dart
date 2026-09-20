@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../app_theme.dart';
@@ -62,46 +62,15 @@ class _OtpInputFieldState extends State<OtpInputField> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Stack(
-      children: [
-        // Hidden input field capturing soft-keyboard typing, backspaces, and pastes
-        Positioned(
-          left: 0,
-          top: 0,
-          width: 1,
-          height: 1,
-          child: Opacity(
-            opacity: 0.0,
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              keyboardType: TextInputType.number,
-              maxLength: widget.length,
-              autofocus: true,
-              showCursor: false,
-              enableInteractiveSelection: true,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-              decoration: const InputDecoration(
-                counterText: '',
-                contentPadding: EdgeInsets.zero,
-                border: InputBorder.none,
-              ),
-              onChanged: _onTextChanged,
-            ),
-          ),
-        ),
-
-        // Visual OTP Boxes
-        GestureDetector(
-          onTap: () {
-            if (!_focusNode.hasFocus) {
-              _focusNode.requestFocus();
-            }
-          },
-          behavior: HitTestBehavior.opaque,
-          child: FittedBox(
+    return Container(
+      height: 60,
+      width: double.infinity,
+      alignment: Alignment.center,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Visual OTP Boxes
+          FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -149,8 +118,39 @@ return Container(
               }),
             ),
           ),
-        ),
-      ],
+
+          // Transparent TextField directly on top capturing taps natively
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.0,
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                keyboardType: TextInputType.number,
+                maxLength: widget.length,
+                autofocus: true,
+                showCursor: false,
+                enableInteractiveSelection: false,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                decoration: const InputDecoration(
+                  counterText: '',
+                  contentPadding: EdgeInsets.zero,
+                  border: InputBorder.none,
+                ),
+                onChanged: _onTextChanged,
+                onTap: () {
+                  if (!_focusNode.hasFocus) {
+                    _focusNode.requestFocus();
+                  }
+                  SystemChannels.textInput.invokeMethod('TextInput.show');
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

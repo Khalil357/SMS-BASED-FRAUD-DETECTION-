@@ -27,10 +27,18 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
       return;
     }
 
-    // 1. Ensure session token is loaded in background isolate
+    // 1. Initialize notification service in background isolate
+    await NotificationService.init();
+
+    // 2. Ensure session token is loaded in background isolate
     await AuthService.loadSession();
 
-    // 2. Perform rule-based threat analysis
+    // 3. Check if ingestion enabled
+    final isIngestionEnabled = await SmsStorageService.getBoolSetting(
+        SmsStorageService.keyIngestionEnabled, true);
+    if (!isIngestionEnabled) return;
+
+    // 4. Perform rule-based threat analysis
     final result = SmsDetectionService.analyze(message: body, sender: sender);
 
     // 3. Persist the log entry locally
@@ -53,35 +61,45 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
         messageBody: body,
         source: 'AUTO_LISTENER',
       );
-      if (backendResult['success'] == true && backendResult['isScam'] != null) {
-        final backendData = backendResult['data'];
-        if (backendData is Map<String, dynamic>) {
-          final scanId = backendData['scanId']?.toString();
-          logEntry['scanId'] = scanId;
-          logEntry['backendId'] = scanId;
-        }
-        
-        final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
+if (backendResult['success'] == true) {
+        final data = backendResult['data'] is Map<String, dynamic>
+            ? AuthService.normalizeScan(backendResult['data'] as Map<String, dynamic>)
+            : AuthService.normalizeScan(backendResult);
+
+        final isScam = data['isScam'] == true;
         final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
         final type = isScam ? 'Fraud' : 'Safe';
         final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
 
         logEntry['type'] = type;
         logEntry['threat'] = threatLevel;
+        final backendId = data['backendId'] ?? data['scanId'] ?? data['scan_id'] ?? data['id'];
+        if (backendId != null) {
+          logEntry['backendId'] = backendId.toString();
+          logEntry['scanId'] = backendId.toString();
+          logEntry['scan_id'] = backendId.toString();
+        }
         if (backendResult['label'] != null) {
           final confPct = (conf * 100).toStringAsFixed(1);
           final threatPct = (threatLevel * 100).toStringAsFixed(1);
           (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("[Ingestion Background Scan Error] $e");
+    }
 
     // 5. Add to local log storage
     await SmsStorageService.addLog(logEntry);
 
     // 6. Trigger alert notification for Fraud or a high threat index.
     final threatLevel = (logEntry['threat'] as num).toDouble();
-    if (logEntry['type'] == 'Fraud' || threatLevel >= 0.50) {
+    final isAlertEnabled = await SmsStorageService.getBoolSetting(
+        SmsStorageService.keyNotificationsEnabled, true);
+    final alertThreshold = await SmsStorageService.getDoubleSetting(
+        SmsStorageService.keyNotificationThreshold, 0.50);
+
+    if (isAlertEnabled && (logEntry['type'] == 'Fraud' || threatLevel >= alertThreshold)) {
       await NotificationService.showThreatAlert(
         sender: sender,
         message: body,
@@ -103,13 +121,16 @@ class SmsIngestionService {
   static Stream<Map<String, dynamic>> get smsStream => _smsStreamController.stream;
 
   /// Request SMS read and receive permissions (Android Only)
-  static Future<bool> requestSmsPermission() async {
+  static Future<bool> requestSmsPermission({bool forcePrompt = false}) async {
     if (!Platform.isAndroid) return false;
     
-    // We request RECEIVE_SMS and READ_SMS
     final statusReceive = await Permission.sms.status;
-    if (statusReceive.isDenied) {
+    if (forcePrompt || statusReceive.isDenied || statusReceive.isPermanentlyDenied) {
       final result = await Permission.sms.request();
+      if (result.isPermanentlyDenied) {
+        await openAppSettings();
+        return false;
+      }
       return result.isGranted;
     }
     return statusReceive.isGranted;
@@ -180,28 +201,33 @@ class SmsIngestionService {
               messageBody: body,
               source: 'AUTO_LISTENER',
             );
-            if (backendResult['success'] == true && backendResult['isScam'] != null) {
-              final backendData = backendResult['data'];
-              if (backendData is Map<String, dynamic>) {
-                final scanId = backendData['scanId']?.toString();
-                logEntry['scanId'] = scanId;
-                logEntry['backendId'] = scanId;
-              }
-              
-              final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
+if (backendResult['success'] == true) {
+              final data = backendResult['data'] is Map<String, dynamic>
+                  ? AuthService.normalizeScan(backendResult['data'] as Map<String, dynamic>)
+                  : AuthService.normalizeScan(backendResult);
+
+              final isScam = data['isScam'] == true;
               final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
               final type = isScam ? 'Fraud' : 'Safe';
               final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
 
               logEntry['type'] = type;
               logEntry['threat'] = threatLevel;
+              final backendId = data['backendId'] ?? data['scanId'] ?? data['scan_id'] ?? data['id'];
+              if (backendId != null) {
+                logEntry['backendId'] = backendId.toString();
+                logEntry['scanId'] = backendId.toString();
+                logEntry['scan_id'] = backendId.toString();
+              }
               if (backendResult['label'] != null) {
                 final confPct = (conf * 100).toStringAsFixed(1);
                 final threatPct = (threatLevel * 100).toStringAsFixed(1);
                 (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
               }
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint("[Ingestion Foreground Scan Error] $e");
+          }
 
           await SmsStorageService.addLog(logEntry);
 
@@ -212,10 +238,10 @@ class SmsIngestionService {
           final isAlertEnabled = await SmsStorageService.getBoolSetting(
               SmsStorageService.keyNotificationsEnabled, true);
           final alertThreshold = await SmsStorageService.getDoubleSetting(
-              SmsStorageService.keyNotificationThreshold, 0.80);
+              SmsStorageService.keyNotificationThreshold, 0.50);
 
           final threatLevel = (logEntry['threat'] as num).toDouble();
-          if (isAlertEnabled && threatLevel >= alertThreshold) {
+          if (isAlertEnabled && (logEntry['type'] == 'Fraud' || threatLevel >= alertThreshold)) {
             await NotificationService.showThreatAlert(
               sender: sender,
               message: body,

@@ -232,33 +232,29 @@ class _SafetyTipsPageState extends State<SafetyTipsPage> with SingleTickerProvid
           ),
           const SizedBox(height: 14),
 
-          // Category Selector Chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: ['All', 'Banking', 'Delivery', 'Impersonation', 'Rewards', 'General']
-                  .map((cat) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(cat),
-                          selected: _selectedCategory == cat,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setState(() => _selectedCategory = cat);
-                            }
-                          },
-                          selectedColor: theme.colorScheme.primary,
-                          labelStyle: GoogleFonts.inter(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                            color: _selectedCategory == cat
-                                ? Colors.white
-                                : (isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
-                          ),
-                        ),
-                      ))
-                  .toList(),
-            ),
+          // Category Selector Chips (Wrapped for easy selection without horizontal scrolling)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ['All', 'Banking', 'Delivery', 'Impersonation', 'Rewards', 'General']
+                .map((cat) => ChoiceChip(
+                      label: Text(cat),
+                      selected: _selectedCategory == cat,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() => _selectedCategory = cat);
+                        }
+                      },
+                      selectedColor: theme.colorScheme.primary,
+                      labelStyle: GoogleFonts.inter(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: _selectedCategory == cat
+                            ? Colors.white
+                            : (isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+                      ),
+                    ))
+                .toList(),
           ),
           const SizedBox(height: 16),
 

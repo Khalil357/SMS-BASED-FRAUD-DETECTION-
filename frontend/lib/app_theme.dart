@@ -2,6 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
+  // Cybersecurity Theme Colors (Reference Redesign Palette)
+  static const Color cyberBg            = Color(0xFF08090D);
+  static const Color cyberCard          = Color(0xFF111217);
+  static const Color cyberCardSecondary = Color(0xFF15161C);
+  static const Color cyberBorder        = Color(0xFF25262D);
+  static const Color cyberRed           = Color(0xFFFF2948);
+  static const Color cyberRedStrong     = Color(0xFFFF1F3D);
+  static const Color cyberGreen         = Color(0xFF00D98B);
+  static const Color cyberCyan          = Color(0xFFFF2948);
+  static const Color cyberTextPrimary   = Color(0xFFF5F5F7);
+  static const Color cyberTextSecondary = Color(0xFF9A9BA3);
+  static const Color cyberTextMuted     = Color(0xFF666872);
+
   // Brand Colors
   static const Color primaryLight = Color(0xFFD32F2F);
   static const Color primaryDark  = Color(0xFFEF5350);
@@ -10,22 +23,23 @@ class AppTheme {
   static const Color amber = Color(0xFFF59E0B);
 
   static const Color bgLight  = Color(0xFFF8FAFC);   // Slate-50
-  static const Color bgDark   = Color(0xFF0F172A);   // Slate-900
+  static const Color bgDark   = cyberBg;             // Dark cybersecurity navy/black #08090D
 
   static const Color cardLight = Colors.white;
-  static const Color cardDark  = Color(0xFF1E293B);  // Slate-800
+  static const Color cardDark  = cyberCard;          // Deep dark card #111217
 
   static const Color borderLight = Color(0xFFE2E8F0); // Slate-200
-  static const Color borderDark  = Color(0xFF334155); // Slate-700
+  static const Color borderDark  = cyberBorder;       // Dark gray #25262D
 
   static const Color subtleLight = Color(0xFF64748B); // Slate-500
-  static const Color subtleDark  = Color(0xFF94A3B8); // Slate-400
+  static const Color subtleDark  = cyberTextSecondary;// Muted gray #9A9BA3
 
   static const Color textBodyLight = Color(0xFF334155); // Slate-700
-  static const Color textBodyDark  = Color(0xFFE2E8F0); // Slate-200
+  static const Color textBodyDark  = cyberTextPrimary;  // Near white #F5F5F7
 
   static const Color errorLight = Color(0xFFE11D48);
-  static const Color errorDark  = Color(0xFFFB7185);
+  static const Color errorDark  = cyberRed;
+
 
   // Gradient
   static const LinearGradient primaryGradient = LinearGradient(

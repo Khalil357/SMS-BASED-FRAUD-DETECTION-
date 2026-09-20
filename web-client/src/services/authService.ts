@@ -1,4 +1,5 @@
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://54.242.107.64';
+const TOKEN_KEY = 'argus_admin_token';
 
 interface LoginParams {
   email: string;
@@ -10,35 +11,37 @@ interface LoginResult {
   message?: string;
 }
 
+/** Read the stored admin JWT (if any). */
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Clear the stored admin JWT. */
+export function clearToken(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function storeToken(token?: string | null): void {
+  if (token) {
+    try {
+      localStorage.setItem(TOKEN_KEY, token);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export async function login({ email, password }: LoginParams): Promise<LoginResult> {
   const cleanEmail = email.trim().toLowerCase();
-
-  // Hardcoded Admin Credential Check
-  if (cleanEmail === "smsfraud.noreply@gmail.com" && password === "Admin000!") {
-    return { success: true, message: "Admin Authentication Successful! OTP Code sent to email." };
-  }
-
-  try {
-    const response = await fetch(`${BASE_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: cleanEmail, password }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return { success: false, message: data.message ?? "Login failed" };
-    }
-
-    return { success: true, message: data.message ?? "Verification code sent" };
-  } catch {
-    // Fallback for hardcoded admin if server is unreachable
-    if (cleanEmail === "smsfraud.noreply@gmail.com") {
-      return { success: true, message: "Offline Admin Authentication Successful" };
-    }
-    return { success: false, message: "Unable to reach the server" };
-  }
+  return postJson("/api/auth/login", { email: cleanEmail, password });
 }
 
 interface VerifyLoginOtpParams {
@@ -92,10 +95,28 @@ export async function verifyLoginOtp({
   verificationCode,
 }: VerifyLoginOtpParams): Promise<ApiResult> {
   const cleanEmail = email.trim().toLowerCase();
-  if (cleanEmail === "smsfraud.noreply@gmail.com") {
-    return { success: true, message: "Admin OTP verified successfully" };
+
+  try {
+    const response = await fetch(`${BASE_URL}/api/auth/verify-login-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: cleanEmail, verificationCode }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, message: data.message ?? "Verification failed" };
+    }
+
+    // LoginResponse is nested under `data`; persist the JWT for admin API calls.
+    const token = data.data?.token ?? data.token;
+    storeToken(token);
+
+    return { success: true, message: data.message ?? "Login successful" };
+  } catch {
+    return { success: false, message: "Unable to reach the server" };
   }
-  return postJson("/api/auth/verify-login-otp", { email: cleanEmail, verificationCode });
 }
 
 export async function resendLoginOtp({ email }: EmailOnlyParams): Promise<ApiResult> {
@@ -123,4 +144,26 @@ export async function resetPassword({
   newPassword,
 }: ResetPasswordParams): Promise<ApiResult> {
   return postJson("/api/auth/reset-password", { phoneNumber, verificationCode, newPassword });
+}
+
+/** True when the stored JWT exists and has not expired. Signature validation remains server-side. */
+export function hasActiveSession(): boolean {
+  const token = getToken();
+  if (!token) return false;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const payload = JSON.parse(atob(padded)) as { exp?: number };
+    if (typeof payload.exp !== 'number' || payload.exp * 1000 <= Date.now()) {
+      clearToken();
+      return false;
+    }
+    return true;
+  } catch {
+    clearToken();
+    return false;
+  }
 }

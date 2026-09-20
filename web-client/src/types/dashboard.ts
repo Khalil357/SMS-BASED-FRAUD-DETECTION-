@@ -30,31 +30,10 @@ export interface SmsRecord {
   status: 'Fraud' | 'Review' | 'Safe';
 }
 
-export interface DetectionRule {
-  id: string;
-  name: string;
-  type: 'Keyword' | 'Regex Pattern' | 'Link Analyzer' | 'Sender Spoofing';
-  pattern: string;
-  riskWeight: number;
-  enabled: boolean;
-  matchesCount: number;
-}
-
 export interface BlacklistedSender {
   id: string;
   number: string;
   reason: string;
   addedBy: string;
   dateAdded: string;
-}
-
-export interface SystemUser {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  role: 'ADMIN' | 'USER';
-  isVerified: boolean;
-  isLocked: boolean;
-  lastActive: string;
 }
