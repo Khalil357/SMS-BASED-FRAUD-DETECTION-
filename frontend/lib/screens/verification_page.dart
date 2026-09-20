@@ -10,6 +10,7 @@ class VerificationPage extends StatefulWidget {
   final Navigate onNavigate;
   final String phoneNumber;
   final bool isResetPasswordFlow;
+  final bool isLoginVerificationFlow;
   final ValueChanged<String> onVerified;
 
   const VerificationPage({
@@ -17,6 +18,7 @@ class VerificationPage extends StatefulWidget {
     required this.onNavigate,
     required this.phoneNumber,
     this.isResetPasswordFlow = true,
+    this.isLoginVerificationFlow = false,
     required this.onVerified,
   });
 
@@ -52,10 +54,15 @@ class _VerificationPageState extends State<VerificationPage> {
       _isLoading = true;
     });
 
-    final result = await AuthService.verifyResetCode(
-      phoneNumber: widget.phoneNumber,
-      verificationCode: _otpCode,
-    );
+    final result = widget.isLoginVerificationFlow
+        ? await AuthService.verifyLoginOtp(
+            identifier: widget.phoneNumber,
+            verificationCode: _otpCode,
+          )
+        : await AuthService.verifyResetCode(
+            phoneNumber: widget.phoneNumber,
+            verificationCode: _otpCode,
+          );
 
     setState(() {
       _isLoading = false;
@@ -87,7 +94,7 @@ class _VerificationPageState extends State<VerificationPage> {
 
     if (widget.phoneNumber.isEmpty) {
       setState(() {
-        _errorMessage = 'Phone number is missing. Please go back.';
+        _errorMessage = 'Account identifier is missing. Please go back.';
       });
       return;
     }
@@ -96,7 +103,9 @@ class _VerificationPageState extends State<VerificationPage> {
       _isLoading = true;
     });
 
-    final result = await AuthService.resendCode(phoneNumber: widget.phoneNumber);
+    final result = widget.isLoginVerificationFlow
+        ? await AuthService.resendLoginOtp(identifier: widget.phoneNumber)
+        : await AuthService.resendCode(phoneNumber: widget.phoneNumber);
 
     setState(() {
       _isLoading = false;
@@ -124,6 +133,9 @@ class _VerificationPageState extends State<VerificationPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final destinationLabel = widget.phoneNumber.contains('@')
+        ? 'email address'
+        : 'phone number';
 
     return Scaffold(
       body: Stack(
@@ -199,7 +211,7 @@ class _VerificationPageState extends State<VerificationPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "We've sent a 6-digit verification code to your email and phone number (${widget.phoneNumber})",
+                          "We've sent a 6-digit verification code to your $destinationLabel (${widget.phoneNumber})",
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium,
                         ),

@@ -869,7 +869,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     bool evaluatedByBackend = false;
 
     if (backendResponse['success'] == true && backendResponse['data'] != null) {
-      final data = backendResponse['data'] as Map<String, dynamic>;
+      final data = backendResponse['data'] is Map<String, dynamic>
+          ? AuthService.normalizeScan(backendResponse['data'] as Map<String, dynamic>)
+          : AuthService.normalizeScan(backendResponse);
       result = SmsDetectionService.parseBackendResult(
         backendData: data,
         originalMessage: text,
@@ -881,17 +883,30 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
     }
 
-    final logEntry = {
-      'id': 'manual_${DateTime.now().millisecondsSinceEpoch}',
+    final backendId = backendResponse['data'] != null
+        ? (backendResponse['data']['scanId'] ??
+            backendResponse['data']['scan_id'] ??
+            backendResponse['data']['id'] ??
+            backendResponse['scanId'])?.toString()
+        : null;
+
+    final logEntry = AuthService.normalizeScan({
+      'id': backendId ?? 'manual_${DateTime.now().millisecondsSinceEpoch}',
+      'scanId': backendId,
+      'scan_id': backendId,
+      'backendId': backendId,
       'sender': 'Manual Scan',
       'message': text,
+      'messageBody': text,
       'type': result.classification,
+      'isScam': result.classification == 'Fraud',
       'time': DateTime.now().toIso8601String(),
+      'scannedAt': DateTime.now().toIso8601String(),
       'threat': result.threatLevel,
       'matchedReasons': result.matchedReasons,
       'hasFeedback': false,
       'userFeedback': null,
-    };
+    });
 
     await SmsStorageService.addLog(logEntry);
 
@@ -3354,13 +3369,17 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   Widget _buildProfileTab(
       String name, Map<String, dynamic> user, ThemeData theme, bool isDark) {
-    final fullName = user['full_name'] ?? user['fullName'] ?? user['name'] ?? user['username'] ?? (name.isNotEmpty ? name : 'User');
-    final rawEmail = user['email'] ?? user['email_address'] ?? user['emailAddress'] ?? user['gmail'] ?? user['user_email'];
-    final email = (rawEmail != null && rawEmail.toString().isNotEmpty) ? rawEmail.toString() : 'Not Provided';
-    final rawPhone = user['phone_number'] ?? user['phoneNumber'] ?? user['phone'] ?? user['mobile'] ?? user['phone_no'];
-    final phone = (rawPhone != null && rawPhone.toString().isNotEmpty) ? rawPhone.toString() : 'Not Provided';
-    final rawGender = user['gender'] ?? user['sex'];
-    final gender = (rawGender != null && rawGender.toString().isNotEmpty) ? rawGender.toString() : 'Not Specified';
+    final rawName = (user['full_name'] ?? user['fullName'] ?? user['name'] ?? user['username'] ?? name)?.toString().trim() ?? '';
+    final fullName = rawName.isNotEmpty ? rawName : 'User';
+
+    final rawEmail = (user['email'] ?? user['email_address'] ?? user['emailAddress'] ?? user['gmail'] ?? user['user_email'])?.toString().trim() ?? '';
+    final email = rawEmail.isNotEmpty ? rawEmail : 'Email not available';
+
+    final rawPhone = (user['phone_number'] ?? user['phoneNumber'] ?? user['phone'] ?? user['mobile'] ?? user['phone_no'])?.toString().trim() ?? '';
+    final phone = rawPhone.isNotEmpty ? rawPhone : 'Phone not available';
+
+    final rawGender = (user['gender'] ?? user['sex'])?.toString().trim() ?? '';
+    final gender = rawGender.isNotEmpty ? rawGender : 'Not specified';
 
     final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
     final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
