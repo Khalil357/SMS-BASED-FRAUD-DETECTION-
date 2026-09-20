@@ -20,7 +20,7 @@ public interface AuthService {
 
     RegisterResponse register(RegisterRequest req);
 
-    Object login(LoginRequest req);
+    LoginPendingResponse login(LoginRequest req);
 
     OtpResponse requestPasswordReset(OtpRequest req);
 

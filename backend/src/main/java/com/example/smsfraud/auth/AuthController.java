@@ -44,8 +44,8 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<Object>> login(@Valid @RequestBody LoginRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok("Login status", authService.login(req)));
+    public ResponseEntity<ApiResponse<LoginPendingResponse>> login(@Valid @RequestBody LoginRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("OTP sent for verification", authService.login(req)));
     }
 
     @PostMapping("/password-resets")

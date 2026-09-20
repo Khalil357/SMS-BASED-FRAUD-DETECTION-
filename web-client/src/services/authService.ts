@@ -1,4 +1,4 @@
-const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8080';
+const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://54.242.107.64';
 const TOKEN_KEY = 'argus_admin_token';
 
 interface LoginParams {
@@ -144,4 +144,26 @@ export async function resetPassword({
   newPassword,
 }: ResetPasswordParams): Promise<ApiResult> {
   return postJson("/api/auth/reset-password", { phoneNumber, verificationCode, newPassword });
+}
+
+/** True when the stored JWT exists and has not expired. Signature validation remains server-side. */
+export function hasActiveSession(): boolean {
+  const token = getToken();
+  if (!token) return false;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const payload = JSON.parse(atob(padded)) as { exp?: number };
+    if (typeof payload.exp !== 'number' || payload.exp * 1000 <= Date.now()) {
+      clearToken();
+      return false;
+    }
+    return true;
+  } catch {
+    clearToken();
+    return false;
+  }
 }

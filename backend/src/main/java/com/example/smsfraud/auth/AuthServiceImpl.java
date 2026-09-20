@@ -91,7 +91,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public Object login(LoginRequest req) {
+    public LoginPendingResponse login(LoginRequest req) {
         User user;
         if (req.email() != null && !req.email().isBlank()) {
             user = userRepository.findByEmail(req.email())
@@ -110,24 +110,27 @@ public class AuthServiceImpl implements AuthService {
         if (user.isLocked()) {
             throw new ForbiddenException("Account is locked");
         }
+        // Unverified accounts proceed to the OTP step; entering the emailed code both
+        // proves email ownership and (in verifyLoginOtp) marks the account verified.
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
-        if (!user.isVerified()) {
-            if (user.getEmail() != null && !user.getEmail().isBlank()) {
-                String otp = otpService.issueCode(user.getEmail());
-                emailService.sendVerificationCode(user.getEmail(), otp);
-            }
+        // Two-step login: credentials are valid, so issue one OTP and deliver it
+        // through every configured channel. Delivery adapters safely log and skip
+        // themselves when their provider credentials are not configured.
+        // No token is returned here — the client must verify the OTP via
+        // verifyLoginOtp() to receive the JWT.
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            String otp = otpService.issueCode(user.getEmail());
+            emailService.sendVerificationCode(user.getEmail(), otp);
             if (user.getPhone() != null && !user.getPhone().isBlank()) {
-                String otp = otpService.issueCode(user.getPhone());
-                smsService.sendSms(user.getPhone(), "ARGUS: Your verification code is " + otp + ". Do not share this code with anyone.");
+                smsService.sendSms(user.getPhone(),
+                        "ARGUS: Your login code is " + otp
+                                + ". Do not share this code with anyone. It expires in 5 minutes.");
             }
-            return new LoginPendingResponse(user.getEmail(), "Account is not verified. OTP sent; verify to complete login");
         }
 
-        String accessToken = tokenProvider.generateAccessToken(user.getUserId(), user.getTokenVersion());
-        String refreshToken = tokenProvider.generateRefreshToken(user.getUserId(), user.getTokenVersion());
-        return new LoginResponse(accessToken, refreshToken, user.getUserId(), user.getFullName(), user.getEmail(), user.getPhone());
+        return new LoginPendingResponse(user.getEmail(), "OTP sent; verify to complete login");
     }
 
     @Override
@@ -147,31 +150,15 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void verifyCode(VerifyCodeRequest req) {
-        String identifier = req.phoneNumber().trim();
-        User user = userRepository.findByPhone(identifier)
-                .or(() -> userRepository.findByEmail(identifier))
-                .orElse(null);
-
-        boolean isValid = otpService.verifyCode(identifier, req.verificationCode());
-        if (!isValid && user != null) {
-            if (user.getPhone() != null && otpService.verifyCode(user.getPhone(), req.verificationCode())) {
-                isValid = true;
-                identifier = user.getPhone();
-            } else if (user.getEmail() != null && otpService.verifyCode(user.getEmail(), req.verificationCode())) {
-                isValid = true;
-                identifier = user.getEmail();
-            }
-        }
-
-        if (!isValid) {
+        if (!otpService.verifyCode(req.phoneNumber(), req.verificationCode())) {
             throw new BadRequestException("Invalid or expired verification code");
         }
-
-        otpService.invalidate(identifier);
-        if (user != null) {
-            user.setVerified(true);
-            userRepository.save(user);
-        }
+        otpService.invalidate(req.phoneNumber());
+        userRepository.findByPhone(req.phoneNumber())
+                .ifPresent(user -> {
+                    user.setVerified(true);
+                    userRepository.save(user);
+                });
     }
 
     @Override
@@ -180,7 +167,6 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Invalid or expired verification code");
         }
         User user = userRepository.findByPhone(req.phoneNumber())
-                .or(() -> userRepository.findByEmail(req.phoneNumber()))
                 .orElseThrow(() -> new NotFoundException("No account found for that phone number"));
         user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
         user.setTokenVersion(user.getTokenVersion() + 1);
@@ -192,36 +178,28 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void resendLoginOtp(String email) {
         User user = userRepository.findByEmail(email)
-                .or(() -> userRepository.findByPhone(email))
                 .orElseThrow(() -> new NotFoundException("No account found for that email"));
         String otp = otpService.issueCode(user.getEmail());
         emailService.sendVerificationCode(user.getEmail(), otp);
+        if (user.getPhone() != null && !user.getPhone().isBlank()) {
+            smsService.sendSms(user.getPhone(),
+                    "ARGUS: Your login code is " + otp
+                            + ". Do not share this code with anyone. It expires in 5 minutes.");
+        }
     }
 
     @Override
     public LoginResponse verifyLoginOtp(String email, String verificationCode) {
-        String identifier = email.trim();
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
-                .orElseThrow(() -> new NotFoundException("No account found for that email or phone"));
-
-        boolean isValid = otpService.verifyCode(identifier, verificationCode);
-        if (!isValid) {
-            if (user.getEmail() != null && otpService.verifyCode(user.getEmail(), verificationCode)) {
-                isValid = true;
-                identifier = user.getEmail();
-            } else if (user.getPhone() != null && otpService.verifyCode(user.getPhone(), verificationCode)) {
-                isValid = true;
-                identifier = user.getPhone();
-            }
-        }
-
-        if (!isValid) {
+        if (!otpService.verifyCode(email, verificationCode)) {
             throw new BadRequestException("Invalid or expired verification code");
         }
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new NotFoundException("No account found for that email"));
         
-        otpService.invalidate(identifier);
+        otpService.invalidate(email);
         user.setLastLoginAt(Instant.now());
+        // The OTP was delivered to this email and matched, so the account is now
+        // genuinely verified.
         user.setVerified(true);
         userRepository.save(user);
 

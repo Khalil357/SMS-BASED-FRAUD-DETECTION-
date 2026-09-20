@@ -16,9 +16,13 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+RUN addgroup -S spring && adduser -S spring -G spring
+
 # Copy only the built JAR from the builder stage
 COPY --from=builder /workspace/target/*.jar app.jar
 
+USER spring:spring
+
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]

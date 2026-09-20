@@ -30,16 +30,6 @@ export interface SmsRecord {
   status: 'Fraud' | 'Review' | 'Safe';
 }
 
-export interface DetectionRule {
-  id: string;
-  name: string;
-  type: 'Keyword' | 'Regex Pattern' | 'Link Analyzer' | 'Sender Spoofing';
-  pattern: string;
-  riskWeight: number;
-  enabled: boolean;
-  matchesCount: number;
-}
-
 export interface BlacklistedSender {
   id: string;
   number: string;
