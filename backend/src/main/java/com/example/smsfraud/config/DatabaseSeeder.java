@@ -10,7 +10,6 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Value;
 
 @Component
 public class DatabaseSeeder implements CommandLineRunner {
@@ -20,34 +19,20 @@ public class DatabaseSeeder implements CommandLineRunner {
     private final UserRepository userRepository;
     private final UserRoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
-    private final boolean adminSeedEnabled;
-    private final String adminEmail;
-    private final String adminPhone;
-    private final String adminPassword;
 
     public DatabaseSeeder(UserRepository userRepository,
                           UserRoleRepository roleRepository,
-                          PasswordEncoder passwordEncoder,
-                          @Value("${app.seed-admin.enabled:false}") boolean adminSeedEnabled,
-                          @Value("${app.seed-admin.email:}") String adminEmail,
-                          @Value("${app.seed-admin.phone:}") String adminPhone,
-                          @Value("${app.seed-admin.password:}") String adminPassword) {
+                          PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
-        this.adminSeedEnabled = adminSeedEnabled;
-        this.adminEmail = adminEmail;
-        this.adminPhone = adminPhone;
-        this.adminPassword = adminPassword;
     }
 
     @Override
     @Transactional
     public void run(String... args) {
         seedRoles();
-        if (adminSeedEnabled) {
-            seedAdminUser();
-        }
+        seedAdminUser();
     }
 
     private void seedRoles() {
@@ -66,25 +51,21 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private void seedAdminUser() {
-        if (adminEmail.isBlank() || adminPhone.isBlank() || adminPassword.length() < 12) {
-            throw new IllegalStateException(
-                    "ADMIN_EMAIL, ADMIN_PHONE and an ADMIN_PASSWORD of at least 12 characters are required " +
-                            "when ADMIN_SEED_ENABLED=true");
-        }
+        String adminEmail = "james06alexander@gmail.com";
         if (userRepository.findByEmail(adminEmail).isEmpty()) {
             UserRole adminRole = roleRepository.findByRoleName("ADMIN").orElseThrow();
 
             User admin = new User();
             admin.setEmail(adminEmail);
-            admin.setPhone(adminPhone);
+            admin.setPhone("+00000000001"); // Admins might not need a phone, but it's unique
             admin.setFullName("System Administrator");
-            admin.setPasswordHash(passwordEncoder.encode(adminPassword));
+            admin.setPasswordHash(passwordEncoder.encode("admin123"));
             admin.setRole(adminRole);
             admin.setVerified(true); // Auto verify admin
             admin.setActive(true);
 
             userRepository.save(admin);
-            log.info("Seeded admin user: {}", adminEmail);
+            log.info("Seeded admin user: james06alexander@gmail.com / admin123");
         }
     }
 }

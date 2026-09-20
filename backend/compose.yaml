@@ -1,122 +1,14 @@
-x-logging: &default-logging
-  driver: local
-  options:
-    max-size: '10m'
-    max-file: '3'
-
 services:
-  nginx:
-    image: nginx:1.28-alpine
-    restart: unless-stopped
-    logging: *default-logging
-    ports:
-      - '${HTTP_PORT:-80}:80'
-      - '${HTTPS_PORT:-443}:443'
-    volumes:
-      - ./nginx/${NGINX_CONFIG:-nginx-http.conf}:/etc/nginx/conf.d/default.conf:ro
-      - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
-      - ./certbot/www:/var/www/certbot:ro
-      - ./certbot/conf:/etc/letsencrypt:ro
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - NET_BIND_SERVICE
-      - SETGID
-      - SETUID
-    depends_on:
-      app:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  app:
-    image: alexanderjames101/sms-fraud-backend:latest
-    restart: unless-stopped
-    logging: *default-logging
-    mem_limit: 512m
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    env_file:
-      - .env
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-sms_fraud}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-sms_app}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
-    expose:
-      - '8080'
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 45s
-
-  # One-off certificate client used by the EC2 renewal timer. It is excluded
-  # from ordinary `docker compose up` unless the tools profile is requested.
-  certbot:
-    image: certbot/certbot:v5.5.0
-    profiles: ["tools"]
-    logging: *default-logging
-    volumes:
-      - ./certbot/www:/var/www/certbot
-      - ./certbot/conf:/etc/letsencrypt
-
-  db:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    logging: *default-logging
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-sms_fraud}
-      POSTGRES_USER: ${POSTGRES_USER:-sms_app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    logging: *default-logging
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}"]
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=$${REDIS_PASSWORD} redis-cli ping | grep PONG"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+    image: 'redis:latest'
+    ports:
+      - '6379'
 
-volumes:
-  postgres_data:
-  redis_data:
+  postgres:
+    image: 'postgres:latest'
+    environment:
+      - 'POSTGRES_DB=${POSTGRES_DB:-sms_fraud}'
+      - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sms_pass}'
+      - 'POSTGRES_USER=${POSTGRES_USER:-sms_app}'
+    ports:
+      - '5432:5432'

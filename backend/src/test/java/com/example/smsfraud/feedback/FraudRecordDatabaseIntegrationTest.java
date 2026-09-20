@@ -17,8 +17,6 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.web.servlet.MockMvc;
@@ -68,17 +66,12 @@ class FraudRecordDatabaseIntegrationTest {
 
     private JdbcTemplate jdbc;
     private MockMvc mvc;
-    private UUID testUserId;
-    private UUID otherUserId;
 
     @BeforeEach
     void setUp() {
         // Only the disposable container is used; application datasource settings are never loaded.
         repository.deleteAllInBatch();
         jdbc = new JdbcTemplate(dataSource);
-        jdbc.update("DELETE FROM users WHERE email LIKE 'feedback-test-%@example.invalid'");
-        testUserId = createTestUser();
-        otherUserId = createTestUser();
         mvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler(), new FeedbackExceptionHandler())
                 .build();
@@ -108,8 +101,7 @@ class FraudRecordDatabaseIntegrationTest {
         UUID removedId = saveFraudScan().getScanId();
         UUID retainedId = saveFraudScan().getScanId();
 
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", removedId)
-                        .principal(authentication(testUserId)))
+        mvc.perform(delete("/api/v1/fraud-records/{recordId}", removedId))
                 .andExpect(status().isNoContent())
                 .andExpect(content().string(""));
 
@@ -123,11 +115,10 @@ class FraudRecordDatabaseIntegrationTest {
         UUID missingId = UUID.randomUUID();
         UUID retainedId = saveFraudScan().getScanId();
 
-        assertThatThrownBy(() -> service.deleteRecord(missingId, testUserId))
+        assertThatThrownBy(() -> service.deleteRecord(missingId))
                 .isInstanceOf(RecordNotFoundException.class)
                 .hasMessage("Fraud record with ID " + missingId + " not found.");
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", missingId)
-                        .principal(authentication(testUserId)))
+        mvc.perform(delete("/api/v1/fraud-records/{recordId}", missingId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
 
@@ -138,11 +129,9 @@ class FraudRecordDatabaseIntegrationTest {
     void repeatedDeletionReturns404() throws Exception {
         UUID recordId = saveFraudScan().getScanId();
 
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", recordId)
-                        .principal(authentication(testUserId)))
+        mvc.perform(delete("/api/v1/fraud-records/{recordId}", recordId))
                 .andExpect(status().isNoContent());
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", recordId)
-                        .principal(authentication(testUserId)))
+        mvc.perform(delete("/api/v1/fraud-records/{recordId}", recordId))
                 .andExpect(status().isNotFound());
 
         assertThat(rowCount(recordId)).isZero();
@@ -154,7 +143,7 @@ class FraudRecordDatabaseIntegrationTest {
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 
         assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
-            service.deleteRecord(recordId, testUserId);
+            service.deleteRecord(recordId);
             repository.flush();
             assertThat(rowCount(recordId)).isZero();
             throw new IllegalStateException("Simulated failure after deletion");
@@ -164,54 +153,11 @@ class FraudRecordDatabaseIntegrationTest {
         assertThat(rowCount(recordId)).isEqualTo(1L);
     }
 
-    @Test
-    void cannotDeleteAnotherUsersRecord() throws Exception {
-        UUID foreignRecordId = saveFraudScan(otherUserId).getScanId();
-
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", foreignRecordId)
-                        .principal(authentication(testUserId)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404));
-
-        assertThat(rowCount(foreignRecordId)).isEqualTo(1L);
-    }
-
-    @Test
-    void cannotDeleteOwnerlessRecord() throws Exception {
-        UUID ownerlessRecordId = saveFraudScan(null).getScanId();
-
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", ownerlessRecordId)
-                        .principal(authentication(testUserId)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404));
-
-        assertThat(rowCount(ownerlessRecordId)).isEqualTo(1L);
-    }
-
     private SmsScan saveFraudScan() {
-        return saveFraudScan(testUserId);
-    }
-
-    private SmsScan saveFraudScan(UUID userId) {
         SmsScan scan = new SmsScan();
-        scan.setUserId(userId);
         scan.setMessageBody("Test fraud scan for false-positive feedback");
         scan.setVerdict("FRAUD");
         return repository.saveAndFlush(scan);
-    }
-
-    private UUID createTestUser() {
-        UUID userId = UUID.randomUUID();
-        jdbc.update("""
-                INSERT INTO users (user_id, email, role_id)
-                SELECT ?, ?, role_id FROM user_roles WHERE role_name = 'USER'
-                """, userId, "feedback-test-" + userId + "@example.invalid");
-        return userId;
-    }
-
-    private Authentication authentication(UUID userId) {
-        return UsernamePasswordAuthenticationToken.authenticated(
-                userId.toString(), null, java.util.List.of());
     }
 
     private Long rowCount(UUID recordId) {

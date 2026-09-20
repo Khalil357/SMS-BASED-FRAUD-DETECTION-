@@ -1,7 +1,6 @@
 package com.example.smsfraud.otp;
 
 import org.springframework.stereotype.Component;
-import org.springframework.context.annotation.Profile;
 
 import java.util.Map;
 import java.util.Optional;
@@ -9,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** In-memory {@link OtpStore} for development; replace with Redis for production. */
 @Component
-@Profile("!prod")
 public class InMemoryOtpStore implements OtpStore {
 
     private final Map<String, OtpCode> store = new ConcurrentHashMap<>();

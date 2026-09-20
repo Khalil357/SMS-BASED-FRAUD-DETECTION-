@@ -8,13 +8,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.UUID;
 
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -31,9 +31,6 @@ class FraudRecordControllerTest {
 
     private MockMvc mvc;
     private final UUID scanId = UUID.fromString("9c428bf8-b4aa-4f2b-a19c-cdb360f1df32");
-    private final UUID userId = UUID.fromString("f6259721-3304-497f-a9b7-a9196d95704c");
-    private final Authentication authentication =
-            UsernamePasswordAuthenticationToken.authenticated(userId.toString(), null, java.util.List.of());
 
     @BeforeEach
     void setUp() {
@@ -45,43 +42,43 @@ class FraudRecordControllerTest {
 
     @Test
     void deletesExistingRecordAndReturnsNoContent() throws Exception {
-        when(repository.deleteOwnedById(scanId, userId)).thenReturn(1);
+        when(repository.existsById(scanId)).thenReturn(true);
 
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", scanId).principal(authentication))
+        mvc.perform(delete("/api/v1/fraud-records/{recordId}", scanId))
                 .andExpect(status().isNoContent())
                 .andExpect(content().string(""));
 
-        verify(repository).deleteOwnedById(scanId, userId);
+        var ordered = inOrder(repository);
+        ordered.verify(repository).existsById(scanId);
+        ordered.verify(repository).deleteById(scanId);
     }
 
     @Test
-    void missingOrForeignRecordReturnsNotFound() throws Exception {
-        when(repository.deleteOwnedById(scanId, userId)).thenReturn(0);
+    void missingRecordReturnsNotFoundWithoutDeleting() throws Exception {
+        when(repository.existsById(scanId)).thenReturn(false);
 
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", scanId).principal(authentication))
+        mvc.perform(delete("/api/v1/fraud-records/{recordId}", scanId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").value("Fraud record with ID " + scanId + " not found."));
 
-        verify(repository).deleteOwnedById(scanId, userId);
+        verify(repository, never()).deleteById(scanId);
     }
 
     @Test
     void repeatedDeletionReturnsNotFound() throws Exception {
-        when(repository.deleteOwnedById(scanId, userId)).thenReturn(1, 0);
+        when(repository.existsById(scanId)).thenReturn(true, false);
 
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", scanId).principal(authentication))
-                .andExpect(status().isNoContent());
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", scanId).principal(authentication))
-                .andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/fraud-records/{recordId}", scanId)).andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/fraud-records/{recordId}", scanId)).andExpect(status().isNotFound());
 
-        verify(repository, org.mockito.Mockito.times(2)).deleteOwnedById(scanId, userId);
+        verify(repository).deleteById(scanId);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"invalid", "42", "9c428bf8-b4aa-4f2b-a19c-cdb360f1df3z"})
     void malformedRecordIdReturnsBadRequestWithoutDatabaseAccess(String recordId) throws Exception {
-        mvc.perform(delete("/api/v1/fraud-records/{recordId}", recordId).principal(authentication))
+        mvc.perform(delete("/api/v1/fraud-records/{recordId}", recordId))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
 

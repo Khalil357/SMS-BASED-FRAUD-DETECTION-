@@ -115,19 +115,12 @@ public class AuthServiceImpl implements AuthService {
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
-        // Two-step login: credentials are valid, so issue one OTP and deliver it
-        // through every configured channel. Delivery adapters safely log and skip
-        // themselves when their provider credentials are not configured.
+        // Two-step login: credentials are valid, so issue + email the OTP.
         // No token is returned here — the client must verify the OTP via
         // verifyLoginOtp() to receive the JWT.
         if (user.getEmail() != null && !user.getEmail().isBlank()) {
             String otp = otpService.issueCode(user.getEmail());
             emailService.sendVerificationCode(user.getEmail(), otp);
-            if (user.getPhone() != null && !user.getPhone().isBlank()) {
-                smsService.sendSms(user.getPhone(),
-                        "ARGUS: Your login code is " + otp
-                                + ". Do not share this code with anyone. It expires in 5 minutes.");
-            }
         }
 
         return new LoginPendingResponse(user.getEmail(), "OTP sent; verify to complete login");
@@ -181,11 +174,6 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new NotFoundException("No account found for that email"));
         String otp = otpService.issueCode(user.getEmail());
         emailService.sendVerificationCode(user.getEmail(), otp);
-        if (user.getPhone() != null && !user.getPhone().isBlank()) {
-            smsService.sendSms(user.getPhone(),
-                    "ARGUS: Your login code is " + otp
-                            + ". Do not share this code with anyone. It expires in 5 minutes.");
-        }
     }
 
     @Override

@@ -1,7 +1,6 @@
 package com.example.smsfraud.feedback;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,11 +19,8 @@ public class FraudRecordController {
     }
 
     @DeleteMapping("/{recordId}")
-    public ResponseEntity<Void> deleteInaccurateRecord(
-            @PathVariable("recordId") UUID recordId,
-            Authentication authentication) {
-        UUID userId = UUID.fromString(authentication.getName());
-        fraudRecordService.deleteRecord(recordId, userId);
+    public ResponseEntity<Void> deleteInaccurateRecord(@PathVariable("recordId") UUID recordId) {
+        fraudRecordService.deleteRecord(recordId);
         return ResponseEntity.noContent().build();
     }
 }
