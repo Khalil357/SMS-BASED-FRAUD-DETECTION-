@@ -19,6 +19,7 @@ import '../widgets/scam_detected_card.dart';
 import 'safety_tips_page.dart';
 import 'terms_and_conditions_page.dart';
 import 'blocked_numbers_screen.dart';
+import 'history_scan_screen.dart';
 
 class DashboardPage extends StatefulWidget {
   final Navigate onNavigate;
@@ -346,6 +347,11 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     }
   }
 
+  void _openHistoryScan() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (c) => const HistoryScanScreen()));
+    if (mounted) _loadStoredData();
+  }
+
   void _handleAddBlockedNumber({String? reason}) {
     final number = _blockNumberController.text.trim();
     if (number.isEmpty) return;
@@ -472,6 +478,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       InteractiveThreatChart(logs: _smsLogs),
       const SizedBox(height: 24),
       _buildMetricCard(title: 'Safety Index', value: '${_safetyIndex.toStringAsFixed(1)}%', icon: Icons.insights, iconColor: Colors.teal, theme: theme, isDark: isDark),
+      const SizedBox(height: 20),
+      _buildHistoryScanCard(theme, isDark),
       const SizedBox(height: 24),
       CustomTextField(controller: _scanController, labelText: 'Paste SMS Text', hintText: 'Check for scams...', prefixIcon: Icons.sms_outlined),
       const SizedBox(height: 16),
@@ -512,6 +520,36 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   Widget _buildMetricCard({required String title, required String value, required IconData icon, required Color iconColor, required ThemeData theme, required bool isDark, String? subtitle}) {
     return Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: theme.cardTheme.color, borderRadius: BorderRadius.circular(20), border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))), child: Row(children: [Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: iconColor.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: iconColor, size: 24)), const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 12)), Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))]))]));
+  }
+
+  Widget _buildHistoryScanCard(ThemeData theme, bool isDark) {
+    return Material(
+      color: theme.cardTheme.color,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 0,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _openHistoryScan,
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+            boxShadow: AppTheme.cardShadow(isDark),
+          ),
+          child: Row(children: [
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppTheme.red.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.history_rounded, color: AppTheme.red, size: 26)),
+            const SizedBox(width: 16),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Scan Previous Messages', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('Analyze existing SMS in your inbox and uncover past scams', style: GoogleFonts.inter(fontSize: 12, color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight, height: 1.4)),
+            ])),
+            Icon(Icons.chevron_right, color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight),
+          ]),
+        ),
+      ),
+    );
   }
 
   Widget _buildTipOfTheDayBanner(ThemeData theme, bool isDark) {

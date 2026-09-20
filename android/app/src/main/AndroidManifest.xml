@@ -1,59 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Network access -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- SMS -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <uses-permission android:name="android.permission.READ_BLOCKED_NUMBERS" />
-    <uses-permission android:name="android.permission.WRITE_BLOCKED_NUMBERS" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.WRITE_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
+
+    <!-- Notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="Argus"
         android:name="${applicationName}"
+        android:label="Argus"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
+
+        <!-- ============================== -->
+        <!-- INCOMING SMS RECEIVER           -->
+        <!-- ============================== -->
+
         <receiver
-            android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
+            android:name=".SmsReceiver"
             android:permission="android.permission.BROADCAST_SMS"
             android:exported="true">
+
             <intent-filter>
-                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+                <action android:name="android.provider.Telephony.SMS_DELIVER" />
             </intent-filter>
+
         </receiver>
-        <!-- Required to receive and send SMS when default -->
-<receiver android:name=".SmsReceiver" android:permission="android.permission.BROADCAST_SMS" android:exported="true">
-    <intent-filter>
-        <action android:name="android.provider.Telephony.SMS_DELIVER" />
-    </intent-filter>
-</receiver>
 
-<receiver android:name=".MmsReceiver" android:permission="android.permission.BROADCAST_WAP_PUSH" android:exported="true">
-    <intent-filter>
-        <action android:name="android.provider.Telephony.WAP_PUSH_DELIVER" />
-        <data android:mimeType="application/vnd.wap.mms-message" />
-    </intent-filter>
-</receiver>
 
-<service android:name=".HeadlessSmsSendService" android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE" android:exported="true">
-    <intent-filter>
-        <action android:name="android.intent.action.RESPOND_VIA_MESSAGE" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <data android:scheme="sms" />
-        <data android:scheme="smsto" />
-    </intent-filter>
-</service>
+        <!-- ============================== -->
+        <!-- MMS RECEIVER                    -->
+        <!-- ============================== -->
 
-<activity android:name=".ComposeSmsActivity" android:exported="true">
-    <intent-filter>
-        <action android:name="android.intent.action.SEND" />                
-        <action android:name="android.intent.action.SENDTO" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="sms" />
-        <data android:scheme="smsto" />
-    </intent-filter>
-</activity>
+        <receiver
+            android:name=".MmsReceiver"
+            android:permission="android.permission.BROADCAST_WAP_PUSH"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.provider.Telephony.WAP_PUSH_DELIVER" />
+
+                <data
+                    android:mimeType="application/vnd.wap.mms-message" />
+            </intent-filter>
+
+        </receiver>
+
+
+        <!-- ============================== -->
+        <!-- SMS SEND SERVICE                -->
+        <!-- ============================== -->
+
+        <service
+            android:name=".HeadlessSmsSendService"
+            android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.RESPOND_VIA_MESSAGE" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+
+            </intent-filter>
+
+        </service>
+
+
+        <!-- ============================== -->
+        <!-- SMS COMPOSE ACTIVITY            -->
+        <!-- ============================== -->
+
+        <activity
+            android:name=".ComposeSmsActivity"
+            android:exported="true">
+
+            <intent-filter>
+
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SENDTO" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+
+            </intent-filter>
+
+        </activity>
+
+
+        <!-- ============================== -->
+        <!-- CALL SCREENING SERVICE          -->
+        <!-- ============================== -->
+
+        <service
+            android:name=".MyCallScreeningService"
+            android:permission="android.permission.BIND_SCREENING_SERVICE"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
+
+        </service>
+
+
+        <!-- ============================== -->
+        <!-- MAIN FLUTTER ACTIVITY           -->
+        <!-- ============================== -->
 
         <activity
             android:name=".MainActivity"
@@ -64,37 +130,54 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
+
             <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+
+            <!-- App launcher -->
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
+
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+
             </intent-filter>
+
+            <!-- SMS default application -->
             <intent-filter>
-                <action android:name="android.provider.Telephony.SMS_DEFAULT_APPLICATION"/>
+
+                <action
+                    android:name="android.provider.Telephony.SMS_DEFAULT_APPLICATION" />
+
             </intent-filter>
+
         </activity>
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+
+
+        <!-- Flutter embedding -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-    </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
 
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    </application>
+
+
+    <!-- ============================== -->
+    <!-- PACKAGE VISIBILITY              -->
+    <!-- ============================== -->
+
     <queries>
+
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
+
+            <action
+                android:name="android.intent.action.PROCESS_TEXT" />
+
+            <data android:mimeType="text/plain" />
+
         </intent>
+
     </queries>
+
 </manifest>

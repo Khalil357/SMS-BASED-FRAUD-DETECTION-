@@ -96,14 +96,8 @@ class _LoginPageState extends State<LoginPage> {
 
       if (mounted) {
         setState(() { _isLoading = false; });
-        if (result['success'] == true && result['requiresOtp'] == true) {
-          final email = result['email']?.toString() ?? '';
-          if (email.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Server error: Email missing for OTP.'), backgroundColor: Theme.of(context).colorScheme.error));
-            return;
-          }
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['message'] ?? 'Enter OTP sent to your email.'), backgroundColor: Colors.green.shade600, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
-          widget.onLoginOtpRequired(email);
+        if (result['success'] == true) {
+          widget.onNavigate(AuthPage.dashboard);
         } else {
           final msg = (result['message'] ?? '').toString();
           final isUnverified = msg.toLowerCase().contains('not verified') || msg.toLowerCase().contains('verify your email') || result['statusCode'] == 403;

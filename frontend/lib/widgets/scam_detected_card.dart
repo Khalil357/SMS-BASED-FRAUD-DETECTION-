@@ -48,7 +48,7 @@ class ScamDetectedScreen extends StatelessWidget {
             ),
             
             Expanded(
-              child: SingleScrollView(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Column(
                   children: [
@@ -215,7 +215,7 @@ class ScamDetectedScreen extends StatelessWidget {
                       backgroundColor: AppTheme.red,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: BoxDecoration(
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
@@ -244,5 +244,4 @@ class ScamDetectedScreen extends StatelessWidget {
       ),
     );
   }
-}
 }

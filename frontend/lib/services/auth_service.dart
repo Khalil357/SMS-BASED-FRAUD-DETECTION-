@@ -230,7 +230,7 @@ class AuthService {
     }
   }
 
-  /// Auth: Login (Two-Step support)
+  /// Auth: Login – backend returns JWT directly, no OTP step.
   static Future<Map<String, dynamic>> login({required String identifier, required String password}) async {
     try {
       final trimmed = identifier.trim();
@@ -244,11 +244,13 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = decoded['data'] as Map<String, dynamic>? ?? decoded;
+        final tokenStr = data['token']?.toString() ?? '';
+        if (tokenStr.isNotEmpty) {
+          await saveSession(tokenStr, data);
+        }
         return {
           'success': true,
-          'requiresOtp': true,
-          'message': decoded['message'] ?? 'OTP sent for verification',
-          'email': data['email']?.toString() ?? '',
+          'message': decoded['message'] ?? 'Login successful',
           'data': data,
         };
       }
