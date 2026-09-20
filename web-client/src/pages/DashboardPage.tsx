@@ -924,12 +924,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle Navigation Menu"
             >
-              <Menu size={22} />
+              <Menu size={20} />
             </button>
 
             <div className="topbar-title">
               <h1>{activeTab}</h1>
-              <p>Argus Executive SMS Security Console</p>
+              <p className="topbar-subtitle">Argus Executive SMS Security Console</p>
             </div>
           </div>
 
