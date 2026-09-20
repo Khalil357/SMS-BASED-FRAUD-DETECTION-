@@ -1244,6 +1244,18 @@
     outline: none;
   }
 
+  html.dark .mobile-hamburger-btn {
+    background-color: #131722 !important;
+    border-color: #64748b !important;
+    color: #f8fafc !important;
+  }
+
+  html.dark .mobile-hamburger-btn:hover,
+  html.dark .mobile-hamburger-btn:focus-visible {
+    border-color: #ef4444 !important;
+    color: #ef4444 !important;
+  }
+
   .topbar-title {
     min-width: 0;
   }
