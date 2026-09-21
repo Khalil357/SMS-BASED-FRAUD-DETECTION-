@@ -19,6 +19,7 @@ import '../services/native_sms_block_service.dart';
 import 'safety_tips_page.dart';
 import 'terms_and_conditions_page.dart';
 import 'history_scan_screen.dart';
+import 'blocked_numbers_screen.dart';
 
 class DashboardPage extends StatefulWidget {
   final Navigate onNavigate;
@@ -2243,6 +2244,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
           // Scan Previous Messages Section
           _buildHistoryScanCard(cardBg, borderColor, textPrimary, textMuted),
+          const SizedBox(height: 16),
+
+          // Blocked Senders Section
+          _buildBlockedSendersCard(cardBg, borderColor, textPrimary, textMuted),
           const SizedBox(height: 24),
         ],
       ),
@@ -2255,6 +2260,26 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       MaterialPageRoute(builder: (c) => const HistoryScanScreen()),
     );
     if (mounted) _loadStoredData();
+  }
+
+  Future<void> _openBlockedNumbers() async {
+    final blocklist = await SmsStorageService.getBlockedNumbers();
+    if (!mounted) return;
+    setState(() => _blockedNumbers = blocklist);
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (c) => BlockedNumbersScreen(
+          blockedNumbers: _blockedNumbers,
+          onUnblock: _handleRemoveBlockedNumber,
+          onBack: () => Navigator.of(context).pop(),
+        ),
+      ),
+    );
+
+    final refreshed = await SmsStorageService.getBlockedNumbers();
+    if (mounted) setState(() => _blockedNumbers = refreshed);
   }
 
   Widget _buildHistoryScanCard(
@@ -2309,6 +2334,86 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     const SizedBox(height: 4),
                     Text(
                       'Analyze existing SMS in your inbox and uncover past scams',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: textMuted,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlockedSendersCard(
+    Color cardBg,
+    Color borderColor,
+    Color textPrimary,
+    Color textMuted,
+  ) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final blockedCount = _blockedNumbers.length;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _openBlockedNumbers,
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppTheme.cyberCyan.withValues(alpha: isDark ? 0.35 : 0.25),
+              width: 1,
+            ),
+            boxShadow: AppTheme.cardShadow(isDark),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.cyberCyan.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.block_rounded,
+                  color: AppTheme.cyberCyan,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Blocked Senders',
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      blockedCount == 0
+                          ? 'No numbers blocked yet'
+                          : blockedCount == 1
+                              ? '1 number blocked'
+                              : '$blockedCount numbers blocked',
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: textMuted,
@@ -3815,6 +3920,53 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ),
           ),
           const SizedBox(height: 20),
+
+          // Blocked Numbers Row
+          InkWell(
+            onTap: _openBlockedNumbers,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor, width: 1),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cyberCyan.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.block_rounded, color: AppTheme.cyberCyan, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Blocked numbers',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${_blockedNumbers.length}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? AppTheme.cyberCyan : theme.colorScheme.primary,
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: textMuted, size: 20),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
 
           // Legal Section
           Text(

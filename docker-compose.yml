@@ -12,6 +12,12 @@ services:
       - db_data:/var/lib/postgresql/data
       - ./backend/db:/docker-entrypoint-initdb.d:ro
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
   ml-service:
     build:
       context: .
@@ -30,6 +36,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/sms_fraud
       SPRING_DATASOURCE_USERNAME: sms_app
       SPRING_DATASOURCE_PASSWORD: sms_pass
+      SPRING_DATA_REDIS_HOST: redis
       ML_SERVICE_URL: http://ml-service:8000
     env_file:
       - ./backend/.env

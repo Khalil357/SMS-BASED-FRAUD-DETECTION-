@@ -6,8 +6,23 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  /// Default server base URL
-  static const String defaultServerBaseUrl = 'https://54.242.107.64';
+  /// Build-time override, e.g.:
+  ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.25:8080
+  static const String _envApiBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  /// Optional secondary host probed only when [baseUrl] is unreachable. Useful
+  /// for a physical phone: use the dev machine's LAN IP, or 127.0.0.1 when the
+  /// port is forwarded over USB with `adb reverse tcp:8080 tcp:8080`.
+  static const String _envApiFallbackUrl = String.fromEnvironment('API_FALLBACK_URL');
+
+  /// Default server base URL. Override at build time with
+  /// `flutter run --dart-define=API_BASE_URL=...`; otherwise the deployed
+  /// backend on AWS EC2 is used.
+  static String get defaultServerBaseUrl {
+    final override = _envApiBaseUrl.trim();
+    if (override.isNotEmpty) return override;
+    return 'https://54.242.107.64';
+  }
 
   /// Custom backend URL override (e.g. https://54.242.107.64)
   static String? customBaseUrl;
@@ -18,6 +33,46 @@ class AuthService {
       return customBaseUrl!.trim().replaceAll(RegExp(r'/$'), '');
     }
     return defaultServerBaseUrl;
+  }
+
+  /// Ordered fallback hosts probed only when [baseUrl] is unreachable.
+  static List<String> get _fallbackHosts {
+    final base = baseUrl.replaceAll(RegExp(r'/$'), '');
+    return <String>[
+      if (_envApiFallbackUrl.trim().isNotEmpty) _envApiFallbackUrl.trim(),
+      if (Platform.isAndroid) 'http://10.0.2.2:8080',
+      'http://localhost:8080',
+    ]
+        .map((h) => h.replaceAll(RegExp(r'/$'), ''))
+        .where((h) => h != base)
+        .toList();
+  }
+
+  static List<String> _requestUrls(String path) {
+    final cleanPath = path.startsWith('/') ? path : '/$path';
+    return <String>[
+      _buildUrl(path),
+      for (final host in _fallbackHosts) '$host$cleanPath',
+    ];
+  }
+
+  static Future<http.Response> _sendWithFallback(
+    List<String> urls,
+    Future<http.Response> Function(String url) send,
+  ) async {
+    Object? lastError;
+    for (var i = 0; i < urls.length; i++) {
+      final url = urls[i];
+      final timeout = Duration(seconds: i == 0 ? 10 : 6);
+      try {
+        return await send(url).timeout(timeout);
+      } catch (e) {
+        lastError = e;
+        debugPrint('[AuthService] Request failed for $url ($e). '
+            '${i < urls.length - 1 ? 'Trying next host.' : ''}');
+      }
+    }
+    throw lastError ?? StateError('No backend host resolved for $urls');
   }
 
   /// Helper to construct full request URL from base URL and path
@@ -201,29 +256,12 @@ class AuthService {
       ...?customHeaders,
     };
     final encodedBody = jsonEncode(body);
-    final primaryUrl = _buildUrl(path);
+    final urls = _requestUrls(path);
+    debugPrint('[AuthService] POST primary: ${urls.first}');
 
-    http.Response response;
-    try {
-      response = await http
-          .post(
-            Uri.parse(primaryUrl),
-            headers: headers,
-            body: encodedBody,
-          )
-          .timeout(const Duration(seconds: 10));
-    } catch (e) {
-      debugPrint("[AuthService] Primary POST $primaryUrl failed: $e. Retrying fallback host.");
-      final fallbackHost = Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
-      var cleanPath = path.startsWith('/') ? path : '/$path';
-      response = await http
-          .post(
-            Uri.parse('$fallbackHost$cleanPath'),
-            headers: headers,
-            body: encodedBody,
-          )
-          .timeout(const Duration(seconds: 6));
-    }
+    final response = await _sendWithFallback(urls, (url) async {
+      return http.post(Uri.parse(url), headers: headers, body: encodedBody);
+    });
     await _handleUnauthorized(response);
     return response;
   }
@@ -238,27 +276,12 @@ class AuthService {
       if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
       ...?customHeaders,
     };
-    final primaryUrl = _buildUrl(path);
+    final urls = _requestUrls(path);
+    debugPrint('[AuthService] GET primary: ${urls.first}');
 
-    http.Response response;
-    try {
-      response = await http
-          .get(
-            Uri.parse(primaryUrl),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 10));
-    } catch (e) {
-      debugPrint("[AuthService] Primary GET $primaryUrl failed: $e. Retrying fallback host.");
-      final fallbackHost = Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
-      var cleanPath = path.startsWith('/') ? path : '/$path';
-      response = await http
-          .get(
-            Uri.parse('$fallbackHost$cleanPath'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 6));
-    }
+    final response = await _sendWithFallback(urls, (url) async {
+      return http.get(Uri.parse(url), headers: headers);
+    });
     await _handleUnauthorized(response);
     return response;
   }
@@ -269,27 +292,12 @@ class AuthService {
       'Content-Type': 'application/json',
       if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
     };
-    final primaryUrl = _buildUrl(path);
+    final urls = _requestUrls(path);
+    debugPrint('[AuthService] DELETE primary: ${urls.first}');
 
-    http.Response response;
-    try {
-      response = await http
-          .delete(
-            Uri.parse(primaryUrl),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 10));
-    } catch (e) {
-      debugPrint("[AuthService] Primary DELETE $primaryUrl failed: $e. Retrying fallback host.");
-      final fallbackHost = Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
-      var cleanPath = path.startsWith('/') ? path : '/$path';
-      response = await http
-          .delete(
-            Uri.parse('$fallbackHost$cleanPath'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 6));
-    }
+    final response = await _sendWithFallback(urls, (url) async {
+      return http.delete(Uri.parse(url), headers: headers);
+    });
     await _handleUnauthorized(response);
     return response;
   }

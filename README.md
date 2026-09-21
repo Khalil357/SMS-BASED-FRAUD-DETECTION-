@@ -79,9 +79,22 @@ Build an installable APK with the same option:
 flutter build apk --dart-define=API_BASE_URL=http://192.168.1.25:8080
 ```
 
-Ensure the backend is listening on port `8080`, the phone and computer are on
-the same network, and the computer firewall permits inbound TCP connections to
-that port. For a deployed backend, use its HTTPS URL instead.
+The `API_BASE_URL` override is read by the Flutter app (see
+`frontend/lib/services/auth_service.dart`); without it the app targets the
+deployed backend on AWS EC2.
+
+If the phone and computer are not on the same Wi-Fi, forward the backend port
+over USB instead:
+
+```bash
+adb reverse tcp:8080 tcp:8080
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080
+```
+
+Ensure the backend is listening on port `8080`, and the computer firewall
+permits inbound TCP connections to that port. For a deployed backend, use its
+HTTPS URL instead. A secondary host can be probed after the primary URL via
+`--dart-define=API_FALLBACK_URL=...` (e.g. a dev-machine LAN IP).
 
 To run the tests:
 

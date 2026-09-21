@@ -26,7 +26,7 @@ class ComposeSmsActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 48, 48, 48)
-        }
+        }       
 
         recipientsInput = EditText(this).apply {
             hint = "Recipient phone number"
