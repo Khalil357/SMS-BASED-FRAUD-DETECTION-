@@ -22,7 +22,7 @@ public class EmailServiceImpl implements EmailService {
     public EmailServiceImpl(@Value("${resend.api-key:}") String apiKey,
                             @Value("${email.from:noreply@smsfraud.com}") String fromEmail,
                             @Value("${app.name:SMS Fraud Detection}") String appName,
-                            @Value("${app.web-url:http://localhost:5173}") String webUrl) {
+                            @Value("${app.web-url:https://d2wma51qvc2c0y.cloudfront.net/}") String webUrl) {
         this.resend = new Resend(apiKey);
         this.fromEmail = fromEmail;
         this.appName = appName;
@@ -45,7 +45,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public void sendWelcomeEmail(String toEmail, String fullName, String role) {
+    public void sendWelcomeEmail(String toEmail, String fullName, String role, String initialPassword) {
         try {
             SendEmailRequest request = SendEmailRequest.builder()
                     .from(fromEmail)
@@ -54,13 +54,18 @@ public class EmailServiceImpl implements EmailService {
                     .text("Hello " + (fullName == null || fullName.isBlank() ? "" : fullName + ", ") + "\n\n"
                             + "An administrator has created an account for you on " + appName
                             + " with the role " + role + ".\n\n"
-                            + "Sign in to the Argus Admin Portal here:\n" + webUrl + "\n\n"
+                            + "Your login details:\n"
+                            + "Email: " + toEmail + "\n"
+                            + "Initial password: " + initialPassword + "\n\n"
+                            + "Sign in to the Argus Admin Portal here:\n" + webUrl.trim() + "\n\n"
                             + "The first time you sign in, you will verify this email with a one-time code.\n\n"
+                            + "Keep this email private. Do not forward or share your password.\n\n"
                             + "If you did not expect this, please contact your administrator.")
                     .build();
             resend.emails().send(request);
         } catch (Exception e) {
-            log.warn("Could not email welcome message to {}: {}", toEmail, e.getMessage());
+            // Provider exceptions may contain the email body, including the password.
+            log.warn("Could not email welcome message to {} ({})", toEmail, e.getClass().getSimpleName());
         }
     }
 
