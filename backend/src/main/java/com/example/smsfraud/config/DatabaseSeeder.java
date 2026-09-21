@@ -6,6 +6,7 @@ import com.example.smsfraud.user.UserRole;
 import com.example.smsfraud.user.UserRoleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -20,12 +21,27 @@ public class DatabaseSeeder implements CommandLineRunner {
     private final UserRoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
+    // Initial admin credentials, supplied via environment variables (SEED_ADMIN_*).
+    // Intentionally blank by default so no credentials are hardcoded in source.
+    private final String seedAdminEmail;
+    private final String seedAdminPassword;
+    private final String seedAdminFullName;
+    private final String seedAdminPhone;
+
     public DatabaseSeeder(UserRepository userRepository,
                           UserRoleRepository roleRepository,
-                          PasswordEncoder passwordEncoder) {
+                          PasswordEncoder passwordEncoder,
+                          @Value("${admin.seed.email:}") String seedAdminEmail,
+                          @Value("${admin.seed.password:}") String seedAdminPassword,
+                          @Value("${admin.seed.full-name:}") String seedAdminFullName,
+                          @Value("${admin.seed.phone:}") String seedAdminPhone) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.seedAdminEmail = seedAdminEmail;
+        this.seedAdminPassword = seedAdminPassword;
+        this.seedAdminFullName = seedAdminFullName;
+        this.seedAdminPhone = seedAdminPhone;
     }
 
     @Override
@@ -51,21 +67,35 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private void seedAdminUser() {
-        String adminEmail = "james06alexander@gmail.com";
-        if (userRepository.findByEmail(adminEmail).isEmpty()) {
-            UserRole adminRole = roleRepository.findByRoleName("ADMIN").orElseThrow();
-
-            User admin = new User();
-            admin.setEmail(adminEmail);
-            admin.setPhone("+00000000001"); // Admins might not need a phone, but it's unique
-            admin.setFullName("System Administrator");
-            admin.setPasswordHash(passwordEncoder.encode("admin123"));
-            admin.setRole(adminRole);
-            admin.setVerified(true); // Auto verify admin
-            admin.setActive(true);
-
-            userRepository.save(admin);
-            log.info("Seeded admin user: james06alexander@gmail.com / admin123");
+        if (seedAdminEmail == null || seedAdminEmail.isBlank()
+                || seedAdminPassword == null || seedAdminPassword.isBlank()) {
+            log.info("Skipping admin seed: set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD "
+                    + "to create the initial admin account.");
+            return;
         }
+
+        if (userRepository.findByEmail(seedAdminEmail).isPresent()) {
+            log.info("Admin {} already exists; skipping seed.", seedAdminEmail);
+            return;
+        }
+
+        UserRole adminRole = roleRepository.findByRoleName("ADMIN").orElseThrow();
+
+        User admin = new User();
+        admin.setEmail(seedAdminEmail);
+        // Phone is optional for the seeded admin (login is by email). Leave null
+        // when not provided rather than a fake value that collides with other seeds.
+        if (seedAdminPhone != null && !seedAdminPhone.isBlank()) {
+            admin.setPhone(seedAdminPhone);
+        }
+        admin.setFullName(seedAdminFullName == null || seedAdminFullName.isBlank()
+                ? "System Administrator" : seedAdminFullName);
+        admin.setPasswordHash(passwordEncoder.encode(seedAdminPassword));
+        admin.setRole(adminRole);
+        admin.setVerified(true); // Auto-verify the seeded admin
+        admin.setActive(true);
+
+        userRepository.save(admin);
+        log.info("Seeded admin user: {}", seedAdminEmail);
     }
 }
