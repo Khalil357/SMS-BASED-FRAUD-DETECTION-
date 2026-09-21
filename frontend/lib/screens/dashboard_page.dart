@@ -1449,6 +1449,24 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.red,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              icon: const Icon(Icons.block, size: 16),
+                              label: const Text('Block Number',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold)),
+                              onPressed: () => _blockNumberFromLog(log),
+                            ),
+                            const SizedBox(height: 10),
                             if (type == 'Fraud') ...[
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
@@ -1517,10 +1535,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     );
   }
 
-  Future<void> _handleAddBlockedNumber({String? reason}) async {
-    final number = _blockNumberController.text.trim();
-    if (number.isEmpty) return;
-    if (number.length < 8) {
+  Future<void> _handleAddBlockedNumber({String? number, String? reason}) async {
+    final numeric = (number ?? _blockNumberController.text).trim();
+    if (numeric.isEmpty) return;
+    if (number == null && numeric.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid phone number.')),
       );
@@ -1529,7 +1547,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
     setState(() {
       _blockedNumbers.insert(0, {
-        'number': number,
+        'number': numeric,
         'date': DateTime.now().toString().split(' ')[0],
         'reason': reason ?? 'Manual block',
       });
@@ -1539,7 +1557,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$number added to blocklist.'),
+        content: Text('$numeric added to blocklist.'),
         backgroundColor: Colors.green.shade600,
         behavior: SnackBarBehavior.floating,
       ),
@@ -1548,8 +1566,22 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     await _maybeOfferFullDeviceBlocking();
 
     if (await NativeSmsBlockService.isDefaultSmsApp()) {
-      await NativeSmsBlockService.blockNumberOnDevice(number);
+      await NativeSmsBlockService.blockNumberOnDevice(numeric);
     }
+  }
+
+  /// Blocks the sender of a flagged message from the message detail sheet.
+  Future<void> _blockNumberFromLog(Map<String, dynamic> log) async {
+    final sender = (log['sender']?.toString() ?? '').trim();
+    if (mounted) Navigator.pop(context);
+    if (sender.isEmpty) {
+      _showMessageActionSnackBar(
+        'This message has no sender number to block.',
+        isError: true,
+      );
+      return;
+    }
+    await _handleAddBlockedNumber(number: sender, reason: 'Scam detected');
   }
 
   Future<void> _handleRemoveBlockedNumber(int index) async {
