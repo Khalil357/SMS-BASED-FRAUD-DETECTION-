@@ -54,17 +54,23 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
         messageBody: body,
         source: 'AUTO_LISTENER',
       );
-      if (backendResult['success'] == true && backendResult['isScam'] != null) {
-        final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
+      if (backendResult['success'] == true) {
+        final data = backendResult['data'] is Map<String, dynamic>
+            ? AuthService.normalizeScan(backendResult['data'] as Map<String, dynamic>)
+            : AuthService.normalizeScan(backendResult);
+
+        final isScam = data['isScam'] == true;
         final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
         final type = isScam ? 'Fraud' : 'Safe';
         final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
 
         logEntry['type'] = type;
         logEntry['threat'] = threatLevel;
-        if (backendResult['data']?['id'] != null) {
-          logEntry['backendId'] = backendResult['data']['id'].toString();
-          logEntry['scanId'] = backendResult['data']['id'].toString();
+        final backendId = data['backendId'] ?? data['scanId'] ?? data['scan_id'] ?? data['id'];
+        if (backendId != null) {
+          logEntry['backendId'] = backendId.toString();
+          logEntry['scanId'] = backendId.toString();
+          logEntry['scan_id'] = backendId.toString();
         }
         if (backendResult['label'] != null) {
           final confPct = (conf * 100).toStringAsFixed(1);
@@ -72,7 +78,9 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
           (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("[Ingestion Background Scan Error] $e");
+    }
 
     // 4. Add to local log storage
     await SmsStorageService.addLog(logEntry);
@@ -178,21 +186,33 @@ class SmsIngestionService {
               messageBody: body,
               source: 'AUTO_LISTENER',
             );
-            if (backendResult['success'] == true && backendResult['isScam'] != null) {
-              final isScam = backendResult['isScam'] == true || backendResult['is_scam'] == true;
+            if (backendResult['success'] == true) {
+              final data = backendResult['data'] is Map<String, dynamic>
+                  ? AuthService.normalizeScan(backendResult['data'] as Map<String, dynamic>)
+                  : AuthService.normalizeScan(backendResult);
+
+              final isScam = data['isScam'] == true;
               final conf = (backendResult['confidence'] as num?)?.toDouble() ?? result.threatLevel;
               final type = isScam ? 'Fraud' : 'Safe';
               final threatLevel = (type == 'Safe') ? (1.0 - conf).clamp(0.0, 1.0) : conf.clamp(0.0, 1.0);
 
               logEntry['type'] = type;
               logEntry['threat'] = threatLevel;
+              final backendId = data['backendId'] ?? data['scanId'] ?? data['scan_id'] ?? data['id'];
+              if (backendId != null) {
+                logEntry['backendId'] = backendId.toString();
+                logEntry['scanId'] = backendId.toString();
+                logEntry['scan_id'] = backendId.toString();
+              }
               if (backendResult['label'] != null) {
                 final confPct = (conf * 100).toStringAsFixed(1);
                 final threatPct = (threatLevel * 100).toStringAsFixed(1);
                 (logEntry['matchedReasons'] as List).add('Backend ML Model: ${backendResult['label']} ($confPct% confidence, $threatPct% threat index)');
               }
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint("[Ingestion Foreground Scan Error] $e");
+          }
 
           await SmsStorageService.addLog(logEntry);
 

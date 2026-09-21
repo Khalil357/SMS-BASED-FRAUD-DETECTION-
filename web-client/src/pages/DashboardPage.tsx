@@ -1031,7 +1031,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                         onClick={() => handleSortToggle("date", logsSortField, logsSortDir, setLogsSortField, setLogsSortDir)}
                       >
                         <div className="th-content">
-                          <span>Intercept Time</span>
+                          <span>Scan Time</span>
                           {logsSortField === "date" ? (
                             <span className="sort-indicator">{logsSortDir === "asc" ? "▲" : "▼"}</span>
                           ) : (
