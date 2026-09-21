@@ -1,6 +1,8 @@
 package com.example.smsfraud.scan;
 
 import com.example.smsfraud.common.dto.ApiResponse;
+import com.example.smsfraud.common.exception.UnauthorizedException;
+import com.example.smsfraud.scan.dto.MarkFraudRequest;
 import com.example.smsfraud.scan.dto.ScanQueryRequest;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -15,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -45,26 +46,31 @@ public class ScanController {
         // Authentication is required (enforced by SecurityConfig), so the
         // authenticated user id is always available.
         UUID userId = authenticatedUserId(authentication);
-        Optional<SmsScan> scan = smsScanService.queryAndSave(
+        SmsScan scan = smsScanService.queryAndSave(
                 userId,
                 request.getSender(),
                 request.getMessageBody(),
                 request.getSource());
 
-        if (scan.isEmpty()) {
-            return ResponseEntity.ok(
-                    ApiResponse.ok("SMS analyzed; no fraud detected, so nothing was saved", null));
-        }
-
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok("Fraudulent SMS analyzed and saved successfully", scan.get()));
+                .body(ApiResponse.ok("SMS analyzed by the fraud model", scan));
+    }
+
+    @PostMapping("/fraud")
+    public ResponseEntity<ApiResponse<SmsScan>> markAsFraud(
+            Authentication authentication,
+            @Valid @RequestBody MarkFraudRequest request) {
+        SmsScan scan = smsScanService.markAsFraud(
+                authenticatedUserId(authentication), request.getSender(), request.getMessage());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("SMS marked as fraud", scan));
     }
 
     private UUID authenticatedUserId(Authentication authentication) {
         try {
             return UUID.fromString(authentication.getName());
         } catch (Exception e) {
-            return null;
+            throw new UnauthorizedException("A valid login session is required");
         }
     }
 }

@@ -27,7 +27,8 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
+class _DashboardPageState extends State<DashboardPage>
+    with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   // Controllers
@@ -67,12 +68,14 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   ];
 
   StreamSubscription? _smsStreamSubscription;
+  Timer? _logRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadDataAndPermissions();
+    _startLogRefresh();
 
     _smsStreamSubscription = SmsIngestionService.smsStream.listen((newLog) {
       if (mounted) {
@@ -88,7 +91,35 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _loadStoredData();
+      _startLogRefresh();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _logRefreshTimer?.cancel();
+      _logRefreshTimer = null;
     }
+  }
+
+  /// Native background SMS work writes directly to shared preferences. Polling
+  /// that small local store while this screen is visible makes new scans appear
+  /// without requiring the user to pull-to-refresh.
+  void _startLogRefresh() {
+    _logRefreshTimer?.cancel();
+    _logRefreshTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final logs = await SmsStorageService.getLogs();
+      if (!mounted || _sameLogIds(logs, _smsLogs)) return;
+      setState(() => _smsLogs = logs);
+    });
+  }
+
+  bool _sameLogIds(
+      List<Map<String, dynamic>> first, List<Map<String, dynamic>> second) {
+    if (first.length != second.length) return false;
+    for (var index = 0; index < first.length; index++) {
+      if (first[index]['id']?.toString() != second[index]['id']?.toString())
+        return false;
+    }
+    return true;
   }
 
   Future<void> _loadDataAndPermissions() async {
@@ -294,6 +325,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     _blockNumberController.dispose();
     _searchController.dispose();
     _smsStreamSubscription?.cancel();
+    _logRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -381,7 +413,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   }
 
   Future<void> _requestPermissions({bool forcePrompt = false}) async {
-    final granted = await SmsIngestionService.requestSmsPermission(forcePrompt: forcePrompt);
+    final granted = await SmsIngestionService.requestSmsPermission(
+        forcePrompt: forcePrompt);
     setState(() {
       _hasSmsPermission = granted;
     });
@@ -516,9 +549,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w400,
-                    color: isDark
-                        ? AppTheme.subtleDark
-                        : AppTheme.subtleLight,
+                    color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                     height: 1.5,
                   ),
                 ),
@@ -628,9 +659,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w400,
-                    color: isDark
-                        ? AppTheme.subtleDark
-                        : AppTheme.subtleLight,
+                    color: isDark ? AppTheme.subtleDark : AppTheme.subtleLight,
                     height: 1.5,
                   ),
                 ),
@@ -707,7 +736,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       if (!granted && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Notification permission is required for live threat alerts.'),
+            content: Text(
+                'Notification permission is required for live threat alerts.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -865,29 +895,32 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       source: 'MANUAL_QUERY',
     );
 
-    SmsAnalysisResult result;
-    bool evaluatedByBackend = false;
-
-    if (backendResponse['success'] == true && backendResponse['data'] != null) {
-      final data = backendResponse['data'] is Map<String, dynamic>
-          ? AuthService.normalizeScan(backendResponse['data'] as Map<String, dynamic>)
-          : AuthService.normalizeScan(backendResponse);
-      result = SmsDetectionService.parseBackendResult(
-        backendData: data,
-        originalMessage: text,
-        sender: 'Manual Scan',
-      );
-      evaluatedByBackend = true;
-    } else {
-      result =
-          SmsDetectionService.analyze(message: text, sender: 'Manual Scan');
+    if (backendResponse['success'] != true || backendResponse['data'] == null) {
+      if (!mounted) return;
+      setState(() {
+        _isScanning = false;
+        _scanResult =
+            'Unable to scan this message with the fraud-detection model.\n\n${backendResponse['message'] ?? 'Please check your connection and try again.'}';
+      });
+      return;
     }
+
+    final data = backendResponse['data'] is Map<String, dynamic>
+        ? AuthService.normalizeScan(
+            backendResponse['data'] as Map<String, dynamic>)
+        : AuthService.normalizeScan(backendResponse);
+    final result = SmsDetectionService.parseBackendResult(
+      backendData: data,
+      originalMessage: text,
+      sender: 'Manual Scan',
+    );
 
     final backendId = backendResponse['data'] != null
         ? (backendResponse['data']['scanId'] ??
-            backendResponse['data']['scan_id'] ??
-            backendResponse['data']['id'] ??
-            backendResponse['scanId'])?.toString()
+                backendResponse['data']['scan_id'] ??
+                backendResponse['data']['id'] ??
+                backendResponse['scanId'])
+            ?.toString()
         : null;
 
     final logEntry = AuthService.normalizeScan({
@@ -904,6 +937,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       'scannedAt': DateTime.now().toIso8601String(),
       'threat': result.threatLevel,
       'matchedReasons': result.matchedReasons,
+      'source': 'MANUAL_QUERY',
       'hasFeedback': false,
       'userFeedback': null,
     });
@@ -919,8 +953,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
       final safeConfPct = ((1.0 - result.threatLevel) * 100).toStringAsFixed(1);
       final threatPct = (result.threatLevel * 100).toStringAsFixed(1);
-      final modelTag =
-          evaluatedByBackend ? 'AI Trained Model' : 'Local Rule Engine';
+      const modelTag = 'AI Trained Model';
 
       if (result.classification == 'Fraud') {
         _scanResult =
@@ -1114,7 +1147,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   /// the backend call and just updates locally, same as before.
   Future<void> _markAsSafe(Map<String, dynamic> log) async {
     final logId = log['id']?.toString() ?? '';
-    final backendId = log['backendId']?.toString() ?? log['scanId']?.toString() ?? log['id']?.toString();
+    final backendId = log['backendId']?.toString() ??
+        log['scanId']?.toString() ??
+        log['id']?.toString();
 
     if (backendId != null &&
         backendId.isNotEmpty &&
@@ -1152,7 +1187,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       _smsLogs = logs;
     });
     Navigator.pop(context);
-    _showMessageActionSnackBar('Record marked as safe and updated successfully.');
+    _showMessageActionSnackBar(
+        'Record marked as safe and updated successfully.');
   }
 
   Future<void> _markAsFraud(Map<String, dynamic> log) async {
@@ -1195,6 +1231,10 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
         final isDark = theme.brightness == Brightness.dark;
 
         final type = log['type'] as String;
+        final source = log['source']?.toString().toUpperCase() ?? '';
+        final isManualScan = source == 'MANUAL_QUERY' ||
+            log['id']?.toString().startsWith('manual_') == true ||
+            log['sender']?.toString() == 'Manual Scan';
         final rawThreat = (log['threat'] as num).toDouble();
         final threatVal = (type == 'Safe' && rawThreat > 0.50)
             ? (1.0 - rawThreat)
@@ -1251,7 +1291,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 ),
                 const Divider(),
                 const SizedBox(height: 12),
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -1273,7 +1312,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ],
                 ),
                 const SizedBox(height: 14),
-
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1296,7 +1334,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 Row(
                   children: [
                     Expanded(
@@ -1356,7 +1393,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ),
                 ),
                 const SizedBox(height: 24),
-
                 Text(
                   'ANALYSIS DETECTOR CHECKS',
                   style: GoogleFonts.inter(
@@ -1397,7 +1433,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         ),
                       )),
                 const SizedBox(height: 28),
-
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1440,7 +1475,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                             child: SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2.4),
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2.4),
                             ),
                           ),
                         )
@@ -1449,7 +1485,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (type == 'Fraud') ...[
-                              OutlinedButton.icon(
+                              if (!isManualScan)
+                                OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.green,
                                   side: const BorderSide(color: Colors.green),
@@ -1485,23 +1522,20 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                             ],
                             if (type == 'Safe')
                               OutlinedButton.icon(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: AppTheme.red,
-                                        side: const BorderSide(
-                                            color: AppTheme.red),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 12),
-                                        alignment: Alignment.center,
-                                      ),
-                                      icon: const Icon(Icons.gpp_bad, size: 16),
-                                      label: const Text('Mark Fraud',
-                                          style: TextStyle(fontSize: 12)),
-                                      onPressed: () =>
-                                          _confirmMarkAsFraud(log),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppTheme.red,
+                                  side: const BorderSide(color: AppTheme.red),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  alignment: Alignment.center,
+                                ),
+                                icon: const Icon(Icons.gpp_bad, size: 16),
+                                label: const Text('Mark Fraud',
+                                    style: TextStyle(fontSize: 12)),
+                                onPressed: () => _confirmMarkAsFraud(log),
                               ),
                           ],
                         ),
@@ -1562,7 +1596,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final user = AuthService.currentUser ?? {};
-    final fullName = user['full_name'] ?? user['fullName'] ?? user['name'] ?? 'User';
+    final fullName =
+        user['full_name'] ?? user['fullName'] ?? user['name'] ?? 'User';
 
     return Scaffold(
       appBar: AppBar(
@@ -1592,7 +1627,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) => Icon(
                       Icons.shield,
-                      color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                      color: isDark
+                          ? AppTheme.cyberRed
+                          : theme.colorScheme.primary,
                       size: 28,
                     ),
                   ),
@@ -1629,7 +1666,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   content: Row(
                     children: [
                       Icon(
-                        isActive ? Icons.shield_rounded : Icons.warning_amber_rounded,
+                        isActive
+                            ? Icons.shield_rounded
+                            : Icons.warning_amber_rounded,
                         color: Colors.white,
                         size: 18,
                       ),
@@ -1648,10 +1687,12 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                       ),
                     ],
                   ),
-                  backgroundColor: isActive ? Colors.green.shade700 : AppTheme.red,
+                  backgroundColor:
+                      isActive ? Colors.green.shade700 : AppTheme.red,
                   behavior: SnackBarBehavior.floating,
                   duration: const Duration(milliseconds: 2500),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               );
             },
@@ -1685,7 +1726,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    (_isIngestionEnabled && _hasSmsPermission) ? 'Active' : 'Inactive',
+                    (_isIngestionEnabled && _hasSmsPermission)
+                        ? 'Active'
+                        : 'Inactive',
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -1713,8 +1756,12 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: _currentIndex == 4
-                        ? (isDark ? AppTheme.cyberRed : theme.colorScheme.primary)
-                        : (isDark ? AppTheme.cyberBorder : const Color(0xFFE2E8F0)),
+                        ? (isDark
+                            ? AppTheme.cyberRed
+                            : theme.colorScheme.primary)
+                        : (isDark
+                            ? AppTheme.cyberBorder
+                            : const Color(0xFFE2E8F0)),
                     width: 2,
                   ),
                 ),
@@ -1728,7 +1775,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w800,
                       fontSize: 13,
-                      color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                      color: isDark
+                          ? AppTheme.cyberRed
+                          : theme.colorScheme.primary,
                     ),
                   ),
                 ),
@@ -1895,7 +1944,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   Widget _buildAnalyticsTab(ThemeData theme, bool isDark) {
     final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
     final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
-    final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+    final textPrimary =
+        isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
     final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
 
     return SingleChildScrollView(
@@ -1995,14 +2045,16 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           children: [
             Row(
               children: [
-                Icon(Icons.lightbulb_outline_rounded, color: accentColor, size: 16),
+                Icon(Icons.lightbulb_outline_rounded,
+                    color: accentColor, size: 16),
                 const SizedBox(width: 8),
                 Text(
                   'Safety Tip Hidden',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
+                    color:
+                        isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight,
                   ),
                 ),
               ],
@@ -2147,9 +2199,11 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   Widget _buildHomeTab(String name, ThemeData theme, bool isDark) {
     final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
-    final cardSecBg = isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF8FAFC);
+    final cardSecBg =
+        isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF8FAFC);
     final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
-    final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+    final textPrimary =
+        isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
     final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
 
     return SingleChildScrollView(
@@ -2162,23 +2216,28 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
           const SizedBox(height: 16),
 
           // Security Status Card
-          _buildCyberSecurityStatusCard(theme, isDark, cardBg, borderColor, textPrimary, textMuted),
+          _buildCyberSecurityStatusCard(
+              theme, isDark, cardBg, borderColor, textPrimary, textMuted),
           const SizedBox(height: 16),
 
           // Statistics Cards Row (SMS Scanned / Threats Blocked)
-          _buildCyberStatsRow(theme, isDark, cardBg, cardSecBg, borderColor, textPrimary, textMuted),
+          _buildCyberStatsRow(theme, isDark, cardBg, cardSecBg, borderColor,
+              textPrimary, textMuted),
           const SizedBox(height: 12),
 
           // Analytics Directive Card (Right after 2 stats cards, short & compact)
-          _buildHomeAnalyticsDirectiveCard(theme, isDark, cardBg, borderColor, textPrimary, textMuted),
+          _buildHomeAnalyticsDirectiveCard(
+              theme, isDark, cardBg, borderColor, textPrimary, textMuted),
           const SizedBox(height: 16),
 
           // Analyze SMS & Links Section
-          _buildCyberAnalyzeSection(theme, isDark, cardBg, borderColor, textPrimary, textMuted),
+          _buildCyberAnalyzeSection(
+              theme, isDark, cardBg, borderColor, textPrimary, textMuted),
           const SizedBox(height: 16),
 
           // Recent Activity Section
-          _buildCyberRecentActivitySection(theme, isDark, cardBg, borderColor, textPrimary, textMuted),
+          _buildCyberRecentActivitySection(
+              theme, isDark, cardBg, borderColor, textPrimary, textMuted),
           const SizedBox(height: 24),
         ],
       ),
@@ -2263,7 +2322,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 height: 84,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF1F5F9),
+                  color: isDark
+                      ? AppTheme.cyberCardSecondary
+                      : const Color(0xFFF1F5F9),
                   boxShadow: [
                     BoxShadow(
                       color: AppTheme.cyberRed.withOpacity(0.35),
@@ -2305,7 +2366,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             color: borderColor,
           ),
           const SizedBox(height: 12),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -2315,7 +2375,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     width: 7,
                     height: 7,
                     decoration: BoxDecoration(
-                      color: _threatsCount == 0 ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                      color: _threatsCount == 0
+                          ? AppTheme.cyberGreen
+                          : AppTheme.cyberRed,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -2349,7 +2411,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                       ),
                     ),
                     const SizedBox(width: 2),
-                    const Icon(Icons.arrow_forward_rounded, size: 14, color: AppTheme.cyberCyan),
+                    const Icon(Icons.arrow_forward_rounded,
+                        size: 14, color: AppTheme.cyberCyan),
                   ],
                 ),
               ),
@@ -2373,7 +2436,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
     for (final log in _smsLogs) {
       DateTime? logTime;
-      final rawTs = log['timestamp'] ?? log['time'] ?? log['date'] ?? log['receivedAt'];
+      final rawTs =
+          log['timestamp'] ?? log['time'] ?? log['date'] ?? log['receivedAt'];
       if (rawTs is DateTime) {
         logTime = rawTs;
       } else if (rawTs is String) {
@@ -2424,9 +2488,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     final weeklyStatText = _calculateWeeklyScannedStats();
     final isUp = weeklyStatText.startsWith('↑');
     final isDown = weeklyStatText.startsWith('↓');
-    final trendColor = isUp
-        ? AppTheme.cyberGreen
-        : (isDown ? AppTheme.cyberRed : textMuted);
+    final trendColor =
+        isUp ? AppTheme.cyberGreen : (isDown ? AppTheme.cyberRed : textMuted);
     final trendIcon = isUp
         ? Icons.trending_up_rounded
         : (isDown ? Icons.trending_down_rounded : Icons.remove_rounded);
@@ -2455,7 +2518,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         color: textMuted,
                       ),
                     ),
-                    const Icon(Icons.mark_chat_read_outlined, size: 18, color: AppTheme.cyberCyan),
+                    const Icon(Icons.mark_chat_read_outlined,
+                        size: 18, color: AppTheme.cyberCyan),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -2509,7 +2573,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         color: textMuted,
                       ),
                     ),
-                    const Icon(Icons.gpp_bad_outlined, size: 18, color: AppTheme.cyberRed),
+                    const Icon(Icons.gpp_bad_outlined,
+                        size: 18, color: AppTheme.cyberRed),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -2587,7 +2652,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ),
           ),
           const SizedBox(height: 16),
-
           TextField(
             controller: _scanController,
             minLines: 3,
@@ -2597,10 +2661,15 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             decoration: InputDecoration(
               hintText: 'Paste suspicious SMS or message link...',
               hintStyle: GoogleFonts.inter(fontSize: 13, color: textMuted),
-              prefixIcon: Icon(Icons.sms_outlined, color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary, size: 20),
+              prefixIcon: Icon(Icons.sms_outlined,
+                  color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                  size: 20),
               filled: true,
-              fillColor: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF1F5F9),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              fillColor: isDark
+                  ? AppTheme.cyberCardSecondary
+                  : const Color(0xFFF1F5F9),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide(color: borderColor, width: 1),
@@ -2611,12 +2680,14 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary, width: 1.5),
+                borderSide: BorderSide(
+                    color:
+                        isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                    width: 1.5),
               ),
             ),
           ),
           const SizedBox(height: 14),
-
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -2633,7 +2704,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.security_rounded, size: 18),
               label: Text(
@@ -2647,7 +2719,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
               onPressed: _isScanning ? null : _handleManualScan,
             ),
           ),
-
           if (_scanResult != null) ...[
             const SizedBox(height: 16),
             Container(
@@ -2658,7 +2729,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     : AppTheme.cyberRed.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: _scanIsSafe == true ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                  color: _scanIsSafe == true
+                      ? AppTheme.cyberGreen
+                      : AppTheme.cyberRed,
                   width: 1,
                 ),
               ),
@@ -2671,8 +2744,12 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                       Row(
                         children: [
                           Icon(
-                            _scanIsSafe == true ? Icons.gpp_good_rounded : Icons.gpp_bad_rounded,
-                            color: _scanIsSafe == true ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                            _scanIsSafe == true
+                                ? Icons.gpp_good_rounded
+                                : Icons.gpp_bad_rounded,
+                            color: _scanIsSafe == true
+                                ? AppTheme.cyberGreen
+                                : AppTheme.cyberRed,
                             size: 20,
                           ),
                           const SizedBox(width: 8),
@@ -2681,7 +2758,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w800,
                               fontSize: 14,
-                              color: _scanIsSafe == true ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                              color: _scanIsSafe == true
+                                  ? AppTheme.cyberGreen
+                                  : AppTheme.cyberRed,
                             ),
                           ),
                         ],
@@ -2768,7 +2847,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ],
           ),
           const SizedBox(height: 16),
-
           if (recentLogs.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -2789,14 +2867,17 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
               final timeStr = _formatLogTime(log['time'] as String? ?? '');
 
               return Padding(
-                padding: EdgeInsets.only(bottom: idx == recentLogs.length - 1 ? 0 : 12.0),
+                padding: EdgeInsets.only(
+                    bottom: idx == recentLogs.length - 1 ? 0 : 12.0),
                 child: InkWell(
                   onTap: () => _showLogDetail(log),
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFF8FAFC),
+                      color: isDark
+                          ? AppTheme.cyberCardSecondary
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: borderColor, width: 1),
                     ),
@@ -2811,8 +2892,12 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            isSafe ? Icons.shield_outlined : Icons.warning_amber_rounded,
-                            color: isSafe ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                            isSafe
+                                ? Icons.shield_outlined
+                                : Icons.warning_amber_rounded,
+                            color: isSafe
+                                ? AppTheme.cyberGreen
+                                : AppTheme.cyberRed,
                             size: 18,
                           ),
                         ),
@@ -2822,7 +2907,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                isSafe ? 'Message Verified Safe' : 'Suspicious Message Detected',
+                                isSafe
+                                    ? 'Message Verified Safe'
+                                    : 'Suspicious Message Detected',
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
@@ -2847,7 +2934,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
                                 color: isSafe
                                     ? AppTheme.cyberGreen.withOpacity(0.15)
@@ -2859,14 +2947,17 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                 style: GoogleFonts.inter(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w800,
-                                  color: isSafe ? AppTheme.cyberGreen : AppTheme.cyberRed,
+                                  color: isSafe
+                                      ? AppTheme.cyberGreen
+                                      : AppTheme.cyberRed,
                                 ),
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               timeStr,
-                              style: GoogleFonts.inter(fontSize: 9, color: textMuted),
+                              style: GoogleFonts.inter(
+                                  fontSize: 9, color: textMuted),
                             ),
                           ],
                         ),
@@ -2978,7 +3069,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ),
           ),
           const SizedBox(height: 12),
-
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -3015,7 +3105,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   }).toList(),
                 ),
                 const SizedBox(width: 16),
-
                 Text(
                   'Time:',
                   style: GoogleFonts.inter(
@@ -3051,7 +3140,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ),
           ),
           const SizedBox(height: 12),
-
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
@@ -3103,14 +3191,24 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         final isFraud = type == 'Fraud';
                         final Color statusColor = isSafe
                             ? AppTheme.cyberGreen
-                            : (isFraud ? AppTheme.cyberRed : AppTheme.cyberCyan);
+                            : (isFraud
+                                ? AppTheme.cyberRed
+                                : AppTheme.cyberCyan);
 
-                        final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
-                        final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
-                        final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
-                        final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
+                        final cardBg =
+                            isDark ? AppTheme.cyberCard : AppTheme.cardLight;
+                        final borderColor = isDark
+                            ? AppTheme.cyberBorder
+                            : AppTheme.borderLight;
+                        final textPrimary = isDark
+                            ? AppTheme.cyberTextPrimary
+                            : AppTheme.textBodyLight;
+                        final textMuted = isDark
+                            ? AppTheme.cyberTextMuted
+                            : AppTheme.subtleLight;
 
-                        final rawThreat = (log['threat'] as num?)?.toDouble() ?? 0.0;
+                        final rawThreat =
+                            (log['threat'] as num?)?.toDouble() ?? 0.0;
                         final displayThreat = (isSafe && rawThreat > 0.50)
                             ? (1.0 - rawThreat)
                             : rawThreat;
@@ -3123,7 +3221,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                             border: Border.all(color: borderColor, width: 1),
                             boxShadow: [
                               BoxShadow(
-                                color: statusColor.withOpacity(isDark ? 0.08 : 0.04),
+                                color: statusColor
+                                    .withOpacity(isDark ? 0.08 : 0.04),
                                 blurRadius: 12,
                                 spreadRadius: 0,
                                 offset: const Offset(0, 2),
@@ -3139,7 +3238,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Expanded(
                                         child: Row(
@@ -3147,13 +3247,18 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                             Container(
                                               padding: const EdgeInsets.all(6),
                                               decoration: BoxDecoration(
-                                                color: statusColor.withOpacity(0.12),
+                                                color: statusColor
+                                                    .withOpacity(0.12),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: Icon(
                                                 isSafe
-                                                    ? Icons.mark_email_read_rounded
-                                                    : (isFraud ? Icons.gpp_bad_rounded : Icons.campaign_rounded),
+                                                    ? Icons
+                                                        .mark_email_read_rounded
+                                                    : (isFraud
+                                                        ? Icons.gpp_bad_rounded
+                                                        : Icons
+                                                            .campaign_rounded),
                                                 color: statusColor,
                                                 size: 16,
                                               ),
@@ -3161,7 +3266,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                             const SizedBox(width: 10),
                                             Expanded(
                                               child: Text(
-                                                log['sender']?.toString() ?? 'Unknown Sender',
+                                                log['sender']?.toString() ??
+                                                    'Unknown Sender',
                                                 style: GoogleFonts.inter(
                                                   fontWeight: FontWeight.w800,
                                                   fontSize: 14,
@@ -3176,14 +3282,22 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                       ),
                                       const SizedBox(width: 8),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
                                           color: statusColor.withOpacity(0.12),
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: statusColor.withOpacity(0.3)),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color:
+                                                  statusColor.withOpacity(0.3)),
                                         ),
                                         child: Text(
-                                          isSafe ? 'SAFE' : (isFraud ? 'FRAUD THREAT' : 'SPAM PROMO'),
+                                          isSafe
+                                              ? 'SAFE'
+                                              : (isFraud
+                                                  ? 'FRAUD THREAT'
+                                                  : 'SPAM PROMO'),
                                           style: GoogleFonts.inter(
                                             color: statusColor,
                                             fontSize: 10,
@@ -3199,10 +3313,14 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                     width: double.infinity,
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                                      color: isDark
+                                          ? const Color(0xFF0F172A)
+                                          : const Color(0xFFF8FAFC),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                                        color: isDark
+                                            ? const Color(0xFF1E293B)
+                                            : const Color(0xFFE2E8F0),
                                       ),
                                     ),
                                     child: Text(
@@ -3212,13 +3330,16 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                       style: GoogleFonts.inter(
                                         fontSize: 12,
                                         height: 1.4,
-                                        color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+                                        color: isDark
+                                            ? Colors.grey.shade300
+                                            : Colors.grey.shade800,
                                       ),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         _formatLogTime(log['time']),
@@ -3231,22 +3352,30 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                       Row(
                                         children: [
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: (displayThreat > 0.60 ? AppTheme.cyberRed : AppTheme.cyberGreen).withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(8),
+                                              color: (displayThreat > 0.60
+                                                      ? AppTheme.cyberRed
+                                                      : AppTheme.cyberGreen)
+                                                  .withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
                                             ),
                                             child: Text(
                                               'Threat Index: ${(displayThreat * 100).toStringAsFixed(0)}%',
                                               style: GoogleFonts.inter(
-                                                color: displayThreat > 0.60 ? AppTheme.cyberRed : AppTheme.cyberGreen,
+                                                color: displayThreat > 0.60
+                                                    ? AppTheme.cyberRed
+                                                    : AppTheme.cyberGreen,
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w700,
                                               ),
                                             ),
                                           ),
                                           const SizedBox(width: 6),
-                                          Icon(Icons.chevron_right_rounded, size: 16, color: textMuted),
+                                          Icon(Icons.chevron_right_rounded,
+                                              size: 16, color: textMuted),
                                         ],
                                       ),
                                     ],
@@ -3284,7 +3413,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ),
           ),
           const SizedBox(height: 16),
-
           Row(
             children: [
               Expanded(
@@ -3313,7 +3441,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             ],
           ),
           const SizedBox(height: 24),
-
           Expanded(
             child: _blockedNumbers.isEmpty
                 ? Center(
@@ -3369,13 +3496,34 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   Widget _buildProfileTab(
       String name, Map<String, dynamic> user, ThemeData theme, bool isDark) {
-    final rawName = (user['full_name'] ?? user['fullName'] ?? user['name'] ?? user['username'] ?? name)?.toString().trim() ?? '';
+    final rawName = (user['full_name'] ??
+                user['fullName'] ??
+                user['name'] ??
+                user['username'] ??
+                name)
+            ?.toString()
+            .trim() ??
+        '';
     final fullName = rawName.isNotEmpty ? rawName : 'User';
 
-    final rawEmail = (user['email'] ?? user['email_address'] ?? user['emailAddress'] ?? user['gmail'] ?? user['user_email'])?.toString().trim() ?? '';
+    final rawEmail = (user['email'] ??
+                user['email_address'] ??
+                user['emailAddress'] ??
+                user['gmail'] ??
+                user['user_email'])
+            ?.toString()
+            .trim() ??
+        '';
     final email = rawEmail.isNotEmpty ? rawEmail : 'Email not available';
 
-    final rawPhone = (user['phone_number'] ?? user['phoneNumber'] ?? user['phone'] ?? user['mobile'] ?? user['phone_no'])?.toString().trim() ?? '';
+    final rawPhone = (user['phone_number'] ??
+                user['phoneNumber'] ??
+                user['phone'] ??
+                user['mobile'] ??
+                user['phone_no'])
+            ?.toString()
+            .trim() ??
+        '';
     final phone = rawPhone.isNotEmpty ? rawPhone : 'Phone not available';
 
     final rawGender = (user['gender'] ?? user['sex'])?.toString().trim() ?? '';
@@ -3383,7 +3531,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
     final cardBg = isDark ? AppTheme.cyberCard : AppTheme.cardLight;
     final borderColor = isDark ? AppTheme.cyberBorder : AppTheme.borderLight;
-    final textPrimary = isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+    final textPrimary =
+        isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
     final textMuted = isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
 
     return SingleChildScrollView(
@@ -3423,7 +3572,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     child: Icon(
                       Icons.person_rounded,
                       size: 40,
-                      color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                      color: isDark
+                          ? AppTheme.cyberRed
+                          : theme.colorScheme.primary,
                     ),
                   ),
                 ),
@@ -3471,10 +3622,17 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: (isDark ? AppTheme.cyberRed : theme.colorScheme.primary).withOpacity(0.12),
+                            color: (isDark
+                                    ? AppTheme.cyberRed
+                                    : theme.colorScheme.primary)
+                                .withOpacity(0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(Icons.mark_chat_unread_outlined, color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary, size: 20),
+                          child: Icon(Icons.mark_chat_unread_outlined,
+                              color: isDark
+                                  ? AppTheme.cyberRed
+                                  : theme.colorScheme.primary,
+                              size: 20),
                         ),
                         const SizedBox(width: 12),
                         Column(
@@ -3489,8 +3647,11 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                               ),
                             ),
                             Text(
-                              Platform.isAndroid ? 'Real-time background shield' : 'Unsupported on iOS',
-                              style: GoogleFonts.inter(fontSize: 11, color: textMuted),
+                              Platform.isAndroid
+                                  ? 'Real-time background shield'
+                                  : 'Unsupported on iOS',
+                              style: GoogleFonts.inter(
+                                  fontSize: 11, color: textMuted),
                             ),
                           ],
                         ),
@@ -3498,7 +3659,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     ),
                     Switch(
                       value: _isIngestionEnabled && _hasSmsPermission,
-                      activeColor: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                      activeColor: isDark
+                          ? AppTheme.cyberRed
+                          : theme.colorScheme.primary,
                       onChanged: Platform.isAndroid
                           ? (val) {
                               if (val) {
@@ -3562,10 +3725,17 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: (isDark ? AppTheme.cyberRed : theme.colorScheme.primary).withOpacity(0.12),
+                            color: (isDark
+                                    ? AppTheme.cyberRed
+                                    : theme.colorScheme.primary)
+                                .withOpacity(0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(Icons.notifications_active_outlined, color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary, size: 20),
+                          child: Icon(Icons.notifications_active_outlined,
+                              color: isDark
+                                  ? AppTheme.cyberRed
+                                  : theme.colorScheme.primary,
+                              size: 20),
                         ),
                         const SizedBox(width: 12),
                         Text(
@@ -3580,7 +3750,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     ),
                     Switch(
                       value: _isNotificationsEnabled,
-                      activeColor: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                      activeColor: isDark
+                          ? AppTheme.cyberRed
+                          : theme.colorScheme.primary,
                       onChanged: (val) => _updateNotifications(val),
                     ),
                   ],
@@ -3592,14 +3764,19 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     children: [
                       Text(
                         'Notification Threshold',
-                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: textMuted),
+                        style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: textMuted),
                       ),
                       Text(
                         '${(_notificationThreshold * 100).toStringAsFixed(0)}% Threat',
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                          color: isDark
+                              ? AppTheme.cyberRed
+                              : theme.colorScheme.primary,
                         ),
                       ),
                     ],
@@ -3610,8 +3787,11 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     min: 0.50,
                     max: 1.00,
                     divisions: 10,
-                    activeColor: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
-                    inactiveColor: isDark ? AppTheme.cyberCardSecondary : const Color(0xFFE2E8F0),
+                    activeColor:
+                        isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                    inactiveColor: isDark
+                        ? AppTheme.cyberCardSecondary
+                        : const Color(0xFFE2E8F0),
                     onChanged: (val) => _updateThreshold(val),
                   ),
                   Text(
@@ -3640,12 +3820,19 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: (isDark ? AppTheme.cyberRed : theme.colorScheme.primary).withOpacity(0.12),
+                        color: (isDark
+                                ? AppTheme.cyberRed
+                                : theme.colorScheme.primary)
+                            .withOpacity(0.12),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-                        color: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                        isDark
+                            ? Icons.dark_mode_outlined
+                            : Icons.light_mode_outlined,
+                        color: isDark
+                            ? AppTheme.cyberRed
+                            : theme.colorScheme.primary,
                         size: 20,
                       ),
                     ),
@@ -3662,7 +3849,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 ),
                 Switch(
                   value: isDark,
-                  activeColor: isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
+                  activeColor:
+                      isDark ? AppTheme.cyberRed : theme.colorScheme.primary,
                   onChanged: (val) {
                     SecureSignalApp.of(context).toggleTheme();
                   },
@@ -3701,7 +3889,8 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                       color: AppTheme.cyberCyan.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.description_outlined, color: AppTheme.cyberCyan, size: 20),
+                    child: const Icon(Icons.description_outlined,
+                        color: AppTheme.cyberCyan, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -3766,7 +3955,8 @@ class TipOfTheDayBannerWidget extends StatefulWidget {
   });
 
   @override
-  State<TipOfTheDayBannerWidget> createState() => _TipOfTheDayBannerWidgetState();
+  State<TipOfTheDayBannerWidget> createState() =>
+      _TipOfTheDayBannerWidgetState();
 }
 
 class _TipOfTheDayBannerWidgetState extends State<TipOfTheDayBannerWidget>
@@ -3799,8 +3989,10 @@ class _TipOfTheDayBannerWidgetState extends State<TipOfTheDayBannerWidget>
   Widget build(BuildContext context) {
     final tip = SafetyTipsService.getTipOfTheDay();
     final cardBg = widget.isDark ? AppTheme.cyberCard : AppTheme.cardLight;
-    final textPrimary = widget.isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
-    final textMuted = widget.isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
+    final textPrimary =
+        widget.isDark ? AppTheme.cyberTextPrimary : AppTheme.textBodyLight;
+    final textMuted =
+        widget.isDark ? AppTheme.cyberTextMuted : AppTheme.subtleLight;
     final accentColor = AppTheme.cyberRed;
 
     return Container(
@@ -3880,7 +4072,8 @@ class _TipOfTheDayBannerWidgetState extends State<TipOfTheDayBannerWidget>
                             color: accentColor.withOpacity(0.18),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(Icons.security_rounded, color: accentColor, size: 14),
+                          child: Icon(Icons.security_rounded,
+                              color: accentColor, size: 14),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -3907,9 +4100,11 @@ class _TipOfTheDayBannerWidgetState extends State<TipOfTheDayBannerWidget>
                       AnimatedBuilder(
                         animation: _controller,
                         builder: (context, child) {
-                          final secs = (_controller.value * _timerSeconds).ceil();
+                          final secs =
+                              (_controller.value * _timerSeconds).ceil();
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
                             margin: const EdgeInsets.only(right: 8),
                             decoration: BoxDecoration(
                               color: accentColor.withOpacity(0.18),
@@ -3939,7 +4134,8 @@ class _TipOfTheDayBannerWidgetState extends State<TipOfTheDayBannerWidget>
                               ),
                             ),
                             const SizedBox(width: 2),
-                            const Icon(Icons.arrow_forward_rounded, size: 12, color: AppTheme.cyberCyan),
+                            const Icon(Icons.arrow_forward_rounded,
+                                size: 12, color: AppTheme.cyberCyan),
                           ],
                         ),
                       ),
@@ -3953,7 +4149,8 @@ class _TipOfTheDayBannerWidgetState extends State<TipOfTheDayBannerWidget>
                             color: accentColor.withOpacity(0.15),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(Icons.close_rounded, size: 14, color: accentColor),
+                          child: Icon(Icons.close_rounded,
+                              size: 14, color: accentColor),
                         ),
                       ),
                     ],
@@ -3989,17 +4186,23 @@ class _TipOfTheDayBannerWidgetState extends State<TipOfTheDayBannerWidget>
                   if (tip.actionSteps.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: widget.isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                        color: widget.isDark
+                            ? const Color(0xFF1E293B)
+                            : const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: widget.isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                          color: widget.isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFFE2E8F0),
                         ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.shield_outlined, size: 14, color: AppTheme.cyberGreen),
+                          const Icon(Icons.shield_outlined,
+                              size: 14, color: AppTheme.cyberGreen),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -4007,7 +4210,9 @@ class _TipOfTheDayBannerWidgetState extends State<TipOfTheDayBannerWidget>
                               style: GoogleFonts.inter(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: widget.isDark ? AppTheme.cyberGreen : Colors.green.shade800,
+                                color: widget.isDark
+                                    ? AppTheme.cyberGreen
+                                    : Colors.green.shade800,
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,

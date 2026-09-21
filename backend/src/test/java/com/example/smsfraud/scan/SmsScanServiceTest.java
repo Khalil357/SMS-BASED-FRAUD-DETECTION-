@@ -9,7 +9,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,12 +38,12 @@ class SmsScanServiceTest {
         when(smsScanRepository.save(any(SmsScan.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Optional<SmsScan> result = smsScanService.queryAndSave(
+        SmsScan result = smsScanService.queryAndSave(
                 userId, "+255680214294", message, "MOBILE_APP");
 
         ArgumentCaptor<SmsScan> captor = ArgumentCaptor.forClass(SmsScan.class);
         verify(smsScanRepository).save(captor.capture());
-        assertThat(result).isPresent();
+        assertThat(result).isNotNull();
         assertThat(captor.getValue().getUserId()).isEqualTo(userId);
         assertThat(captor.getValue().getMessageBody()).isEqualTo(message);
         assertThat(captor.getValue().getVerdict()).isEqualTo("FRAUD");
@@ -52,15 +51,20 @@ class SmsScanServiceTest {
     }
 
     @Test
-    void doesNotSaveAMessageWhenTheModelDoesNotDetectAScam() {
+    void savesAMessageWhenTheModelDoesNotDetectAScam() {
         String message = "Hello, how are you?";
         when(mlFraudDetectionClient.analyzeSms(message))
                 .thenReturn(new FraudCheckResponse(message, "not_scam", false, 0.99));
 
-        Optional<SmsScan> result = smsScanService.queryAndSave(
+        when(smsScanRepository.save(any(SmsScan.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        SmsScan result = smsScanService.queryAndSave(
                 UUID.randomUUID(), "+255700000000", message, "MOBILE_APP");
 
-        assertThat(result).isEmpty();
-        verifyNoInteractions(smsScanRepository);
+        assertThat(result).isNotNull();
+        assertThat(result.getVerdict()).isEqualTo("SAFE");
+        assertThat(result.getIsScam()).isFalse();
+        verify(smsScanRepository).save(any(SmsScan.class));
     }
 }

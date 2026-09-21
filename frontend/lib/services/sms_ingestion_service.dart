@@ -148,6 +148,16 @@ class SmsIngestionService {
       return;
     }
 
+    // Android's manifest receiver plus SmsScanWorker is the single automatic
+    // ingestion pipeline. Registering Telephony here processes the same SMS a
+    // second time whenever the Flutter activity is open, producing duplicate
+    // Safe/Fraud entries and a second local-rules verdict.
+    final useNativeReceiver = Platform.isAndroid;
+    if (useNativeReceiver) {
+      debugPrint('SMS Ingestion: Native receiver owns automatic SMS scanning.');
+      return;
+    }
+
     // Register listener
     try {
       _telephony.listenIncomingSms(

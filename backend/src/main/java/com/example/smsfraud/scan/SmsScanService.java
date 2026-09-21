@@ -7,7 +7,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -23,15 +22,33 @@ public class SmsScanService {
     }
 
     /** Uses the ML service as the sole fraud-decision authority. */
-    public Optional<SmsScan> queryAndSave(UUID userId, String sender, String body, String source) {
+    public SmsScan queryAndSave(UUID userId, String sender, String body, String source) {
         String message = body == null ? "" : body.trim();
         if (message.isEmpty()) {
             throw new IllegalArgumentException("messageBody is required");
         }
 
         FraudCheckResponse result = mlFraudDetectionClient.analyzeSms(message);
-        if (!result.isScam()) {
-            return Optional.empty();
+        SmsScan scan = new SmsScan();
+        scan.setUserId(userId);
+        scan.setSender(sender);
+        scan.setMessageBody(message);
+        scan.setVerdict(result.isScam() ? "FRAUD" : "SAFE");
+        scan.setConfidence(result.confidence());
+        scan.setIsScam(result.isScam());
+        scan.setSource(source == null || source.isBlank() ? "MANUAL_QUERY" : source);
+        scan.setScannedAt(Instant.now());
+        // Keep a complete model-scanned history. This lets the mobile client show
+        // safe as well as fraudulent scans and prevents it from falling back to
+        // a second, local rules engine when the model says a message is safe.
+        return repository.save(scan);
+    }
+
+    /** Records an authenticated user's explicit fraud report. */
+    public SmsScan markAsFraud(UUID userId, String sender, String body) {
+        String message = body == null ? "" : body.trim();
+        if (message.isEmpty()) {
+            throw new IllegalArgumentException("message is required");
         }
 
         SmsScan scan = new SmsScan();
@@ -39,11 +56,11 @@ public class SmsScanService {
         scan.setSender(sender);
         scan.setMessageBody(message);
         scan.setVerdict("FRAUD");
-        scan.setConfidence(result.confidence());
-        scan.setIsScam(result.isScam());
-        scan.setSource(source == null || source.isBlank() ? "MANUAL_QUERY" : source);
+        scan.setConfidence(1.0);
+        scan.setIsScam(true);
+        scan.setSource("USER_REPORTED");
         scan.setScannedAt(Instant.now());
-        return Optional.of(repository.save(scan));
+        return repository.save(scan);
     }
 
     public Page<SmsScan> listForUser(UUID userId, Pageable pageable) {

@@ -71,12 +71,28 @@ class AuthService {
   // Session variables & Storage Keys
   static Map<String, dynamic>? currentUser;
   static String? token;
+  static String? refreshToken;
 
   static const String _keyToken = 'auth_token_v1';
+  static const String _keyRefreshToken = 'auth_refresh_token_v1';
   static const String _keyUser = 'auth_user_v1';
   static const String _keyUnverifiedIdentifiers = 'unverified_identifiers_v1';
 
   static final Set<String> _unverifiedIdentifiers = {};
+
+  /// Protected endpoints require an access JWT. Older builds saved a profile
+  /// without one and treated it as a signed-in session, which led every scan
+  /// request to be rejected with HTTP 401.
+  static bool _isUsableAccessToken(String? value) {
+    if (value == null) return false;
+    var candidate = value.trim();
+    if (candidate.toLowerCase().startsWith('bearer ')) {
+      candidate = candidate.substring(7).trim();
+    }
+    return candidate.isNotEmpty &&
+        candidate != 'auth_session_active' &&
+        candidate.split('.').length == 3;
+  }
 
   static void markIdentifierUnverified(String identifier) {
     if (identifier.trim().isEmpty) return;
@@ -123,12 +139,18 @@ class AuthService {
   }
 
   /// Save session to persistent storage
-  static Future<void> saveSession(
-      String tokenStr, Map<String, dynamic> userMap) async {
+  static Future<void> saveSession(String tokenStr, Map<String, dynamic> userMap,
+      {String? refreshTokenStr}) async {
     token = tokenStr;
+    if (refreshTokenStr != null && refreshTokenStr.trim().isNotEmpty) {
+      refreshToken = refreshTokenStr.trim();
+    }
     currentUser = userMap;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyToken, tokenStr);
+    if (refreshToken != null && refreshToken!.isNotEmpty) {
+      await prefs.setString(_keyRefreshToken, refreshToken!);
+    }
     await prefs.setString(_keyUser, jsonEncode(userMap));
   }
 
@@ -139,15 +161,21 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
       final savedToken = prefs.getString(_keyToken);
+      final savedRefreshToken = prefs.getString(_keyRefreshToken);
       final savedUserJson = prefs.getString(_keyUser);
 
-      if (savedUserJson != null && savedUserJson.isNotEmpty) {
-        token = (savedToken != null && savedToken.isNotEmpty)
-            ? savedToken
-            : 'auth_session_active';
+      if (savedUserJson != null &&
+          savedUserJson.isNotEmpty &&
+          _isUsableAccessToken(savedToken)) {
+        token = savedToken!.trim();
+        refreshToken = savedRefreshToken?.trim();
         currentUser = jsonDecode(savedUserJson) as Map<String, dynamic>;
         return true;
       }
+      // Do not enter the dashboard using a stale profile-only session.
+      token = null;
+      refreshToken = null;
+      currentUser = null;
     } catch (e) {
       debugPrint("Load Session error: $e");
     }
@@ -157,10 +185,12 @@ class AuthService {
   /// Clear persistent session (Logout)
   static Future<void> logout() async {
     token = null;
+    refreshToken = null;
     currentUser = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_keyToken);
+      await prefs.remove(_keyRefreshToken);
       await prefs.remove(_keyUser);
     } catch (_) {}
   }
@@ -168,10 +198,13 @@ class AuthService {
   /// Helper to send POST requests with automatic fallback for physical phone vs emulator
   /// Returns properly formatted Authorization header with Bearer prefix
   static String get formattedAuthorization {
-    if (token == null || token!.trim().isEmpty) return '';
-    final t = token!.trim();
-    if (t.toLowerCase().startsWith('bearer ')) return t;
-    return 'Bearer $t';
+    if (!_isUsableAccessToken(token)) return '';
+    var rawToken = token!.trim();
+    if (rawToken.toLowerCase().startsWith('bearer ')) {
+      rawToken = rawToken.substring(7).trim();
+    }
+    // The server deliberately accepts the standard, case-sensitive scheme.
+    return 'Bearer $rawToken';
   }
 
   static Future<http.Response> _postRequest(
@@ -181,7 +214,7 @@ class AuthService {
   }) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
+      if (formattedAuthorization.isNotEmpty) 'Authorization': formattedAuthorization,
       ...?customHeaders,
     };
     final encodedBody = jsonEncode(body);
@@ -216,7 +249,7 @@ class AuthService {
   }) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
+      if (formattedAuthorization.isNotEmpty) 'Authorization': formattedAuthorization,
       ...?customHeaders,
     };
     final primaryUrl = _buildUrl(path);
@@ -245,7 +278,7 @@ class AuthService {
   static Future<http.Response> _deleteRequest(String path) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
+      if (formattedAuthorization.isNotEmpty) 'Authorization': formattedAuthorization,
     };
     final primaryUrl = _buildUrl(path);
 
@@ -269,6 +302,33 @@ class AuthService {
     }
   }
 
+  /// Access JWTs are short-lived. Renew one with the saved refresh token
+  /// before giving up on a protected scan or feedback request.
+  static Future<bool> _refreshAccessToken() async {
+    if (refreshToken == null || refreshToken!.trim().isEmpty) return false;
+    try {
+      final response = await _postRequest('/api/auth/refresh', {
+        'refreshToken': refreshToken,
+      });
+      if (response.statusCode != 200 && response.statusCode != 201) return false;
+
+      final decoded = _safeJsonDecode(response.body);
+      final data = decoded['data'] is Map<String, dynamic>
+          ? decoded['data'] as Map<String, dynamic>
+          : decoded;
+      final nextToken = data['token']?.toString() ?? '';
+      final nextRefresh = data['refreshToken']?.toString() ?? refreshToken!;
+      if (!_isUsableAccessToken(nextToken)) return false;
+
+      await saveSession(nextToken, currentUser ?? {}, refreshTokenStr: nextRefresh);
+      debugPrint('[AuthService] Access token refreshed.');
+      return true;
+    } catch (error) {
+      debugPrint('[AuthService] Token refresh failed: $error');
+      return false;
+    }
+  }
+
   /// Submit SMS scan payload to backend API
   /// POST /api/scans
   static Future<Map<String, dynamic>> submitScan({
@@ -286,7 +346,10 @@ class AuthService {
       };
 
       debugPrint("[Argus Scan Endpoint] POST ${_buildUrl('/api/scans')} | sender: $sender, source: $source");
-      final response = await _postRequest('/api/scans', body);
+      var response = await _postRequest('/api/scans', body);
+      if (response.statusCode == 401 && await _refreshAccessToken()) {
+        response = await _postRequest('/api/scans', body);
+      }
       debugPrint("[Argus Scan Endpoint] Status: ${response.statusCode} | Response: ${response.body}");
       final decoded = _safeJsonDecode(response.body);
 
@@ -311,9 +374,14 @@ class AuthService {
           'confidence': confidence,
         };
       } else {
+        final defaultMessage = response.statusCode == 503
+            ? 'The fraud-detection model is temporarily unavailable. Please try again shortly.'
+            : response.statusCode == 401 || response.statusCode == 403
+                ? 'Your login session has expired. Please sign in again.'
+                : 'Scan submission failed';
         return {
           'success': false,
-          'message': decoded['message'] ?? 'Scan submission failed',
+          'message': decoded['message'] ?? defaultMessage,
           'statusCode': response.statusCode,
         };
       }
@@ -321,7 +389,7 @@ class AuthService {
       debugPrint("[Argus Scan Exception] $e");
       return {
         'success': false,
-        'message': 'Failed to submit scan to backend server.',
+        'message': 'Unable to reach the fraud-detection service. Check your connection and try again.',
         'error': e,
       };
     }
@@ -433,17 +501,19 @@ class AuthService {
   }
 
   /// Add a user-confirmed fraud scan to the backend database.
-  /// TODO: Confirm the exact endpoint path and payload with the backend team.
   static Future<Map<String, dynamic>> addFraudScan({
     required String sender,
     required String message,
   }) async {
     try {
-      // TODO: Confirm exact endpoint path and payload with backend.
-      final response = await _postRequest('/api/scans/fraud', {
+      final payload = {
         'sender': sender,
         'message': message,
-      });
+      };
+      var response = await _postRequest('/api/scans/fraud', payload);
+      if (response.statusCode == 401 && await _refreshAccessToken()) {
+        response = await _postRequest('/api/scans/fraud', payload);
+      }
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -453,9 +523,12 @@ class AuthService {
         };
       }
 
+      final defaultMessage = response.statusCode == 401 || response.statusCode == 403
+          ? 'Your login session has expired. Please sign in again.'
+          : 'Failed to mark message as fraud.';
       return {
         'success': false,
-        'message': decoded['message'] ?? 'Failed to mark message as fraud.',
+        'message': decoded['message'] ?? defaultMessage,
         'statusCode': response.statusCode,
       };
     } catch (e) {
@@ -863,8 +936,10 @@ class AuthService {
         markIdentifierVerified(cleanIdentifier);
         final data = _extractUserMap(decoded, cleanIdentifier);
         final tokenStr = decoded['token'] as String? ?? data['token'] as String? ?? '';
+        final refreshTokenStr =
+            decoded['refreshToken'] as String? ?? data['refreshToken'] as String?;
         if (tokenStr.isNotEmpty) {
-          await saveSession(tokenStr, data);
+          await saveSession(tokenStr, data, refreshTokenStr: refreshTokenStr);
         }
         return {
           'success': true,
@@ -912,7 +987,9 @@ class AuthService {
 
       userData['is_verified'] = true;
       markIdentifierVerified(cleanIdentifier);
-      await saveSession(tokenStr, userData);
+      final refreshTokenStr =
+          (decoded['refreshToken'] ?? userData['refreshToken'])?.toString();
+      await saveSession(tokenStr, userData, refreshTokenStr: refreshTokenStr);
       return {
         'success': true,
         'message': decoded['message'] ?? 'Account verified successfully.',
