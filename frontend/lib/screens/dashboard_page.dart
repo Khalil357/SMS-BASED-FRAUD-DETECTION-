@@ -36,6 +36,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   // Controllers
   final _scanController = TextEditingController();
   final _blockNumberController = TextEditingController();
+  bool _offeredFullBlockThisSession = false;
   final _searchController = TextEditingController();
 
   // Scan state
@@ -1449,25 +1450,25 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.red,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              icon: const Icon(Icons.block, size: 16),
-                              label: const Text('Block Number',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold)),
-                              onPressed: () => _blockNumberFromLog(log),
-                            ),
-                            const SizedBox(height: 10),
                             if (type == 'Fraud') ...[
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.red,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                icon: const Icon(Icons.block, size: 16),
+                                label: const Text('Block Number',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold)),
+                                onPressed: () => _blockNumberFromLog(log),
+                              ),
+                              const SizedBox(height: 10),
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.green,
@@ -1610,10 +1611,11 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     if (!Platform.isAndroid) return;
     if (await NativeSmsBlockService.isDefaultSmsApp()) return;
 
-    final alreadyAsked =
-        await SmsStorageService.getBoolSetting('has_offered_full_block', false);
-    if (alreadyAsked) return;
-    await SmsStorageService.saveBoolSetting('has_offered_full_block', true);
+    // Only avoid re-asking within the same app session — a "Not now" earlier
+    // (including from earlier testing) must not permanently block the user
+    // from ever being offered real, OS-level blocking again.
+    if (_offeredFullBlockThisSession) return;
+    _offeredFullBlockThisSession = true;
 
     if (!mounted) return;
     final wantsFullBlock = await showDialog<bool>(
