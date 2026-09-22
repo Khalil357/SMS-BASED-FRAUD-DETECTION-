@@ -435,32 +435,24 @@ class AuthService {
     }
 
     try {
-      final path1 = '/api/v1/fraud-records/${Uri.encodeComponent(scanId)}';
-      print("[Argus Delete Fraud Record] DELETE $baseUrl$path1 | Header: $formattedAuthorization");
-      final response1 = await delete(path1);
-      print("[Argus Delete Fraud Record] Status: ${response1.statusCode} | Body: ${response1.body}");
+      final path = '/api/v1/fraud-records/${Uri.encodeComponent(scanId)}';
+      final response = await delete(path);
 
-      if (response1.statusCode == 200 || response1.statusCode == 204 || response1.statusCode == 404) {
+      if (response.statusCode == 200 ||
+          response.statusCode == 204 ||
+          response.statusCode == 404) {
         return {
           'success': true,
           'message': 'Record removed from the backend database.',
         };
       }
 
-      final path2 = '/api/scans/fraud/${Uri.encodeComponent(scanId)}';
-      final response2 = await delete(path2);
-      if (response2.statusCode == 200 || response2.statusCode == 204 || response2.statusCode == 404) {
-        return {
-          'success': true,
-          'message': 'Record removed from the backend database.',
-        };
-      }
-
-      final decoded = _safeJsonDecode(response1.body);
+      final decoded = _safeJsonDecode(response.body);
       return {
         'success': false,
-        'message': decoded['message'] ?? 'Failed to remove the record (status ${response1.statusCode}).',
-        'statusCode': response1.statusCode,
+        'message': decoded['message'] ??
+            'Failed to remove the record (status ${response.statusCode}).',
+        'statusCode': response.statusCode,
       };
     } catch (e) {
       return {
@@ -478,10 +470,9 @@ class AuthService {
     required String message,
   }) async {
     try {
-      // TODO: Confirm exact endpoint path and payload with backend.
-      final response = await _postRequest('/api/scans/fraud', {
+      final response = await _postRequest('/api/v1/fraud-records', {
         'sender': sender,
-        'message': message,
+        'messageBody': message,
       });
       final decoded = _safeJsonDecode(response.body);
 
