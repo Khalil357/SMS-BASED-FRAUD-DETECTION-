@@ -1,0 +1,49 @@
+# ─── Production compose ───────────────────────────────────────────────────────
+# Deployed to the EC2 instance. Unlike docker-compose.yml (local dev), this file
+# does NOT build images — it pulls pre-built images from Docker Hub (built and
+# pushed by CI). The ML service is NOT here: it runs on a separate AWS account
+# and is reached by the backend over HTTP via ML_SERVICE_URL.
+#
+# Secrets are injected at deploy time from the box's environment (see deploy.yml).
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sms_fraud}
+      POSTGRES_USER: ${POSTGRES_USER:-sms_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sms_pass}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    image: ${DOCKER_USERNAME}/argus-backend:${TAG:-latest}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-sms_fraud}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-sms_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-sms_pass}
+      ML_SERVICE_URL: ${ML_SERVICE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      MESEJI_API_KEY: ${MESEJI_API_KEY}
+      MESEJI_SENDER_ID: ${MESEJI_SENDER_ID:-MESEJI}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  web-client:
+    image: ${DOCKER_USERNAME}/argus-web-client:${TAG:-latest}
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:
+    driver: local

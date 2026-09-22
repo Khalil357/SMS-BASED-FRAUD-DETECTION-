@@ -1,14 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:telephony/telephony.dart';
 import 'theme.dart';
 import 'screens/splash_screen.dart';
 import 'services/notification_service.dart';
 import 'services/sms_ingestion_service.dart';
-
-@pragma('vm:entry-point')
-Future<void> backgroundSmsHandler(SmsMessage message) async {
-  await handleBackgroundSms(message);
-}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,9 +28,6 @@ class MyApp extends StatefulWidget {
   static MyAppState of(BuildContext context) =>
       context.findAncestorStateOfType<MyAppState>()!;
 }
-
-typedef SecureSignalApp = MyApp;
-typedef SecureSignalAppState = MyAppState;
 
 class MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.system;

@@ -8,7 +8,7 @@ import 'notification_service.dart';
 import 'auth_service.dart';
 
 @pragma('vm:entry-point')
-Future<void> handleBackgroundSms(SmsMessage message) async {
+void backgroundSmsHandler(SmsMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   
   final body = message.body ?? '';
@@ -62,10 +62,10 @@ Future<void> handleBackgroundSms(SmsMessage message) async {
     // Always trigger notification for Fraud / Spam / Threat Index >= 0.50
     final threatLevel = (logEntry['threat'] as num).toDouble();
     if (logEntry['type'] == 'Fraud' || logEntry['type'] == 'Spam' || threatLevel >= 0.50) {
-      await NotificationService.showThreatAlert(
-        sender: sender,
-        message: body,
-        threatLevel: threatLevel,
+      await NotificationService.initialize();
+      await NotificationService.showThreatNotification(
+        title: '🚨 High Threat SMS Detected',
+        body: 'From $sender: ${logEntry['type']} Risk (${(threatLevel * 100).toStringAsFixed(0)}% Threat Index)',
       );
     }
   } catch (e) {
@@ -153,7 +153,7 @@ class SmsIngestionService {
           );
         }
       },
-      onBackgroundMessage: handleBackgroundSms,
+      onBackgroundMessage: backgroundSmsHandler,
     );
   }
 }

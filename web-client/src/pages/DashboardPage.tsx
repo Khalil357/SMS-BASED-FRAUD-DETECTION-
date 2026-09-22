@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import "./DashboardPage.css";
 import type {
@@ -7,7 +7,6 @@ import type {
   SmsRecord,
   DetectionRule,
   BlacklistedSender,
-  SystemUser,
 } from "../types/dashboard";
 import type { AuthPage } from "../types/auth";
 import { useTheme } from "../theme/ThemeContext";
@@ -23,10 +22,9 @@ import {
   Search,
   Trash2,
   Eye,
+  EyeOff,
   CheckCircle2,
   XCircle,
-  Lock,
-  Unlock,
   Moon,
   Sun,
   LogOut,
@@ -39,12 +37,19 @@ import {
   Copy,
   Check,
   Download,
+  Pencil,
+  KeyRound,
 } from "lucide-react";
 import inAppIcon from "../assets/images/in_app_icon.png";
+import { getUsers, createUser, updateUser, resetUserPassword, deleteUser, getCurrentUserId } from "../services/adminService";
+import type { AdminUser } from "../services/adminService";
 
 interface DashboardPageProps {
   onNavigate: (page: AuthPage) => void;
 }
+
+/** Strict email format: local@domain.tld (TLD of 2+ letters). */
+const EMAIL_PATTERN = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
 
 const mockStats: StatCardData[] = [
   {
@@ -232,49 +237,6 @@ const initialBlacklist: BlacklistedSender[] = [
   },
 ];
 
-const initialUsers: SystemUser[] = [
-  {
-    id: "USR-01",
-    name: "System Administrator",
-    email: "admin@smsfraud.com",
-    phone: "+255 700 000 001",
-    role: "ADMIN",
-    isVerified: true,
-    isLocked: false,
-    lastActive: "Active Now",
-  },
-  {
-    id: "USR-02",
-    name: "Security Analyst",
-    email: "analyst@smsfraud.com",
-    phone: "+255 700 000 002",
-    role: "ADMIN",
-    isVerified: true,
-    isLocked: false,
-    lastActive: "10 mins ago",
-  },
-  {
-    id: "USR-03",
-    name: "Juma Hamisi",
-    email: "juma.hamisi@gmail.com",
-    phone: "+255 712 990 011",
-    role: "USER",
-    isVerified: true,
-    isLocked: false,
-    lastActive: "2 hours ago",
-  },
-  {
-    id: "USR-04",
-    name: "Amina Salum",
-    email: "amina.salum@yahoo.com",
-    phone: "+255 754 881 223",
-    role: "USER",
-    isVerified: false,
-    isLocked: true,
-    lastActive: "1 day ago",
-  },
-];
-
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const { isDark, toggleTheme } = useTheme();
 
@@ -285,7 +247,46 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [smsList, setSmsList] = useState<SmsRecord[]>(initialSmsRecords);
   const [rulesList, setRulesList] = useState<DetectionRule[]>(initialRules);
   const [blacklist, setBlacklist] = useState<BlacklistedSender[]>(initialBlacklist);
-  const [usersList, setUsersList] = useState<SystemUser[]>(initialUsers);
+  const [usersList, setUsersList] = useState<AdminUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Add User form state
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [addUserBusy, setAddUserBusy] = useState(false);
+  const [addUserFullName, setAddUserFullName] = useState("");
+  const [addUserEmail, setAddUserEmail] = useState("");
+  const [addUserPhone, setAddUserPhone] = useState("");
+  const [addUserPassword, setAddUserPassword] = useState("");
+  const [addUserConfirmPassword, setAddUserConfirmPassword] = useState("");
+  const [addUserGender, setAddUserGender] = useState<"MALE" | "FEMALE" | "OTHER" | "">("");
+  const [showAddUserPassword, setShowAddUserPassword] = useState(false);
+  const [showAddUserConfirmPassword, setShowAddUserConfirmPassword] = useState(false);
+  const [addUserErrors, setAddUserErrors] = useState<Record<string, string>>({});
+
+  // Edit User form state
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [editUserBusy, setEditUserBusy] = useState(false);
+  const [editUserId, setEditUserId] = useState<string>("");
+  const [editUserFullName, setEditUserFullName] = useState("");
+  const [editUserEmail, setEditUserEmail] = useState("");
+  const [editUserPhone, setEditUserPhone] = useState("");
+  const [editUserActive, setEditUserActive] = useState(true);
+  const [editUserErrors, setEditUserErrors] = useState<Record<string, string>>({});
+
+  // Reset Password state
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+  const [resetPasswordBusy, setResetPasswordBusy] = useState(false);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
+  const [resetPasswordErrors, setResetPasswordErrors] = useState<Record<string, string>>({});
+
+  // Delete User state
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   // Modals & Popovers
   const [selectedSms, setSelectedSms] = useState<SmsRecord | null>(null);
@@ -417,12 +418,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     setBlacklist((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const handleToggleUserLock = (id: string) => {
-    setUsersList((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, isLocked: !u.isLocked } : u))
-    );
-  };
-
   const handleMarkSafe = (smsId: string) => {
     setSmsList((prev) =>
       prev.map((s) => (s.id === smsId ? { ...s, status: "Safe", fraudType: "Clean", riskScore: 5 } : s))
@@ -464,6 +459,195 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     }
   };
 
+  const currentUserId = getCurrentUserId();
+
+  function showToast(type: "success" | "error", message: string) {
+    setToast({ type, message });
+    window.setTimeout(() => setToast(null), 3500);
+  }
+
+  async function loadUsers() {
+    setUsersLoading(true);
+    setUsersError(null);
+    const res = await getUsers();
+    setUsersLoading(false);
+    if (res.success && res.data) {
+      setUsersList(res.data);
+    } else {
+      setUsersError(res.message ?? "Failed to load users");
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === "Users") {
+      void loadUsers();
+    }
+  }, [activeTab]);
+
+  async function handleCreateUser(e: React.FormEvent) {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+
+    if (!addUserFullName.trim()) errors.fullName = "Full name is required";
+
+    if (!addUserEmail.trim()) {
+      errors.email = "Email is required";
+    } else if (!EMAIL_PATTERN.test(addUserEmail.trim())) {
+      errors.email = "Enter a valid email address";
+    }
+
+    if (!addUserPhone.trim()) {
+      errors.phone = "Phone number is required";
+    } else if (!/^\+?[0-9]{9,15}$/.test(addUserPhone.trim())) {
+      errors.phone = "Enter a valid phone number (e.g. +255 712 345 678)";
+    }
+
+    if (!addUserPassword) {
+      errors.password = "Password is required";
+    } else if (addUserPassword.length < 8) {
+      errors.password = "Password must be at least 8 characters";
+    }
+
+    if (addUserConfirmPassword !== addUserPassword) {
+      errors.confirmPassword = "Passwords do not match";
+    }
+
+    setAddUserErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setAddUserBusy(true);
+    const res = await createUser({
+      full_name: addUserFullName.trim(),
+      email: addUserEmail.trim(),
+      phone_number: addUserPhone.trim(),
+      password: addUserPassword,
+      gender: addUserGender || undefined,
+    });
+    setAddUserBusy(false);
+    if (res.success && res.data) {
+      setUsersList((prev) => [...prev, res.data!]);
+      showToast("success", `${res.data.email} created`);
+      setAddUserFullName("");
+      setAddUserEmail("");
+      setAddUserPhone("");
+      setAddUserPassword("");
+      setAddUserConfirmPassword("");
+      setAddUserGender("");
+      setAddUserErrors({});
+      setIsAddUserOpen(false);
+    } else {
+      showToast("error", res.message ?? "Failed to create user");
+    }
+  }
+
+  function openEditUser(user: AdminUser) {
+    setEditUserId(user.user_id);
+    setEditUserFullName(user.full_name ?? "");
+    setEditUserEmail(user.email ?? "");
+    setEditUserPhone(user.phone ?? "");
+    setEditUserActive(user.active);
+    setEditUserErrors({});
+    setIsEditUserOpen(true);
+  }
+
+  async function handleUpdateUser(e: React.FormEvent) {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+
+    if (!editUserFullName.trim()) errors.fullName = "Full name is required";
+
+    if (!editUserEmail.trim()) {
+      errors.email = "Email is required";
+    } else if (!EMAIL_PATTERN.test(editUserEmail.trim())) {
+      errors.email = "Enter a valid email address";
+    }
+
+    if (!editUserPhone.trim()) {
+      errors.phone = "Phone number is required";
+    } else if (!/^\+?[0-9]{9,15}$/.test(editUserPhone.trim())) {
+      errors.phone = "Enter a valid phone number";
+    }
+
+    setEditUserErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setEditUserBusy(true);
+    const res = await updateUser(editUserId, {
+      full_name: editUserFullName.trim(),
+      email: editUserEmail.trim(),
+      phone_number: editUserPhone.trim(),
+      active: editUserActive,
+    });
+    setEditUserBusy(false);
+    if (res.success && res.data) {
+      setUsersList((prev) => prev.map((u) => (u.user_id === res.data!.user_id ? res.data! : u)));
+      showToast("success", `${res.data.email} updated`);
+      setIsEditUserOpen(false);
+    } else {
+      showToast("error", res.message ?? "Failed to update user");
+    }
+  }
+
+  function openResetPassword() {
+    setResetPasswordValue("");
+    setResetPasswordConfirm("");
+    setResetPasswordErrors({});
+    setShowResetPassword(false);
+    setShowResetPasswordConfirm(false);
+    setIsResetPasswordOpen(true);
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+
+    if (!resetPasswordValue) {
+      errors.password = "New password is required";
+    } else if (resetPasswordValue.length < 8) {
+      errors.password = "Password must be at least 8 characters";
+    }
+
+    if (resetPasswordConfirm !== resetPasswordValue) {
+      errors.confirmPassword = "Passwords do not match";
+    }
+
+    setResetPasswordErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setResetPasswordBusy(true);
+    const res = await resetUserPassword(editUserId, resetPasswordValue);
+    setResetPasswordBusy(false);
+    if (res.success) {
+      showToast("success", "Password reset successfully");
+      setIsResetPasswordOpen(false);
+    } else {
+      showToast("error", res.message ?? "Failed to reset password");
+    }
+  }
+
+  function handleDeleteClick(user: AdminUser) {
+    if (user.user_id === currentUserId) {
+      showToast("error", "You cannot delete your own account");
+      return;
+    }
+    setDeleteTarget(user);
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteBusy(true);
+    const res = await deleteUser(target.user_id);
+    setDeleteBusy(false);
+    if (res.success) {
+      setUsersList((prev) => prev.filter((u) => u.user_id !== target.user_id));
+      showToast("success", `${target.email} deleted`);
+    } else {
+      showToast("error", res.message ?? "Failed to delete user");
+    }
+    setDeleteTarget(null);
+  }
+
   return (
     <div className="admin-portal-container">
       {/* SIDEBAR */}
@@ -497,7 +681,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             {
               category: "ADMINISTRATION",
               items: [
-                { name: "Users & Devices", icon: Users, badge: usersList.length },
+                { name: "Users", icon: Users, badge: usersList.length },
                 { name: "System Settings", icon: Settings },
               ],
             },
@@ -1399,16 +1583,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
         )}
 
-        {/* TAB 5: USERS & DEVICES */}
-        {activeTab === "Users & Devices" && (
+        {/* TAB 5: USERS */}
+        {activeTab === "Users" && (
           <div className="tab-content fade-slide">
             <div className="admin-panel">
               <div className="panel-top">
                 <div>
-                  <h3>User & Device Registry</h3>
-                  <p>Registered users, device authorization, and account security</p>
+                  <h3>Users</h3>
+                  <p>Registered users, roles, and account status</p>
                 </div>
-                <button type="button" className="btn-primary" onClick={() => alert("Creating new system user...")}>
+                <button type="button" className="btn-primary" onClick={() => setIsAddUserOpen(true)}>
                   <UserPlus size={16} /> Add User
                 </button>
               </div>
@@ -1417,55 +1601,71 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>User ID</th>
                       <th>Full Name</th>
                       <th>Email / Contact</th>
-                      <th>Role</th>
                       <th>Email Verified</th>
                       <th>Status</th>
-                      <th>Last Active</th>
-                      <th>Account Lock</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {usersList.map((user) => (
-                      <tr key={user.id}>
-                        <td><code className="code-tag">{user.id}</code></td>
-                        <td className="font-semibold">{user.name}</td>
-                        <td>
-                          <div>{user.email}</div>
-                          <small className="subtle-text">{user.phone}</small>
-                        </td>
-                        <td>
-                          <span className={`type-tag ${user.role === "ADMIN" ? "impersonation" : "blue"}`}>
-                            {user.role}
-                          </span>
-                        </td>
-                        <td>
-                          {user.isVerified ? (
-                            <span className="badge-inline green"><CheckCircle2 size={14} /> Verified</span>
-                          ) : (
-                            <span className="badge-inline amber"><XCircle size={14} /> Pending</span>
-                          )}
-                        </td>
-                        <td>
-                          <span className={`status-pill ${user.isLocked ? "danger" : "safe"}`}>
-                            {user.isLocked ? "Locked" : "Active"}
-                          </span>
-                        </td>
-                        <td className="subtle-text">{user.lastActive}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className={`icon-action-btn ${user.isLocked ? "success" : "danger"}`}
-                            onClick={() => handleToggleUserLock(user.id)}
-                            title={user.isLocked ? "Unlock Account" : "Lock Account"}
-                          >
-                            {user.isLocked ? <Unlock size={16} /> : <Lock size={16} />}
-                          </button>
+                    {usersLoading ? (
+                      <tr>
+                        <td colSpan={5} className="subtle-text">Loading users…</td>
+                      </tr>
+                    ) : usersError ? (
+                      <tr>
+                        <td colSpan={5} className="subtle-text" style={{ color: "var(--primary)" }}>
+                          {usersError}
                         </td>
                       </tr>
-                    ))}
+                    ) : usersList.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="subtle-text">No users found.</td>
+                      </tr>
+                    ) : (
+                      usersList.map((user) => (
+                        <tr key={user.user_id}>
+                          <td className="font-semibold">{user.full_name || "—"}</td>
+                          <td>
+                            <div>{user.email}</div>
+                            <small className="subtle-text">{user.phone}</small>
+                          </td>
+                          <td>
+                            {user.verified ? (
+                              <span className="badge-inline green"><CheckCircle2 size={14} /> Verified</span>
+                            ) : (
+                              <span className="badge-inline amber"><XCircle size={14} /> Pending</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`status-pill ${user.active ? "safe" : "danger"}`}>
+                              {user.active ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="action-buttons-row">
+                              <button
+                                type="button"
+                                className="icon-action-btn"
+                                onClick={() => openEditUser(user)}
+                                title="Edit User"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-action-btn danger"
+                                onClick={() => handleDeleteClick(user)}
+                                title="Delete User"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1817,6 +2017,324 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+      {/* ADD USER MODAL */}
+      {isAddUserOpen && (
+        <div className="modal-backdrop" onClick={() => !addUserBusy && setIsAddUserOpen(false)}>
+          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex-align">
+                <UserPlus size={20} style={{ color: "var(--primary)" }} />
+                <h3>Add New User</h3>
+              </div>
+              <button type="button" className="close-btn" onClick={() => setIsAddUserOpen(false)} disabled={addUserBusy}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} noValidate>
+              <div className="modal-body">
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Jane Doe"
+                      value={addUserFullName}
+                      onChange={(e) => setAddUserFullName(e.target.value)}
+                      className={addUserErrors.fullName ? "input-error" : ""}
+                    />
+                    {addUserErrors.fullName && <span className="form-error">{addUserErrors.fullName}</span>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. jane@smsfraud.com"
+                      value={addUserEmail}
+                      onChange={(e) => setAddUserEmail(e.target.value)}
+                      className={addUserErrors.email ? "input-error" : ""}
+                    />
+                    {addUserErrors.email && <span className="form-error">{addUserErrors.email}</span>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Phone Number</label>
+                    <input
+                      type="tel"
+                      placeholder="e.g. +255 712 345 678"
+                      value={addUserPhone}
+                      onChange={(e) => setAddUserPhone(e.target.value)}
+                      className={addUserErrors.phone ? "input-error" : ""}
+                    />
+                    {addUserErrors.phone && <span className="form-error">{addUserErrors.phone}</span>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Gender (optional)</label>
+                    <select
+                      value={addUserGender}
+                      onChange={(e) => setAddUserGender(e.target.value as "MALE" | "FEMALE" | "OTHER" | "")}
+                    >
+                      <option value="">Prefer not to say</option>
+                      <option value="MALE">Male</option>
+                      <option value="FEMALE">Female</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Password</label>
+                    <div className="password-input-wrapper">
+                      <input
+                        type={showAddUserPassword ? "text" : "password"}
+                        placeholder="At least 8 characters"
+                        value={addUserPassword}
+                        onChange={(e) => setAddUserPassword(e.target.value)}
+                        className={addUserErrors.password ? "input-error" : ""}
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle-btn"
+                        onClick={() => setShowAddUserPassword(!showAddUserPassword)}
+                        aria-label="Toggle password visibility"
+                      >
+                        {showAddUserPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {addUserErrors.password && <span className="form-error">{addUserErrors.password}</span>}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Confirm Password</label>
+                    <div className="password-input-wrapper">
+                      <input
+                        type={showAddUserConfirmPassword ? "text" : "password"}
+                        placeholder="Re-enter the password"
+                        value={addUserConfirmPassword}
+                        onChange={(e) => setAddUserConfirmPassword(e.target.value)}
+                        className={addUserErrors.confirmPassword ? "input-error" : ""}
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle-btn"
+                        onClick={() => setShowAddUserConfirmPassword(!showAddUserConfirmPassword)}
+                        aria-label="Toggle password visibility"
+                      >
+                        {showAddUserConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {addUserErrors.confirmPassword && <span className="form-error">{addUserErrors.confirmPassword}</span>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setIsAddUserOpen(false)} disabled={addUserBusy}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={addUserBusy}>
+                  {addUserBusy ? "Creating…" : "Create User"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT USER MODAL */}
+      {isEditUserOpen && (
+        <div className="modal-backdrop" onClick={() => !editUserBusy && setIsEditUserOpen(false)}>
+          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex-align">
+                <Pencil size={20} style={{ color: "var(--primary)" }} />
+                <h3>Edit User</h3>
+              </div>
+              <button type="button" className="close-btn" onClick={() => setIsEditUserOpen(false)} disabled={editUserBusy}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateUser} noValidate>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Full Name</label>
+                  <input
+                    type="text"
+                    value={editUserFullName}
+                    onChange={(e) => setEditUserFullName(e.target.value)}
+                    className={editUserErrors.fullName ? "input-error" : ""}
+                  />
+                  {editUserErrors.fullName && <span className="form-error">{editUserErrors.fullName}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input
+                    type="email"
+                    value={editUserEmail}
+                    onChange={(e) => setEditUserEmail(e.target.value)}
+                    className={editUserErrors.email ? "input-error" : ""}
+                  />
+                  {editUserErrors.email && <span className="form-error">{editUserErrors.email}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Phone Number</label>
+                  <input
+                    type="tel"
+                    value={editUserPhone}
+                    onChange={(e) => setEditUserPhone(e.target.value)}
+                    className={editUserErrors.phone ? "input-error" : ""}
+                  />
+                  {editUserErrors.phone && <span className="form-error">{editUserErrors.phone}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label className="flex-align" style={{ gap: "8px", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={editUserActive}
+                      onChange={(e) => setEditUserActive(e.target.checked)}
+                      style={{ width: "auto" }}
+                    />
+                    Account active
+                  </label>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={openResetPassword} disabled={editUserBusy}>
+                  <KeyRound size={16} /> Reset Password
+                </button>
+                <button type="submit" className="btn-primary" disabled={editUserBusy}>
+                  {editUserBusy ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RESET PASSWORD MODAL */}
+      {isResetPasswordOpen && (
+        <div className="modal-backdrop" onClick={() => !resetPasswordBusy && setIsResetPasswordOpen(false)}>
+          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex-align">
+                <KeyRound size={20} style={{ color: "var(--primary)" }} />
+                <h3>Reset User Password</h3>
+              </div>
+              <button type="button" className="close-btn" onClick={() => setIsResetPasswordOpen(false)} disabled={resetPasswordBusy}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPassword} noValidate>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>New Password</label>
+                  <div className="password-input-wrapper">
+                    <input
+                      type={showResetPassword ? "text" : "password"}
+                      placeholder="At least 8 characters"
+                      value={resetPasswordValue}
+                      onChange={(e) => setResetPasswordValue(e.target.value)}
+                      className={resetPasswordErrors.password ? "input-error" : ""}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowResetPassword(!showResetPassword)}
+                      aria-label="Toggle password visibility"
+                    >
+                      {showResetPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  {resetPasswordErrors.password && <span className="form-error">{resetPasswordErrors.password}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Confirm New Password</label>
+                  <div className="password-input-wrapper">
+                    <input
+                      type={showResetPasswordConfirm ? "text" : "password"}
+                      placeholder="Re-enter the password"
+                      value={resetPasswordConfirm}
+                      onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                      className={resetPasswordErrors.confirmPassword ? "input-error" : ""}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowResetPasswordConfirm(!showResetPasswordConfirm)}
+                      aria-label="Toggle password visibility"
+                    >
+                      {showResetPasswordConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  {resetPasswordErrors.confirmPassword && <span className="form-error">{resetPasswordErrors.confirmPassword}</span>}
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setIsResetPasswordOpen(false)} disabled={resetPasswordBusy}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={resetPasswordBusy}>
+                  {resetPasswordBusy ? "Saving…" : "Set New Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE USER CONFIRM MODAL */}
+      {deleteTarget && (
+        <div className="modal-backdrop" onClick={() => !deleteBusy && setDeleteTarget(null)}>
+          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex-align">
+                <Trash2 size={20} style={{ color: "var(--primary)" }} />
+                <h3>Delete User</h3>
+              </div>
+              <button type="button" className="close-btn" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>
+                Are you sure you want to delete{" "}
+                <strong>{deleteTarget.full_name || deleteTarget.email}</strong>?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary danger"
+                onClick={() => void handleDeleteUser()}
+                disabled={deleteBusy}
+              >
+                {deleteBusy ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST NOTIFICATION */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.type === "success" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+          <span>{toast.message}</span>
         </div>
       )}
     </div>

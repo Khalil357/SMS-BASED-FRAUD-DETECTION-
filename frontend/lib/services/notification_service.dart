@@ -58,19 +58,15 @@ class NotificationService {
     }
   }
 
-  /// Request runtime permission for notifications (Android 13+) and background battery optimization
+  /// Request runtime permission for notifications (Android 13+)
   static Future<bool> requestPermission() async {
     if (Platform.isAndroid) {
       final status = await Permission.notification.status;
       if (status.isDenied) {
-        await Permission.notification.request();
+        final result = await Permission.notification.request();
+        return result.isGranted;
       }
-      try {
-        if (await Permission.ignoreBatteryOptimizations.isDenied) {
-          await Permission.ignoreBatteryOptimizations.request();
-        }
-      } catch (_) {}
-      return await Permission.notification.isGranted;
+      return status.isGranted;
     }
     if (Platform.isIOS) {
       final iosPlugin =

@@ -1183,6 +1183,12 @@
   margin-bottom: 1.25rem;
 }
 
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 1rem;
+}
+
 .form-group label {
   display: block;
   font-size: 0.8125rem;
@@ -1208,6 +1214,46 @@
 .form-group select:focus,
 .form-group textarea:focus {
   border-color: var(--primary);
+}
+
+.form-group input.input-error,
+.form-group select.input-error {
+  border-color: var(--primary);
+}
+
+.form-error {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.password-input-wrapper {
+  position: relative;
+}
+
+.password-input-wrapper input {
+  padding-right: 44px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--subtle);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.password-toggle-btn:hover {
+  color: var(--heading);
 }
 
 /* SWITCH TOGGLE */
@@ -1687,4 +1733,48 @@ input:checked + .slider:before {
   font-size: 0.75rem;
   color: var(--subtle);
   font-weight: 700;
+}
+
+/* ROLE SWITCHER (Users & Devices) */
+.role-select {
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background-color: var(--bg);
+  color: var(--heading);
+  font-size: 0.75rem;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+.role-select:focus {
+  border-color: var(--primary);
+}
+.role-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* TOAST NOTIFICATIONS */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #ffffff;
+  z-index: 100;
+  box-shadow: var(--card-shadow);
+  animation: fadeInSlide 0.3s ease-out forwards;
+}
+.toast-success {
+  background-color: var(--emerald);
+}
+.toast-error {
+  background-color: var(--primary);
 }

@@ -110,9 +110,8 @@ public class AuthServiceImpl implements AuthService {
         if (user.isLocked()) {
             throw new ForbiddenException("Account is locked");
         }
-        if (!user.isVerified()) {
-            throw new ForbiddenException("Email not verified. Please verify your email before logging in.");
-        }
+        // Unverified accounts proceed to the OTP step; entering the emailed code both
+        // proves email ownership and (in verifyLoginOtp) marks the account verified.
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
@@ -187,6 +186,9 @@ public class AuthServiceImpl implements AuthService {
         
         otpService.invalidate(email);
         user.setLastLoginAt(Instant.now());
+        // The OTP was delivered to this email and matched, so the account is now
+        // genuinely verified.
+        user.setVerified(true);
         userRepository.save(user);
 
         String accessToken = tokenProvider.generateAccessToken(user.getUserId(), user.getTokenVersion());
