@@ -57,5 +57,27 @@ __pycache__/
 .packages
 android/.gradle/
 
+# Root Flutter platform generated/local files
+android/gradle/wrapper/gradle-wrapper.jar
+android/gradlew
+android/gradlew.bat
+android/local.properties
+android/app/src/main/java/io/flutter/plugins/
+
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Runner/GeneratedPluginRegistrant.*
+
+macos/Flutter/ephemeral/
+macos/Flutter/GeneratedPluginRegistrant.*
+
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# Machine artifacts
+.DS_Store
+hs_err_pid*.log
+
 # Widget Preview related
 .widget_preview/

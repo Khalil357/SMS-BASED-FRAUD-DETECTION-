@@ -1,6 +1,9 @@
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
+
+# Local machine config (Flutter-generated)
+local.properties
 !**/src/main/**/build/
 !**/src/test/**/build/
 .kotlin
