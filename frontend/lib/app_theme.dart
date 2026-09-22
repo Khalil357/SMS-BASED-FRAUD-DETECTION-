@@ -48,15 +48,15 @@ class AppTheme {
   static List<BoxShadow> cardShadow(bool isDark) => [
     BoxShadow(
       color: isDark
-          ? Colors.black.withOpacity(0.35)
-          : Colors.black.withOpacity(0.06),
+          ? Colors.black.withValues(alpha: 0.35)
+          : Colors.black.withValues(alpha: 0.06),
       blurRadius: 24,
       offset: const Offset(0, 8),
     ),
     BoxShadow(
       color: isDark
-          ? Colors.black.withOpacity(0.2)
-          : Colors.black.withOpacity(0.03),
+          ? Colors.black.withValues(alpha: 0.2)
+          : Colors.black.withValues(alpha: 0.03),
       blurRadius: 6,
       offset: const Offset(0, 2),
     ),
@@ -64,7 +64,7 @@ class AppTheme {
 
   static List<BoxShadow> buttonShadow = [
     BoxShadow(
-      color: const Color(0xFFD32F2F).withOpacity(0.35),
+      color: const Color(0xFFD32F2F).withValues(alpha: 0.35),
       blurRadius: 20,
       offset: const Offset(0, 8),
     ),
