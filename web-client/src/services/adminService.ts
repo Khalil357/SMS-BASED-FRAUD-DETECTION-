@@ -97,7 +97,17 @@ async function authFetchJson<T>(path: string, init?: RequestInit): Promise<ApiRe
       data?: T;
     } | null;
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
+        try {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+          window.dispatchEvent(new Event('argus:unauthorized'));
+        } catch {
+          // Storage can be unavailable in privacy-restricted browser contexts.
+        }
+      } else if (response.status === 403) {
         try {
           localStorage.removeItem(TOKEN_KEY);
           window.dispatchEvent(new Event('argus:unauthorized'));

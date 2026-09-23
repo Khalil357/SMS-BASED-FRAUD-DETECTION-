@@ -89,6 +89,13 @@ const emptyStats: StatCardData[] = [
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const { isDark, toggleTheme } = useTheme();
 
+  const handleLogout = () => {
+    clearToken();
+    localStorage.removeItem("user");
+    window.history.pushState(null, "", "/login");
+    onNavigate("login");
+  };
+
   // Mobile Navigation Drawer Toggle State
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -749,10 +756,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
           </button>
 
-          <button type="button" className="logout-btn" onClick={() => {
-            clearToken();
-            onNavigate("login");
-          }}>
+          <button type="button" className="logout-btn" onClick={handleLogout}>
             <LogOut size={18} />
             <span>Logout</span>
           </button>
