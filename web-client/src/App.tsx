@@ -20,10 +20,17 @@ function App() {
   const [resetPhone, setResetPhone] = useState("");
   const [resetCode] = useState("");
 
+  const handleNavigate = (nextPage: AuthPage) => {
+    if (nextPage === "login" && window.location.pathname !== "/login") {
+      window.history.pushState(null, "", "/login");
+    }
+    setPage(nextPage);
+  };
+
   useEffect(() => {
     const handleUnauthorized = () => {
       clearToken();
-      setPage("login");
+      handleNavigate("login");
     };
     window.addEventListener("argus:unauthorized", handleUnauthorized);
     return () => window.removeEventListener("argus:unauthorized", handleUnauthorized);
@@ -44,7 +51,7 @@ function App() {
       case "forgotPassword":
         return (
           <ForgotPasswordPage
-            onNavigate={setPage}
+            onNavigate={handleNavigate}
             onResetRequested={(phone) => {
               setResetPhone(phone);
               setPage("verification");
@@ -57,7 +64,7 @@ function App() {
           <VerificationPage
             email={loginEmail || "your email"}
             onVerified={() => setPage("dashboard")}
-            onNavigateToLogin={() => setPage("login")}
+            onNavigateToLogin={() => handleNavigate("login")}
           />
         );
 
@@ -66,12 +73,12 @@ function App() {
           <ResetPasswordPage
             phoneNumber={resetPhone || "+255 000 000 000"}
             verificationCode={resetCode || "000000"}
-            onNavigateToLogin={() => setPage("login")}
+            onNavigateToLogin={() => handleNavigate("login")}
           />
         );
 
       case "dashboard":
-        return <DashboardPage onNavigate={setPage} />;
+        return <DashboardPage onNavigate={handleNavigate} />;
 
       default:
         return (
