@@ -11,9 +11,10 @@ public interface EmailService {
 
     /**
      * Notify a newly-created user that an admin has added them to the platform,
-     * and tell them their assigned role.
+     * and provide their assigned role and initial login password. The password
+     * is supplied only during account creation; it must never be logged.
      */
-    void sendWelcomeEmail(String toEmail, String fullName, String role);
+    void sendWelcomeEmail(String toEmail, String fullName, String role, String initialPassword);
 
     /**
      * Notify a user that an admin has changed their account (profile, role, or status).

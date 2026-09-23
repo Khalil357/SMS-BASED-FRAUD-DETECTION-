@@ -229,7 +229,7 @@ public class AdminServiceImpl implements AdminService {
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
 
-        emailService.sendWelcomeEmail(email, user.getFullName(), "ADMIN");
+        emailService.sendWelcomeEmail(email, user.getFullName(), "ADMIN", req.password());
 
         return UserResponse.from(user);
     }

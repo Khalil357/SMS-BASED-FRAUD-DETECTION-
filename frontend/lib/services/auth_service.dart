@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   /// Default server base URL
-  static const String defaultServerBaseUrl = 'https://54.242.107.64/api';
+  static const String defaultServerBaseUrl = 'https://54.242.107.64';
 
-  /// Custom backend URL override (e.g. https://54.242.107.64/api)
+  /// Custom backend URL override (e.g. https://54.242.107.64)
   static String? customBaseUrl;
 
   /// Dynamic baseUrl getter
@@ -20,60 +21,176 @@ class AuthService {
 
   /// Helper to construct full request URL from base URL and path
   static String _buildUrl(String path) {
-    final base = baseUrl;
+    final base = baseUrl.replaceAll(RegExp(r'/$'), '');
     var cleanPath = path.trim();
     if (!cleanPath.startsWith('/')) {
       cleanPath = '/$cleanPath';
     }
-    if (base.endsWith('/api') && cleanPath.startsWith('/api/')) {
-      cleanPath = cleanPath.substring(4);
+    if (!base.endsWith('/api') && !cleanPath.startsWith('/api/') && cleanPath != '/api') {
+      cleanPath = '/api$cleanPath';
     }
     return '$base$cleanPath';
+  }
+
+  /// Normalizes backend & local scan data maps so snake_case & camelCase fields
+  /// are uniformly accessible throughout the Flutter app.
+  static Map<String, dynamic> normalizeScan(Map<String, dynamic> scan) {
+    final rawScanId = scan['scanId'] ?? scan['scan_id'] ?? scan['id'] ?? scan['backendId'];
+    final scanIdStr = rawScanId?.toString();
+    final messageBody = scan['messageBody'] ?? scan['message_body'] ?? scan['message'] ?? '';
+    final scannedAt = scan['scannedAt'] ?? scan['scanned_at'] ?? scan['time'] ?? scan['date'] ?? DateTime.now().toIso8601String();
+
+    final isScamBool = scan['isScam'] == true ||
+        scan['is_scam'] == true ||
+        scan['label'] == 'scam' ||
+        scan['label'] == 'fraud' ||
+        scan['type'] == 'Fraud';
+    final typeStr = scan['type'] ?? (isScamBool ? 'Fraud' : 'Safe');
+
+    return {
+      ...scan,
+      'scanId': scanIdStr,
+      'scan_id': scanIdStr,
+      'id': scan['id'] ?? scanIdStr,
+      'backendId': scan['backendId'] ?? scanIdStr,
+      'messageBody': messageBody,
+      'message_body': messageBody,
+      'message': messageBody,
+      'scannedAt': scannedAt,
+      'scanned_at': scannedAt,
+      'time': scannedAt,
+      'isScam': isScamBool,
+      'is_scam': isScamBool,
+      'userId': scan['userId'] ?? scan['user_id'],
+      'user_id': scan['userId'] ?? scan['user_id'],
+      'sender': scan['sender'] ?? scan['sender_number'] ?? scan['senderNumber'] ?? 'Unknown',
+      'type': typeStr,
+    };
   }
 
   // Session variables & Storage Keys
   static Map<String, dynamic>? currentUser;
   static String? token;
+  static String? refreshToken;
 
   static const String _keyToken = 'auth_token_v1';
+  static const String _keyRefreshToken = 'auth_refresh_token_v1';
   static const String _keyUser = 'auth_user_v1';
+  static const String _keyUnverifiedIdentifiers = 'unverified_identifiers_v1';
+
+  static final Set<String> _unverifiedIdentifiers = {};
+
+  /// Protected endpoints require an access JWT. Older builds saved a profile
+  /// without one and treated it as a signed-in session, which led every scan
+  /// request to be rejected with HTTP 401.
+  static bool _isUsableAccessToken(String? value) {
+    if (value == null) return false;
+    var candidate = value.trim();
+    if (candidate.toLowerCase().startsWith('bearer ')) {
+      candidate = candidate.substring(7).trim();
+    }
+    return candidate.isNotEmpty &&
+        candidate != 'auth_session_active' &&
+        candidate.split('.').length == 3;
+  }
+
+  static void markIdentifierUnverified(String identifier) {
+    if (identifier.trim().isEmpty) return;
+    final clean = identifier.trim().toLowerCase();
+    _unverifiedIdentifiers.add(clean);
+    _saveUnverifiedIdentifiers();
+  }
+
+  static void markIdentifierVerified(String identifier) {
+    if (identifier.trim().isEmpty) return;
+    final clean = identifier.trim().toLowerCase();
+    _unverifiedIdentifiers.remove(clean);
+
+    if (currentUser != null) {
+      final email = (currentUser!['email'] ?? currentUser!['emailAddress'])?.toString().trim().toLowerCase();
+      final phone = (currentUser!['phone_number'] ?? currentUser!['phoneNumber'] ?? currentUser!['phone'])?.toString().trim().toLowerCase();
+      if (email != null && email.isNotEmpty) _unverifiedIdentifiers.remove(email);
+      if (phone != null && phone.isNotEmpty) _unverifiedIdentifiers.remove(phone);
+    }
+    _saveUnverifiedIdentifiers();
+  }
+
+  static bool isIdentifierUnverified(String identifier) {
+    if (identifier.trim().isEmpty) return false;
+    final clean = identifier.trim().toLowerCase();
+    return _unverifiedIdentifiers.contains(clean);
+  }
+
+  static Future<void> _saveUnverifiedIdentifiers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_keyUnverifiedIdentifiers, _unverifiedIdentifiers.toList());
+    } catch (_) {}
+  }
+
+  static Future<void> _loadUnverifiedIdentifiers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList(_keyUnverifiedIdentifiers);
+      if (list != null) {
+        _unverifiedIdentifiers.addAll(list);
+      }
+    } catch (_) {}
+  }
 
   /// Save session to persistent storage
-  static Future<void> saveSession(
-      String tokenStr, Map<String, dynamic> userMap) async {
+  static Future<void> saveSession(String tokenStr, Map<String, dynamic> userMap,
+      {String? refreshTokenStr}) async {
     token = tokenStr;
+    if (refreshTokenStr != null && refreshTokenStr.trim().isNotEmpty) {
+      refreshToken = refreshTokenStr.trim();
+    }
     currentUser = userMap;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyToken, tokenStr);
+    if (refreshToken != null && refreshToken!.isNotEmpty) {
+      await prefs.setString(_keyRefreshToken, refreshToken!);
+    }
     await prefs.setString(_keyUser, jsonEncode(userMap));
   }
 
   /// Load session from persistent storage
   static Future<bool> loadSession() async {
     try {
+      await _loadUnverifiedIdentifiers();
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
       final savedToken = prefs.getString(_keyToken);
+      final savedRefreshToken = prefs.getString(_keyRefreshToken);
       final savedUserJson = prefs.getString(_keyUser);
 
-      if (savedUserJson != null && savedUserJson.isNotEmpty) {
-        token = (savedToken != null && savedToken.isNotEmpty)
-            ? savedToken
-            : 'auth_session_active';
+      if (savedUserJson != null &&
+          savedUserJson.isNotEmpty &&
+          _isUsableAccessToken(savedToken)) {
+        token = savedToken!.trim();
+        refreshToken = savedRefreshToken?.trim();
         currentUser = jsonDecode(savedUserJson) as Map<String, dynamic>;
         return true;
       }
-    } catch (_) {}
+      // Do not enter the dashboard using a stale profile-only session.
+      token = null;
+      refreshToken = null;
+      currentUser = null;
+    } catch (e) {
+      debugPrint("Load Session error: $e");
+    }
     return false;
   }
 
   /// Clear persistent session (Logout)
   static Future<void> logout() async {
     token = null;
+    refreshToken = null;
     currentUser = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_keyToken);
+      await prefs.remove(_keyRefreshToken);
       await prefs.remove(_keyUser);
     } catch (_) {}
   }
@@ -81,10 +198,13 @@ class AuthService {
   /// Helper to send POST requests with automatic fallback for physical phone vs emulator
   /// Returns properly formatted Authorization header with Bearer prefix
   static String get formattedAuthorization {
-    if (token == null || token!.trim().isEmpty) return '';
-    final t = token!.trim();
-    if (t.toLowerCase().startsWith('bearer ')) return t;
-    return 'Bearer $t';
+    if (!_isUsableAccessToken(token)) return '';
+    var rawToken = token!.trim();
+    if (rawToken.toLowerCase().startsWith('bearer ')) {
+      rawToken = rawToken.substring(7).trim();
+    }
+    // The server deliberately accepts the standard, case-sensitive scheme.
+    return 'Bearer $rawToken';
   }
 
   static Future<http.Response> _postRequest(
@@ -94,7 +214,7 @@ class AuthService {
   }) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
+      if (formattedAuthorization.isNotEmpty) 'Authorization': formattedAuthorization,
       ...?customHeaders,
     };
     final encodedBody = jsonEncode(body);
@@ -108,7 +228,8 @@ class AuthService {
             body: encodedBody,
           )
           .timeout(const Duration(seconds: 10));
-    } catch (_) {
+    } catch (e) {
+      debugPrint("[AuthService] Primary POST $primaryUrl failed: $e. Retrying fallback host.");
       final fallbackHost = Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
       var cleanPath = path.startsWith('/') ? path : '/$path';
       return await http
@@ -128,7 +249,7 @@ class AuthService {
   }) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
+      if (formattedAuthorization.isNotEmpty) 'Authorization': formattedAuthorization,
       ...?customHeaders,
     };
     final primaryUrl = _buildUrl(path);
@@ -140,7 +261,8 @@ class AuthService {
             headers: headers,
           )
           .timeout(const Duration(seconds: 10));
-    } catch (_) {
+    } catch (e) {
+      debugPrint("[AuthService] Primary GET $primaryUrl failed: $e. Retrying fallback host.");
       final fallbackHost = Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
       var cleanPath = path.startsWith('/') ? path : '/$path';
       return await http
@@ -156,7 +278,7 @@ class AuthService {
   static Future<http.Response> _deleteRequest(String path) async {
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null && token!.trim().isNotEmpty) 'Authorization': formattedAuthorization,
+      if (formattedAuthorization.isNotEmpty) 'Authorization': formattedAuthorization,
     };
     final primaryUrl = _buildUrl(path);
 
@@ -167,7 +289,8 @@ class AuthService {
             headers: headers,
           )
           .timeout(const Duration(seconds: 10));
-    } catch (_) {
+    } catch (e) {
+      debugPrint("[AuthService] Primary DELETE $primaryUrl failed: $e. Retrying fallback host.");
       final fallbackHost = Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
       var cleanPath = path.startsWith('/') ? path : '/$path';
       return await http
@@ -176,6 +299,33 @@ class AuthService {
             headers: headers,
           )
           .timeout(const Duration(seconds: 6));
+    }
+  }
+
+  /// Access JWTs are short-lived. Renew one with the saved refresh token
+  /// before giving up on a protected scan or feedback request.
+  static Future<bool> _refreshAccessToken() async {
+    if (refreshToken == null || refreshToken!.trim().isEmpty) return false;
+    try {
+      final response = await _postRequest('/api/auth/refresh', {
+        'refreshToken': refreshToken,
+      });
+      if (response.statusCode != 200 && response.statusCode != 201) return false;
+
+      final decoded = _safeJsonDecode(response.body);
+      final data = decoded['data'] is Map<String, dynamic>
+          ? decoded['data'] as Map<String, dynamic>
+          : decoded;
+      final nextToken = data['token']?.toString() ?? '';
+      final nextRefresh = data['refreshToken']?.toString() ?? refreshToken!;
+      if (!_isUsableAccessToken(nextToken)) return false;
+
+      await saveSession(nextToken, currentUser ?? {}, refreshTokenStr: nextRefresh);
+      debugPrint('[AuthService] Access token refreshed.');
+      return true;
+    } catch (error) {
+      debugPrint('[AuthService] Token refresh failed: $error');
+      return false;
     }
   }
 
@@ -195,43 +345,51 @@ class AuthService {
         'source': source,
       };
 
-      print(
-          "[Argus Scan Endpoint] POST $baseUrl/api/scans | sender: $sender, source: $source");
-      final response = await _postRequest('/api/scans', body);
-      print(
-          "[Argus Scan Endpoint] Status: ${response.statusCode} | Response: ${response.body}");
+      debugPrint("[Argus Scan Endpoint] POST ${_buildUrl('/api/scans')} | sender: $sender, source: $source");
+      var response = await _postRequest('/api/scans', body);
+      if (response.statusCode == 401 && await _refreshAccessToken()) {
+        response = await _postRequest('/api/scans', body);
+      }
+      debugPrint("[Argus Scan Endpoint] Status: ${response.statusCode} | Response: ${response.body}");
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = decoded['data'] is Map<String, dynamic>
+        final rawData = decoded['data'] is Map<String, dynamic>
             ? (decoded['data'] as Map<String, dynamic>)
             : decoded;
+        final data = normalizeScan(rawData);
 
-        final isScam = data['is_scam'] ??
-            data['isScam'] ??
-            (data['label'] == 'scam' || data['label'] == 'fraud');
-        final label = data['label'] ?? (isScam == true ? 'scam' : 'safe');
+        final isScam = data['isScam'] == true;
+        final label = data['label'] ?? (isScam ? 'scam' : 'safe');
         final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.95;
 
         return {
           'success': true,
           'message': decoded['message'] ?? 'Scan submitted successfully',
           'data': data,
-          'isScam': isScam == true,
+          'scanId': data['scanId'],
+          'scan_id': data['scan_id'],
+          'isScam': isScam,
           'label': label,
           'confidence': confidence,
         };
       } else {
+        final defaultMessage = response.statusCode == 503
+            ? 'The fraud-detection model is temporarily unavailable. Please try again shortly.'
+            : response.statusCode == 401 || response.statusCode == 403
+                ? 'Your login session has expired. Please sign in again.'
+                : 'Scan submission failed';
         return {
           'success': false,
-          'message': decoded['message'] ?? 'Scan submission failed',
+          'message': decoded['message'] ?? defaultMessage,
           'statusCode': response.statusCode,
         };
       }
     } catch (e) {
+      debugPrint("[Argus Scan Exception] $e");
       return {
         'success': false,
-        'message': 'Failed to submit scan to backend server.',
+        'message': 'Unable to reach the fraud-detection service. Check your connection and try again.',
         'error': e,
       };
     }
@@ -252,8 +410,13 @@ class AuthService {
         final data = decoded['data'] is Map<String, dynamic>
             ? (decoded['data'] as Map<String, dynamic>)
             : <String, dynamic>{};
-        final content =
+        final rawContent =
             data['content'] is List ? (data['content'] as List) : [];
+        final content = rawContent
+            .whereType<Map<String, dynamic>>()
+            .map((item) => normalizeScan(item))
+            .toList();
+
         return {
           'success': true,
           'message': decoded['message'] ?? 'Fraud scans retrieved successfully',
@@ -272,6 +435,7 @@ class AuthService {
         };
       }
     } catch (e) {
+      debugPrint("[Argus Fraud Scans Exception] $e");
       return {
         'success': false,
         'message': 'Failed to connect to backend server.',
@@ -337,17 +501,19 @@ class AuthService {
   }
 
   /// Add a user-confirmed fraud scan to the backend database.
-  /// TODO: Confirm the exact endpoint path and payload with the backend team.
   static Future<Map<String, dynamic>> addFraudScan({
     required String sender,
     required String message,
   }) async {
     try {
-      // TODO: Confirm exact endpoint path and payload with backend.
-      final response = await _postRequest('/api/scans/fraud', {
+      final payload = {
         'sender': sender,
         'message': message,
-      });
+      };
+      var response = await _postRequest('/api/scans/fraud', payload);
+      if (response.statusCode == 401 && await _refreshAccessToken()) {
+        response = await _postRequest('/api/scans/fraud', payload);
+      }
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -357,9 +523,12 @@ class AuthService {
         };
       }
 
+      final defaultMessage = response.statusCode == 401 || response.statusCode == 403
+          ? 'Your login session has expired. Please sign in again.'
+          : 'Failed to mark message as fraud.';
       return {
         'success': false,
-        'message': decoded['message'] ?? 'Failed to mark message as fraud.',
+        'message': decoded['message'] ?? defaultMessage,
         'statusCode': response.statusCode,
       };
     } catch (e) {
@@ -392,6 +561,9 @@ class AuthService {
     required String gender,
     required String password,
   }) async {
+    markIdentifierUnverified(email);
+    markIdentifierUnverified(phoneNumber);
+
     final userPayload = <String, dynamic>{
       'full_name': fullName,
       'email': email,
@@ -425,6 +597,7 @@ class AuthService {
           'full_name': fullName,
           'email': email,
           'phone_number': phoneNumber,
+          'is_verified': false,
         };
 
         return {
@@ -466,6 +639,14 @@ class AuthService {
       userMap.addAll(decoded);
     }
 
+    if (currentUser != null && currentUser!.isNotEmpty) {
+      currentUser!.forEach((k, v) {
+        if (v != null && v.toString().trim().isNotEmpty) {
+          userMap.putIfAbsent(k, () => v);
+        }
+      });
+    }
+
     // Normalize user data key aliases so they are consistently accessible
     final fullName = userMap['full_name'] ??
         userMap['fullName'] ??
@@ -474,7 +655,8 @@ class AuthService {
         userMap['display_name'] ??
         currentUser?['full_name'] ??
         currentUser?['fullName'] ??
-        currentUser?['name'];
+        currentUser?['name'] ??
+        '';
 
     final email = userMap['email'] ??
         userMap['email_address'] ??
@@ -483,7 +665,7 @@ class AuthService {
         userMap['user_email'] ??
         currentUser?['email'] ??
         currentUser?['emailAddress'] ??
-        (identifier.contains('@') ? identifier : null);
+        (identifier.contains('@') ? identifier : '');
 
     final phone = userMap['phone_number'] ??
         userMap['phoneNumber'] ??
@@ -493,38 +675,33 @@ class AuthService {
         currentUser?['phone_number'] ??
         currentUser?['phoneNumber'] ??
         currentUser?['phone'] ??
-        (!identifier.contains('@') && identifier.isNotEmpty ? identifier : null);
+        (!identifier.contains('@') && identifier.isNotEmpty ? identifier : '');
 
     final gender = userMap['gender'] ??
         userMap['sex'] ??
         currentUser?['gender'] ??
-        currentUser?['sex'];
+        currentUser?['sex'] ??
+        '';
 
-    // Populate ALL key aliases on userMap so any component reading any alias gets the right value
-    if (fullName != null && fullName.toString().trim().isNotEmpty) {
-      final val = fullName.toString().trim();
-      userMap['full_name'] = val;
-      userMap['fullName'] = val;
-      userMap['name'] = val;
-    }
-    if (email != null && email.toString().trim().isNotEmpty) {
-      final val = email.toString().trim();
-      userMap['email'] = val;
-      userMap['emailAddress'] = val;
-      userMap['gmail'] = val;
-    }
-    if (phone != null && phone.toString().trim().isNotEmpty) {
-      final val = phone.toString().trim();
-      userMap['phone_number'] = val;
-      userMap['phoneNumber'] = val;
-      userMap['phone'] = val;
-      userMap['mobile'] = val;
-    }
-    if (gender != null && gender.toString().trim().isNotEmpty) {
-      final val = gender.toString().trim();
-      userMap['gender'] = val;
-      userMap['sex'] = val;
-    }
+    final nameVal = fullName.toString().trim();
+    final emailVal = email.toString().trim();
+    final phoneVal = phone.toString().trim();
+    final genderVal = gender.toString().trim();
+
+    userMap['full_name'] = nameVal;
+    userMap['fullName'] = nameVal;
+    userMap['name'] = nameVal;
+
+    userMap['email'] = emailVal;
+    userMap['emailAddress'] = emailVal;
+    userMap['gmail'] = emailVal;
+
+    userMap['phone_number'] = phoneVal;
+    userMap['phoneNumber'] = phoneVal;
+    userMap['phone'] = phoneVal;
+
+    userMap['gender'] = genderVal;
+    userMap['sex'] = genderVal;
 
     return userMap;
   }
@@ -571,21 +748,62 @@ class AuthService {
         final tokenStr =
             decoded['token'] as String? ?? userData['token'] as String? ?? '';
 
+        final rawVerified = userData['is_verified'] ??
+            userData['isVerified'] ??
+            userData['verified'] ??
+            decoded['is_verified'] ??
+            decoded['isVerified'];
+
+        final bool isExplicitlyVerified = rawVerified == true ||
+            rawVerified == 1 ||
+            rawVerified == 'true' ||
+            rawVerified == '1';
+
+        final bool isExplicitlyUnverified = rawVerified == false ||
+            rawVerified == 0 ||
+            rawVerified == 'false' ||
+            rawVerified == '0' ||
+            rawVerified == 'unverified';
+
+        final bool isLocallyUnverified = isIdentifierUnverified(trimmed);
+        final bool hasNoToken = tokenStr.trim().isEmpty || tokenStr == 'token_registered';
+
+        final bool isUnverified = isExplicitlyUnverified ||
+            isLocallyUnverified ||
+            hasNoToken ||
+            !isExplicitlyVerified;
+
+        if (isUnverified) {
+          return {
+            'success': false,
+            'message': 'Account is not verified. Please verify your OTP to log in.',
+            'statusCode': 403,
+            'isUnverified': true,
+            'data': userData,
+          };
+        }
+
+        markIdentifierVerified(trimmed);
+        userData['is_verified'] = true;
         await saveSession(tokenStr, userData);
 
         return {
           'success': true,
-          'message': decoded['message'] ?? 'Login successful',
+          'message': 'Login successful',
           'data': userData,
           'token': tokenStr,
-          'isVerified': userData['is_verified'] ?? userData['isVerified'] ?? userData['verified'] ?? true,
+          'isVerified': true,
         };
       } else {
         final msg = (decoded['message'] ?? '').toString();
-        final isUnverified = decoded['is_verified'] == false ||
-            decoded['verified'] == false ||
+        final rawVerified = decoded['is_verified'] ?? decoded['verified'] ?? decoded['data']?['is_verified'];
+        final isUnverified = isIdentifierUnverified(trimmed) ||
+            rawVerified == false ||
+            rawVerified == 0 ||
+            rawVerified == 'false' ||
             msg.toLowerCase().contains('not verified') ||
-            msg.toLowerCase().contains('verify your email');
+            msg.toLowerCase().contains('verify your email') ||
+            msg.toLowerCase().contains('otp');
 
         return {
           'success': false,
@@ -596,39 +814,11 @@ class AuthService {
         };
       }
     } catch (e) {
-      final existingPhone = currentUser?['phone_number'] ??
-          currentUser?['phoneNumber'] ??
-          currentUser?['phone'] ??
-          (!trimmed.contains('@') ? trimmed : '');
-      final existingEmail = currentUser?['email'] ??
-          currentUser?['emailAddress'] ??
-          (trimmed.contains('@') ? trimmed : '');
-      final existingName = currentUser?['full_name'] ??
-          currentUser?['fullName'] ??
-          currentUser?['name'] ??
-          '';
-      final existingGender = currentUser?['gender'] ??
-          currentUser?['sex'] ??
-          '';
-
-      final userPayload = <String, dynamic>{
-        'full_name': existingName.toString().isNotEmpty ? existingName : 'Argus Sentinel User',
-        'fullName': existingName.toString().isNotEmpty ? existingName : 'Argus Sentinel User',
-        'name': existingName.toString().isNotEmpty ? existingName : 'Argus Sentinel User',
-        'email': existingEmail.toString().isNotEmpty ? existingEmail : (trimmed.contains('@') ? trimmed : 'user@email.com'),
-        'phone_number': existingPhone.toString().isNotEmpty ? existingPhone : (!trimmed.contains('@') ? trimmed : ''),
-        'phoneNumber': existingPhone.toString().isNotEmpty ? existingPhone : (!trimmed.contains('@') ? trimmed : ''),
-        'phone': existingPhone.toString().isNotEmpty ? existingPhone : (!trimmed.contains('@') ? trimmed : ''),
-        'gender': existingGender.toString().isNotEmpty ? existingGender : 'Not Specified',
-        'is_verified': true,
-      };
-      await saveSession('local_demo_token', userPayload);
+      debugPrint("[AuthService Login Exception] $e");
       return {
-        'success': true,
-        'message': 'Login successful (Offline Mode)',
-        'data': userPayload,
-        'token': 'local_demo_token',
-        'isVerified': true,
+        'success': false,
+        'message': 'Unable to connect to the backend server.',
+        'error': e,
       };
     }
   }
@@ -702,37 +892,136 @@ class AuthService {
     }
   }
 
-  /// Verify reset code
-  /// POST /api/auth/password-resets/verify
+  /// Verify reset / registration OTP code against remote server
+  /// POST /api/auth/password-resets/verify & POST /api/auth/verify-login-otp
   static Future<Map<String, dynamic>> verifyResetCode({
     required String phoneNumber,
     required String verificationCode,
   }) async {
+    final cleanIdentifier = phoneNumber.trim();
+    final cleanCode = verificationCode.trim();
+
+    // 1. Try POST /api/auth/password-resets/verify
     try {
       final response = await _postRequest('/api/auth/password-resets/verify', {
-        'phone_number': phoneNumber.trim(),
-        'verification_code': verificationCode.trim(),
+        'phone_number': cleanIdentifier,
+        'email': cleanIdentifier,
+        'verification_code': cleanCode,
       });
 
       final decoded = _safeJsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        markIdentifierVerified(cleanIdentifier);
         return {
           'success': true,
           'message': decoded['message'] ?? 'Code verified successfully',
           'data': decoded['data'] ?? decoded,
         };
-      } else {
+      }
+    } catch (_) {}
+
+    // 2. Try POST /api/auth/verify-login-otp
+    try {
+      final response = await _postRequest('/api/auth/verify-login-otp', {
+        'email': cleanIdentifier,
+        'phone_number': cleanIdentifier,
+        'verificationCode': cleanCode,
+        'verification_code': cleanCode,
+      });
+
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        markIdentifierVerified(cleanIdentifier);
+        final data = _extractUserMap(decoded, cleanIdentifier);
+        final tokenStr = decoded['token'] as String? ?? data['token'] as String? ?? '';
+        final refreshTokenStr =
+            decoded['refreshToken'] as String? ?? data['refreshToken'] as String?;
+        if (tokenStr.isNotEmpty) {
+          await saveSession(tokenStr, data, refreshTokenStr: refreshTokenStr);
+        }
         return {
-          'success': false,
-          'message': decoded['message'] ?? 'Invalid verification code',
-          'statusCode': response.statusCode,
+          'success': true,
+          'message': decoded['message'] ?? 'Code verified successfully',
+          'data': decoded['data'] ?? decoded,
         };
       }
+    } catch (_) {}
+
+    return {
+      'success': false,
+      'message': 'Invalid verification code. Please check the code and try again.',
+    };
+  }
+
+  /// Verify the OTP issued after an unverified user attempts to log in.
+  /// This endpoint both marks the account verified and returns a real JWT.
+  static Future<Map<String, dynamic>> verifyLoginOtp({
+    required String identifier,
+    required String verificationCode,
+  }) async {
+    final cleanIdentifier = identifier.trim();
+    try {
+      final response = await _postRequest('/api/auth/verify-login-otp', {
+        'email': cleanIdentifier,
+        'verificationCode': verificationCode.trim(),
+      });
+      final decoded = _safeJsonDecode(response.body);
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Invalid or expired verification code.',
+        };
+      }
+
+      final userData = _extractUserMap(decoded, cleanIdentifier);
+      final tokenStr = (decoded['token'] ?? userData['token'] ?? '').toString();
+      if (tokenStr.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Verification succeeded, but no login token was returned.',
+        };
+      }
+
+      userData['is_verified'] = true;
+      markIdentifierVerified(cleanIdentifier);
+      final refreshTokenStr =
+          (decoded['refreshToken'] ?? userData['refreshToken'])?.toString();
+      await saveSession(tokenStr, userData, refreshTokenStr: refreshTokenStr);
+      return {
+        'success': true,
+        'message': decoded['message'] ?? 'Account verified successfully.',
+        'data': userData,
+      };
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to connect to backend server.',
+        'message': 'Unable to connect to the backend server.',
+        'error': e,
+      };
+    }
+  }
+
+  /// Resend the OTP for an account that is blocked at login until verified.
+  static Future<Map<String, dynamic>> resendLoginOtp({
+    required String identifier,
+  }) async {
+    try {
+      final response = await _postRequest('/api/auth/resend-login-otp', {
+        'email': identifier.trim(),
+      });
+      final decoded = _safeJsonDecode(response.body);
+      return {
+        'success': response.statusCode == 200 || response.statusCode == 201,
+        'message': decoded['message'] ??
+            (response.statusCode == 200 ? 'Verification code resent.' : 'Failed to resend verification code.'),
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Unable to connect to the backend server.',
         'error': e,
       };
     }

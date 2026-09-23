@@ -1,5 +1,6 @@
 package com.example.smsfraud.ml;
 
+import com.example.smsfraud.common.exception.ServiceUnavailableException;
 import com.example.smsfraud.ml.dto.FraudCheckRequest;
 import com.example.smsfraud.ml.dto.FraudCheckResponse;
 import lombok.RequiredArgsConstructor;
@@ -7,6 +8,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -21,27 +23,33 @@ public class MlFraudDetectionClient {
     public FraudCheckResponse analyzeSms(String message) {
         FraudCheckRequest request = new FraudCheckRequest(message);
 
-        var responseEntity = restClient
-                .post()
-                .uri("/predict")
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, (clientRequest, response) -> {
-                    String responseBody = readResponseBody(response);
+        try {
+            var responseEntity = restClient
+                    .post()
+                    .uri("/predict")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (clientRequest, response) -> {
+                        String responseBody = readResponseBody(response);
+                        throw new ServiceUnavailableException(
+                                "The fraud-detection model is unavailable (status "
+                                        + response.getStatusCode().value() + ")."
+                                        + (responseBody.isBlank() ? "" : " Please try again shortly."));
+                    })
+                    .toEntity(FraudCheckResponse.class);
 
-                    throw new IllegalStateException(
-                            "ML fraud detection request failed with status "
-                                    + response.getStatusCode()
-                                    + (responseBody.isBlank() ? "" : ": " + responseBody));
-                })
-                .toEntity(FraudCheckResponse.class);
+            if (!responseEntity.hasBody()) {
+                throw new ServiceUnavailableException("The fraud-detection model returned an empty response.");
+            }
 
-        if (!responseEntity.hasBody()) {
-            throw new IllegalStateException("ML fraud detection service returned an empty response");
+            return responseEntity.getBody();
+        } catch (ServiceUnavailableException ex) {
+            throw ex;
+        } catch (RestClientException | IllegalStateException ex) {
+            throw new ServiceUnavailableException(
+                    "Unable to reach the fraud-detection model. Check your connection and try again.");
         }
-
-        return responseEntity.getBody();
     }
 
     private String readResponseBody(ClientHttpResponse response) throws IOException {

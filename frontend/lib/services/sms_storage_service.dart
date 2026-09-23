@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
 
 class SmsStorageService {
   static const String _keyLogs = 'sms_logs_v1';
@@ -37,7 +38,9 @@ class SmsStorageService {
     if (jsonStr == null) return [];
     try {
       final List<dynamic> decoded = jsonDecode(jsonStr);
-      return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+      return decoded
+          .map((e) => AuthService.normalizeScan(Map<String, dynamic>.from(e)))
+          .toList();
     } catch (_) {
       return [];
     }

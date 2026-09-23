@@ -67,11 +67,8 @@ class _LoginPageState extends State<LoginPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                onPressed: () async {
+                onPressed: () {
                   Navigator.pop(context);
-                  if (identifier.isNotEmpty) {
-                    await AuthService.resendCode(phoneNumber: identifier);
-                  }
                   if (mounted) {
                     if (widget.onUnverifiedAccount != null) {
                       widget.onUnverifiedAccount!(identifier);
@@ -116,7 +113,7 @@ class _LoginPageState extends State<LoginPage> {
         if (result['success'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['message'] ?? 'Login successful!'),
+              content: const Text('Login successful!'),
               backgroundColor: Colors.green.shade600,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -127,17 +124,24 @@ class _LoginPageState extends State<LoginPage> {
           final isUnverified = result['isUnverified'] == true;
 
           if (isUnverified) {
-            final data = result['data'] is Map<String, dynamic>
-                ? result['data'] as Map<String, dynamic>
-                : null;
-            final userEmail = data?['email'] ??
-                data?['user']?['email'] ??
-                _identifierController.text.trim();
-            _showUnverifiedAccountDialog(userEmail);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Account not verified. Please enter your verification code.'),
+                backgroundColor: Colors.orange.shade800,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            );
+            final identifier = _identifierController.text.trim();
+            if (widget.onUnverifiedAccount != null) {
+              widget.onUnverifiedAccount!(identifier);
+            } else {
+              widget.onNavigate(AuthPage.verification);
+            }
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(result['message'] ?? 'Login failed'),
+                content: Text(result['message'] ?? 'Login failed. Please check your credentials.'),
                 backgroundColor: Theme.of(context).colorScheme.error,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

@@ -10,7 +10,7 @@ class AppTheme {
   static const Color cyberRed           = Color(0xFFFF2948);
   static const Color cyberRedStrong     = Color(0xFFFF1F3D);
   static const Color cyberGreen         = Color(0xFF00D98B);
-  static const Color cyberCyan          = Color(0xFF00A8FF);
+  static const Color cyberCyan          = Color(0xFFFF2948);
   static const Color cyberTextPrimary   = Color(0xFFF5F5F7);
   static const Color cyberTextSecondary = Color(0xFF9A9BA3);
   static const Color cyberTextMuted     = Color(0xFF666872);

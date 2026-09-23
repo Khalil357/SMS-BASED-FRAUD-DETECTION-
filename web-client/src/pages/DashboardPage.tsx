@@ -130,6 +130,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   // 1. Team Tab
   const [teamSearch, setTeamSearch] = useState("");
+  const [teamVerificationFilter, setTeamVerificationFilter] = useState<"All" | "Verified" | "Pending">("All");
   const [teamStatusFilter, setTeamStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
   const [teamSortField, setTeamSortField] = useState<"full_name" | "email" | "active">("full_name");
   const [teamSortDir, setTeamSortDir] = useState<"asc" | "desc">("asc");
@@ -323,11 +324,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   }
 
   // 1. Team Administrators List Logic
-  const filteredTeamList = useMemo(() => {
-    let list = usersList.filter((u: any) => {
+  const teamAdmins = useMemo(() =>
+    usersList.filter((u: any) => {
       const roleVal = String(u.role || u.role_id || "").toUpperCase();
       return roleVal === "ADMIN" || roleVal === "ROLE_ADMIN" || roleVal === "1";
-    });
+    }), [usersList]);
+
+  const verifiedTeamCount = teamAdmins.filter((u) => u.verified).length;
+  const pendingTeamCount = teamAdmins.length - verifiedTeamCount;
+
+  const filteredTeamList = useMemo(() => {
+    let list = teamAdmins;
 
     if (teamSearch.trim()) {
       const q = teamSearch.toLowerCase().trim();
@@ -342,6 +349,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     if (teamStatusFilter !== "All") {
       const isActive = teamStatusFilter === "Active";
       list = list.filter((u) => u.active === isActive);
+    }
+
+    if (teamVerificationFilter !== "All") {
+      const isVerified = teamVerificationFilter === "Verified";
+      list = list.filter((u) => u.verified === isVerified);
     }
 
     return [...list].sort((a, b) => {
@@ -363,12 +375,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       if (valA > valB) return teamSortDir === "asc" ? 1 : -1;
       return 0;
     });
-  }, [usersList, teamSearch, teamStatusFilter, teamSortField, teamSortDir]);
+  }, [teamAdmins, teamSearch, teamVerificationFilter, teamStatusFilter, teamSortField, teamSortDir]);
 
   // Reset Team Filters
-  const isTeamFiltered = teamSearch !== "" || teamStatusFilter !== "All" || teamSortField !== "full_name" || teamSortDir !== "asc";
+  const isTeamFiltered = teamSearch !== "" || teamVerificationFilter !== "All" || teamStatusFilter !== "All" || teamSortField !== "full_name" || teamSortDir !== "asc";
   function resetTeamFilters() {
     setTeamSearch("");
+    setTeamVerificationFilter("All");
     setTeamStatusFilter("All");
     setTeamSortField("full_name");
     setTeamSortDir("asc");
@@ -1087,7 +1100,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <div className="panel-top">
                 <div>
                   <h3>Team Administrators</h3>
-                  <p>Authorized platform admins ({filteredTeamList.length} members)</p>
+                  <p>Authorized platform admins ({filteredTeamList.length} members; {verifiedTeamCount} verified, {pendingTeamCount} pending)</p>
                 </div>
                 <button type="button" className="btn-primary" onClick={() => {
                   setAddUserPhone("+255");
@@ -1120,6 +1133,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 <div className="toolbar-controls">
                   <div className="flex-align gap-2">
                     <Filter size={14} className="subtle-text" />
+                    <select
+                      value={teamVerificationFilter}
+                      onChange={(e) => setTeamVerificationFilter(e.target.value as "All" | "Verified" | "Pending")}
+                      className="filter-select"
+                      aria-label="Filter admins by verification"
+                    >
+                      <option value="All">All Verifications ({teamAdmins.length})</option>
+                      <option value="Verified">Verified Only ({verifiedTeamCount})</option>
+                      <option value="Pending">Pending Only ({pendingTeamCount})</option>
+                    </select>
                     <select
                       value={teamStatusFilter}
                       onChange={(e) => setTeamStatusFilter(e.target.value as "All" | "Active" | "Inactive")}
@@ -1169,6 +1192,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                           )}
                         </div>
                       </th>
+                      <th>Verification</th>
                       <th
                         className="sortable"
                         onClick={() => handleSortToggle("active", teamSortField, teamSortDir, setTeamSortField, setTeamSortDir)}
@@ -1188,17 +1212,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   <tbody>
                     {usersLoading ? (
                       <tr>
-                        <td colSpan={4} className="subtle-text">Loading admin team…</td>
+                        <td colSpan={5} className="subtle-text">Loading admin team…</td>
                       </tr>
                     ) : usersError ? (
                       <tr>
-                        <td colSpan={4} className="subtle-text" style={{ color: "var(--primary)" }}>
+                        <td colSpan={5} className="subtle-text" style={{ color: "var(--primary)" }}>
                           {usersError}
                         </td>
                       </tr>
                     ) : filteredTeamList.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="subtle-text">No administrators match your search/filter criteria.</td>
+                        <td colSpan={5} className="subtle-text">No administrators match your search/filter criteria.</td>
                       </tr>
                     ) : (
                       filteredTeamList.map((user) => (
@@ -1207,6 +1231,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                           <td>
                             <div>{user.email}</div>
                             <small className="subtle-text">{user.phone}</small>
+                          </td>
+                          <td>
+                            {user.verified ? (
+                              <span className="badge-inline green"><CheckCircle2 size={14} /> Verified</span>
+                            ) : (
+                              <span className="badge-inline amber"><XCircle size={14} /> Pending</span>
+                            )}
                           </td>
                           <td>
                             <span className={`status-pill ${user.active ? "safe" : "danger"}`}>

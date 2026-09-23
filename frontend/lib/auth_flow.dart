@@ -23,6 +23,7 @@ class _AuthFlowState extends State<AuthFlow> {
   String? _resetPhoneNumber;
   String? _resetVerificationCode;
   bool _isResetPasswordFlow = true;
+  bool _isLoginVerificationFlow = false;
   bool _isCheckingSession = true;
 
   @override
@@ -50,6 +51,7 @@ class _AuthFlowState extends State<AuthFlow> {
       _resetPhoneNumber = phoneNumber;
       _resetVerificationCode = null;
       _isResetPasswordFlow = true;
+      _isLoginVerificationFlow = false;
       _page = AuthPage.verification;
     });
   }
@@ -59,6 +61,17 @@ class _AuthFlowState extends State<AuthFlow> {
       _resetPhoneNumber = phoneNumber;
       _resetVerificationCode = null;
       _isResetPasswordFlow = false;
+      _isLoginVerificationFlow = false;
+      _page = AuthPage.verification;
+    });
+  }
+
+  void _beginLoginVerification(String identifier) {
+    setState(() {
+      _resetPhoneNumber = identifier;
+      _resetVerificationCode = null;
+      _isResetPasswordFlow = false;
+      _isLoginVerificationFlow = true;
       _page = AuthPage.verification;
     });
   }
@@ -87,7 +100,7 @@ class _AuthFlowState extends State<AuthFlow> {
     final page = switch (_page) {
       AuthPage.login => LoginPage(
           onNavigate: _goTo,
-          onUnverifiedAccount: _beginSignUpVerification,
+          onUnverifiedAccount: _beginLoginVerification,
         ),
       AuthPage.signUp => SignUpPage(
           onNavigate: _goTo,
@@ -99,20 +112,16 @@ class _AuthFlowState extends State<AuthFlow> {
           onNavigate: _goTo,
           phoneNumber: _resetPhoneNumber ?? '',
           isResetPasswordFlow: _isResetPasswordFlow,
+          isLoginVerificationFlow: _isLoginVerificationFlow,
           onVerified: (code) async {
             if (_isResetPasswordFlow) {
               _verifyPasswordReset(code);
-            } else {
-              final user = AuthService.currentUser ?? {
-                'phone_number': _resetPhoneNumber,
-                'is_verified': true,
-              };
-              user['is_verified'] = true;
-              await AuthService.saveSession(
-                AuthService.token ?? 'verified_user_token',
-                user,
-              );
+            } else if (_isLoginVerificationFlow) {
               _goTo(AuthPage.dashboard);
+            } else {
+              // Registration verification does not issue a JWT. Require a real
+              // login instead of creating a placeholder authenticated session.
+              _goTo(AuthPage.login);
             }
           },
         ),
