@@ -135,6 +135,17 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
+    @Transactional
+    public void deleteFraudScan(UUID scanId) {
+        SmsScan scan = smsScanRepository.findById(scanId)
+                .orElseThrow(() -> new NotFoundException("SMS scan not found"));
+        if (!"FRAUD".equalsIgnoreCase(scan.getVerdict())) {
+            throw new BadRequestException("Only fraud scans can be marked as safe");
+        }
+        smsScanRepository.delete(scan);
+    }
+
+    @Override
     public List<String> getAllSenders() {
         return smsScanRepository.findDistinctSenders();
     }

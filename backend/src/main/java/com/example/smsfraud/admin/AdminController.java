@@ -75,6 +75,12 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.ok("SMS scans retrieved", adminService.getSmsScans(status, page, size)));
     }
 
+    @DeleteMapping("/scans/{scanId}")
+    public ResponseEntity<ApiResponse<Void>> deleteFraudScan(@PathVariable UUID scanId) {
+        adminService.deleteFraudScan(scanId);
+        return ResponseEntity.ok(ApiResponse.ok("Fraud scan marked as safe and deleted"));
+    }
+
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserResponse>>> listUsers() {
         // Return both administrators and mobile users. The portal separates them by role.

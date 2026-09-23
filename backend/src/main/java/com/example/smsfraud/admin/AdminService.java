@@ -17,6 +17,7 @@ public interface AdminService {
     List<FraudTrendPoint> getFraudTrend(int days);
     List<AlertResponse> getRecentAlerts(int limit);
     Page<AdminSmsResponse> getSmsScans(String status, int page, int size);
+    void deleteFraudScan(UUID scanId);
     List<String> getAllSenders();
     List<BlockedSender> getBlockedSenders();
     void blockSender(String phoneNumber, String reason);
