@@ -136,6 +136,23 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
+    public Page<AdminSmsResponse> getUserReportedFraud(int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<SmsScan> scans = smsScanRepository.findBySourceOrderByScannedAtDesc(
+                "USER_REPORTED", pageRequest);
+
+        return scans.map(scan -> new AdminSmsResponse(
+                scan.getScanId(),
+                scan.getSender() != null ? scan.getSender() : "Unknown",
+                scan.getMessageBody(),
+                scan.getVerdict(),
+                scan.getConfidence() != null ? scan.getConfidence() : 0.0,
+                scan.getScannedAt(),
+                scan.getSource()
+        ));
+    }
+
+    @Override
     public List<String> getAllSenders() {
         return smsScanRepository.findDistinctSenders();
     }

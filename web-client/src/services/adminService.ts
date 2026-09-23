@@ -134,6 +134,16 @@ export function getSmsScans(
   return authFetchJson<PageResponse<AdminSmsScanResponse> | AdminSmsScanResponse[]>(`/api/admin/scans${query}`);
 }
 
+/** Messages users explicitly marked as fraud via the mobile app - the dataset used to review model misses and retrain. */
+export function getMarkedFraud(
+  page: number = 0,
+  size: number = 100,
+): Promise<ApiResult<PageResponse<AdminSmsScanResponse> | AdminSmsScanResponse[]>> {
+  return authFetchJson<PageResponse<AdminSmsScanResponse> | AdminSmsScanResponse[]>(
+    `/api/admin/marked-fraud?page=${page}&size=${size}`,
+  );
+}
+
 /** List all users (admin only). */
 export function getUsers(): Promise<ApiResult<AdminUser[]>> {
   return authFetchJson<AdminUser[]>('/api/admin/users');

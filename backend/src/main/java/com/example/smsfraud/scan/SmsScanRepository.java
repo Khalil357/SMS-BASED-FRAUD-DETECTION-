@@ -22,6 +22,8 @@ public interface SmsScanRepository extends JpaRepository<SmsScan, UUID> {
 
     Page<SmsScan> findAllByOrderByScannedAtDesc(Pageable pageable);
 
+    Page<SmsScan> findBySourceOrderByScannedAtDesc(String source, Pageable pageable);
+
     @org.springframework.data.jpa.repository.Query("SELECT DISTINCT s.sender FROM SmsScan s WHERE s.sender IS NOT NULL")
     java.util.List<String> findDistinctSenders();
 }

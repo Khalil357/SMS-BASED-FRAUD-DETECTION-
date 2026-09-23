@@ -75,6 +75,14 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.ok("SMS scans retrieved", adminService.getSmsScans(status, page, size)));
     }
 
+    @GetMapping("/marked-fraud")
+    public ResponseEntity<ApiResponse<Page<AdminSmsResponse>>> getMarkedFraud(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                "User-reported fraud retrieved", adminService.getUserReportedFraud(page, size)));
+    }
+
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserResponse>>> listUsers() {
         // Return both administrators and mobile users. The portal separates them by role.

@@ -17,6 +17,13 @@ public interface AdminService {
     List<FraudTrendPoint> getFraudTrend(int days);
     List<AlertResponse> getRecentAlerts(int limit);
     Page<AdminSmsResponse> getSmsScans(String status, int page, int size);
+
+    /**
+     * Messages a user explicitly marked as fraud via the app's "Mark Fraud"
+     * action (source = USER_REPORTED), rather than flagged by the ML model.
+     * This is the dataset intended for retraining/reviewing model misses.
+     */
+    Page<AdminSmsResponse> getUserReportedFraud(int page, int size);
     List<String> getAllSenders();
     List<BlockedSender> getBlockedSenders();
     void blockSender(String phoneNumber, String reason);

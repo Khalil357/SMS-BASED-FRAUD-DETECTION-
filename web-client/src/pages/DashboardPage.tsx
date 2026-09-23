@@ -28,6 +28,7 @@ import {
   Filter,
   RotateCcw,
   Menu,
+  Flag,
 } from "lucide-react";
 import inAppIcon from "../assets/images/in_app_icon.png";
 import {
@@ -40,6 +41,7 @@ import {
   getAdminStats,
   getFraudTrend,
   getSmsScans,
+  getMarkedFraud,
 } from "../services/adminService";
 import type { AdminUser, FraudTrendPoint } from "../services/adminService";
 import { clearToken } from "../services/authService";
@@ -96,6 +98,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const TAB_SLUGS: Record<string, string> = {
     "Overview":              "/",
     "SMS Ingestion Logs":    "/logs",
+    "Marked as Fraud":       "/marked-fraud",
     "Team":                  "/team",
     "Users":                 "/users",
   };
@@ -120,6 +123,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   // Main Data States
   const [statsCards, setStatsCards] = useState<StatCardData[]>(emptyStats);
   const [smsList, setSmsList] = useState<SmsRecord[]>([]);
+  const [markedFraudList, setMarkedFraudList] = useState<SmsRecord[]>([]);
   const [fraudTrend, setFraudTrend] = useState<FraudTrendPoint[]>([]);
   const [usersList, setUsersList] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -145,6 +149,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [logsSearch, setLogsSearch] = useState("");
   const [logsSortField, setLogsSortField] = useState<"id" | "sender" | "date">("date");
   const [logsSortDir, setLogsSortDir] = useState<"asc" | "desc">("desc");
+  const [markedFraudSearch, setMarkedFraudSearch] = useState("");
 
   // Add Admin form state
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -263,6 +268,44 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     }
   }
 
+  /** Messages users explicitly marked as fraud in the app - used to review what the model missed and to grow the training dataset. */
+  async function loadMarkedFraud() {
+    const res = await getMarkedFraud(0, 100);
+    if (res.success && res.data) {
+      const records = Array.isArray(res.data) ? res.data : (res.data as any)?.content || [];
+      const mapped: SmsRecord[] = records.map((item: any) => {
+          let dateStr = "Recently";
+          if (item.timestamp) {
+            try {
+              dateStr = new Date(item.timestamp).toLocaleString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+            } catch {
+              dateStr = item.timestamp;
+            }
+          }
+          return {
+            id: item.id ? `SMS-${String(item.id).substring(0, 6).toUpperCase()}` : "Unknown",
+            sender: item.sender || "Unknown",
+            message: item.message || "",
+            fraudType: (item.fraud_type || item.fraudType || "Clean") as SmsRecord["fraudType"],
+            riskScore: Math.round(
+              Number(item.risk_score ?? item.riskScore ?? 0)
+                * (Number(item.risk_score ?? item.riskScore ?? 0) <= 1 ? 100 : 1)
+            ),
+            date: dateStr,
+            status: "Fraud",
+            reportedByUser: true,
+          };
+      });
+      setMarkedFraudList(mapped);
+    }
+  }
+
   async function loadUsers() {
     setUsersLoading(true);
     setUsersError(null);
@@ -294,6 +337,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       void loadSmsAuditScans();
     } else if (activeTab === "SMS Ingestion Logs") {
       void loadSmsAuditScans();
+    } else if (activeTab === "Marked as Fraud") {
+      void loadMarkedFraud();
     } else if (activeTab === "Team" || activeTab === "Users") {
       void loadUsers();
     }
@@ -476,6 +521,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   }, [smsList, logsSearch, logsSortField, logsSortDir]);
 
   const isLogsFiltered = logsSearch !== "" || logsSortField !== "date" || logsSortDir !== "desc";
+
+  const filteredMarkedFraudList = useMemo(() => {
+    if (!markedFraudSearch.trim()) return markedFraudList;
+    const q = markedFraudSearch.toLowerCase().trim();
+    return markedFraudList.filter(
+      (s) =>
+        s.id.toLowerCase().includes(q) ||
+        s.sender.toLowerCase().includes(q) ||
+        s.message.toLowerCase().includes(q)
+    );
+  }, [markedFraudList, markedFraudSearch]);
   function resetLogsFilters() {
     setLogsSearch("");
     setLogsSortField("date");
@@ -682,6 +738,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const navMenuItems = [
     { name: "Overview", icon: Activity },
     { name: "SMS Ingestion Logs", icon: MessageSquare, badge: smsList.length },
+    { name: "Marked as Fraud", icon: Flag, badge: markedFraudList.length },
     { name: "Team", icon: UserCheck, badge: filteredTeamList.length },
     { name: "Users", icon: Users, badge: filteredAppUsersList.length },
   ];
@@ -1069,6 +1126,96 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                                 USER REPORTED
                               </span>
                             )}
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="icon-action-btn"
+                              onClick={() => setSelectedSms(sms)}
+                              title="Inspect Log Payload"
+                            >
+                              <Eye size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: MARKED AS FRAUD (user-reported, feeds model retraining) */}
+        {activeTab === "Marked as Fraud" && (
+          <div className="tab-content fade-slide">
+            <div className="admin-panel">
+              <div className="panel-top flex-wrap">
+                <div>
+                  <h3>Marked as Fraud by Users</h3>
+                  <p>
+                    Messages users manually flagged as fraud from the app ({filteredMarkedFraudList.length} records).
+                    These are cases the model may have missed or that users caught first — this set is what
+                    feeds future model retraining.
+                  </p>
+                </div>
+              </div>
+
+              {/* TOOLBAR */}
+              <div className="toolbar-row">
+                <div className="search-input-wrapper">
+                  <Search size={16} className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search by ID, sender, or message body..."
+                    value={markedFraudSearch}
+                    onChange={(e) => setMarkedFraudSearch(e.target.value)}
+                    className="search-input"
+                  />
+                  {markedFraudSearch && (
+                    <button type="button" className="clear-search-btn" onClick={() => setMarkedFraudSearch("")}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Record ID</th>
+                      <th>Sender</th>
+                      <th>Message Body</th>
+                      <th>Marked At</th>
+                      <th>Source</th>
+                      <th>Inspect</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMarkedFraudList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="subtle-text">
+                          No user-reported fraud messages yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredMarkedFraudList.map((sms) => (
+                        <tr key={sms.id}>
+                          <td><code className="code-tag">{sms.id}</code></td>
+                          <td className="font-semibold">{sms.sender}</td>
+                          <td className="message-cell">{sms.message}</td>
+                          <td className="subtle-text">{sms.date}</td>
+                          <td>
+                            <span
+                              className="status-pill"
+                              style={{ background: "#eef2ff", color: "#4338ca" }}
+                              title="Reported by a user via the mobile app, not detected by the ML model"
+                            >
+                              <Flag size={12} style={{ marginRight: 4, verticalAlign: "-2px" }} />
+                              USER REPORTED
+                            </span>
                           </td>
                           <td>
                             <button
