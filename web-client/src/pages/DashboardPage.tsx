@@ -256,6 +256,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             ),
             date: dateStr,
             status: "Fraud",
+            reportedByUser: item.source === "USER_REPORTED",
           };
       });
       setSmsList(mapped);
@@ -1059,6 +1060,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                             <span className="status-pill fraud">
                               FRAUD
                             </span>
+                            {sms.reportedByUser && (
+                              <span
+                                className="status-pill"
+                                style={{ marginLeft: 6, background: "#eef2ff", color: "#4338ca" }}
+                                title="Reported by a user via the mobile app, not detected by the ML model"
+                              >
+                                USER REPORTED
+                              </span>
+                            )}
                           </td>
                           <td>
                             <button
@@ -1448,6 +1458,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 <div>
                   <small>DATE / TIME</small>
                   <strong>{selectedSms.date}</strong>
+                </div>
+                <div>
+                  <small>SOURCE</small>
+                  <strong style={selectedSms.reportedByUser ? { color: "#4338ca" } : undefined}>
+                    {selectedSms.reportedByUser ? "Reported by user" : "Detected by system"}
+                  </strong>
                 </div>
               </div>
 

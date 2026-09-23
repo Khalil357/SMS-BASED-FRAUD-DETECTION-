@@ -130,7 +130,8 @@ public class AdminServiceImpl implements AdminService {
                 scan.getMessageBody(),
                 scan.getVerdict(),
                 scan.getConfidence() != null ? scan.getConfidence() : 0.0,
-                scan.getScannedAt()
+                scan.getScannedAt(),
+                scan.getSource()
         ));
     }
 

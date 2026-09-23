@@ -50,6 +50,9 @@ class _AuthFlowState extends State<AuthFlow> {
 
   Future<void> _checkSavedSession() async {
     final hasSession = await AuthService.loadSession();
+    if (!hasSession) {
+      AuthService.stopSessionWatcher();
+    }
     if (mounted) {
       setState(() {
         if (hasSession) {

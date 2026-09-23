@@ -28,6 +28,7 @@ export interface SmsRecord {
   riskScore: number;
   date: string;
   status: 'Fraud' | 'Review' | 'Safe';
+  reportedByUser: boolean;
 }
 
 export interface BlacklistedSender {

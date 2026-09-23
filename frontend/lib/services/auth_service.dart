@@ -127,8 +127,11 @@ class AuthService {
   // Session variables & Storage Keys
   static Map<String, dynamic>? currentUser;
   static String? token;
+  static String? _refreshToken;
+  static Timer? _sessionWatcherTimer;
 
   static const String _keyToken = 'auth_token_v1';
+  static const String _keyRefreshToken = 'auth_refresh_token_v1';
   static const String _keyUser = 'auth_user_v1';
   static const String _keyUnverifiedIdentifiers = 'unverified_identifiers_v1';
 
@@ -195,12 +198,20 @@ class AuthService {
 
   /// Save session to persistent storage
   static Future<void> saveSession(
-      String tokenStr, Map<String, dynamic> userMap) async {
+      String tokenStr, Map<String, dynamic> userMap,
+      {String? refreshTokenStr}) async {
     token = tokenStr;
     currentUser = userMap;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyToken, tokenStr);
     await prefs.setString(_keyUser, jsonEncode(userMap));
+
+    if (refreshTokenStr != null && refreshTokenStr.isNotEmpty) {
+      _refreshToken = refreshTokenStr;
+      await prefs.setString(_keyRefreshToken, refreshTokenStr);
+    }
+
+    startSessionWatcher();
   }
 
   /// Load session from persistent storage
@@ -210,13 +221,16 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
       final savedToken = prefs.getString(_keyToken);
+      final savedRefreshToken = prefs.getString(_keyRefreshToken);
       final savedUserJson = prefs.getString(_keyUser);
 
       if (savedUserJson != null && savedUserJson.isNotEmpty) {
         token = (savedToken != null && savedToken.isNotEmpty)
             ? savedToken
             : 'auth_session_active';
+        _refreshToken = savedRefreshToken;
         currentUser = jsonDecode(savedUserJson) as Map<String, dynamic>;
+        startSessionWatcher();
         return true;
       }
     } catch (e) {
@@ -227,13 +241,105 @@ class AuthService {
 
   /// Clear persistent session (Logout)
   static Future<void> logout() async {
+    stopSessionWatcher();
     token = null;
+    _refreshToken = null;
     currentUser = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_keyToken);
+      await prefs.remove(_keyRefreshToken);
       await prefs.remove(_keyUser);
     } catch (_) {}
+  }
+
+  /// Decodes a JWT's `exp` claim (seconds since epoch) without verifying the
+  /// signature - the backend is the source of truth on validity, this is
+  /// only used client-side to decide when to proactively refresh.
+  static DateTime? _tokenExpiry(String? jwt) {
+    if (jwt == null || jwt.isEmpty) return null;
+    final parts = jwt.split('.');
+    if (parts.length != 3) return null;
+    try {
+      var payload = parts[1];
+      payload += '=' * ((4 - payload.length % 4) % 4);
+      final decoded = utf8.decode(base64Url.decode(payload));
+      final map = jsonDecode(decoded) as Map<String, dynamic>;
+      final exp = map['exp'];
+      if (exp is! int) return null;
+      return DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Starts (or restarts) a periodic check that proactively keeps the
+  /// session alive: refreshes the access token shortly before it expires,
+  /// and logs the user out (emitting [sessionExpiredStream]) the moment the
+  /// session can no longer be renewed - this is what makes "session
+  /// timeout" happen even if the user never triggers another API call.
+  static void startSessionWatcher() {
+    _sessionWatcherTimer?.cancel();
+    _sessionWatcherTimer =
+        Timer.periodic(const Duration(seconds: 30), (_) => _checkSession());
+    // Run one check immediately too, rather than waiting for the first tick.
+    _checkSession();
+  }
+
+  static void stopSessionWatcher() {
+    _sessionWatcherTimer?.cancel();
+    _sessionWatcherTimer = null;
+  }
+
+  static bool _isRefreshing = false;
+
+  static Future<void> _checkSession() async {
+    if (token == null || _isRefreshing) return;
+
+    final expiry = _tokenExpiry(token);
+    // Tokens without a decodable expiry (e.g. the 'auth_session_active'
+    // placeholder from a very old cached session) are left to the existing
+    // reactive 401 handler; nothing safe to proactively check here.
+    if (expiry == null) return;
+
+    final timeLeft = expiry.difference(DateTime.now().toUtc());
+    if (timeLeft > const Duration(seconds: 60)) return; // not close to expiry yet
+
+    _isRefreshing = true;
+    try {
+      if (_refreshToken == null || _refreshToken!.isEmpty) {
+        await logout();
+        _sessionExpiredController.add(true);
+        return;
+      }
+
+      final response = await _postRequest(
+        '/api/auth/refresh',
+        {'refreshToken': _refreshToken},
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = _safeJsonDecode(response.body);
+        final data = (decoded['data'] ?? decoded) as Map<String, dynamic>;
+        final newToken = data['token'] as String?;
+        final newRefreshToken = data['refreshToken'] as String?;
+        if (newToken != null && newToken.isNotEmpty && currentUser != null) {
+          await saveSession(newToken, currentUser!,
+              refreshTokenStr: newRefreshToken);
+        }
+      } else {
+        // Refresh token itself has expired or was revoked - this is the
+        // real end of the session (default 7 days server-side).
+        await logout();
+        _sessionExpiredController.add(true);
+      }
+    } catch (_) {
+      // Network hiccup during a proactive refresh should not log the user
+      // out - the existing reactive 401 handler covers the case where the
+      // access token has actually expired by the time of a real request.
+    } finally {
+      _isRefreshing = false;
+    }
   }
 
   /// Helper to send POST requests with automatic fallback for physical phone vs emulator
@@ -704,6 +810,7 @@ class AuthService {
         final userData = _extractUserMap(decoded, trimmed);
         final tokenStr =
             decoded['token'] as String? ?? userData['token'] as String? ?? '';
+        final refreshTokenStr = decoded['refreshToken'] as String?;
 
         final rawVerified = userData['is_verified'] ??
             userData['isVerified'] ??
@@ -742,7 +849,7 @@ class AuthService {
 
         markIdentifierVerified(trimmed);
         userData['is_verified'] = true;
-        await saveSession(tokenStr, userData);
+        await saveSession(tokenStr, userData, refreshTokenStr: refreshTokenStr);
 
         return {
           'success': true,

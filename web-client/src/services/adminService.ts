@@ -36,6 +36,7 @@ export interface AdminSmsScanResponse {
   fraudType?: string;
   riskScore?: number;
   timestamp: string;
+  source?: string;
 }
 
 /** Spring Boot Page wrapper */
