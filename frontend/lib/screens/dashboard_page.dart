@@ -63,6 +63,13 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   // NEW: tracks which log id is currently being marked-as-safe (backend call in flight)
   String? _markingSafeLogId;
 
+  // Only logs whose id is a real backend UUID live on the server. Local-only
+  // ids ("history_", "manual_", "auto_", "backend_fraud_", ...) never existed
+  // there, so sending them to DELETE would always be rejected with a 400.
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
   // Blocklist state
   List<Map<String, String>> _blockedNumbers = [];
 
@@ -1109,20 +1116,27 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     );
   }
 
-  /// CHANGED: now calls the backend to delete the fraud row first.
-  /// Local state (and the "Safe" reclassification) is only applied once
-  /// the backend confirms the row is gone. If there's no backendId (e.g.
-  /// this was a manual scan, never stored server-side as fraud), it skips
-  /// the backend call and just updates locally, same as before.
+  /// Marks a message as safe.
+  ///
+  /// The backend DELETE is only attempted when the log carries a real
+  /// backend id (a UUID). Local-only logs ("history_", "manual_", "auto_",
+  /// "backend_fraud_", ...) were never stored server-side, so sending them
+  /// would only produce a 400 and the whole action would silently fail.
+  ///
+  /// The local reclassification always happens afterwards so the action
+  /// reliably works — even when the server is unreachable or the delete
+  /// fails. In that case a warning is shown, but the message is still
+  /// marked Safe on the device.
   Future<void> _markAsSafe(Map<String, dynamic> log) async {
     final logId = log['id']?.toString() ?? '';
-    final backendId = log['backendId']?.toString() ?? log['scanId']?.toString() ?? log['id']?.toString();
+    final backendId =
+        log['backendId']?.toString() ?? log['scanId']?.toString() ?? log['id']?.toString();
 
-    if (backendId != null &&
-        backendId.isNotEmpty &&
-        !backendId.startsWith('manual_') &&
-        !backendId.startsWith('auto_') &&
-        !backendId.startsWith('mock_')) {
+    String? syncError;
+    final isBackendRecord =
+        backendId != null && backendId.isNotEmpty && _uuidRegex.hasMatch(backendId);
+
+    if (isBackendRecord) {
       setState(() {
         _markingSafeLogId = logId;
       });
@@ -1136,16 +1150,13 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       });
 
       if (result['success'] != true) {
-        _showMessageActionSnackBar(
-          result['message'] ?? 'Failed to delete record on the server.',
-          isError: true,
-        );
-        return; // Stop here — do NOT remove local record if authenticated backend DELETE call failed!
+        syncError = result['message']?.toString() ??
+            'Could not sync with the server. The message was still marked safe on this device.';
       }
     }
 
-    // Reaches here only if: there was no backendId to check,
-    // OR the backend confirmed the row was deleted.
+    // Always reclassify locally so the user's action reliably works, even if
+    // the server delete above couldn't be completed.
     await SmsStorageService.submitFeedback(logId: logId, feedbackType: 'Safe');
     final logs = await SmsStorageService.getLogs();
     if (!mounted) return;
@@ -1154,7 +1165,11 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       _smsLogs = logs;
     });
     Navigator.pop(context);
-    _showMessageActionSnackBar('Record marked as safe and updated successfully.');
+    if (syncError != null) {
+      _showMessageActionSnackBar(syncError, isError: true);
+    } else {
+      _showMessageActionSnackBar('Record marked as safe and updated successfully.');
+    }
   }
 
   Future<void> _markAsFraud(Map<String, dynamic> log) async {

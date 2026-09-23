@@ -86,10 +86,16 @@ class SmsStorageService {
     if (index != -1) {
       final original = Map<String, dynamic>.from(logs[index]);
       final oldType = original['type'];
+      final isFeedbackSafe = feedbackType == 'Safe';
       original['hasFeedback'] = true;
       original['userFeedback'] = feedbackType;
       // Update classification in the logs page too to show user updated assessment
       original['type'] = feedbackType;
+      // Keep the derived ML fields consistent with the user's reclassification
+      // so no other part of the app still treats it as the old type.
+      original['isScam'] = !isFeedbackSafe;
+      original['is_scam'] = !isFeedbackSafe;
+      original['label'] = isFeedbackSafe ? 'safe' : 'scam';
 
       logs[index] = original;
       await saveLogs(logs);
