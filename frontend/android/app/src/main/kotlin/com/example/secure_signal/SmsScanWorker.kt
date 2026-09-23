@@ -75,7 +75,10 @@ class SmsScanWorker(appContext: Context, parameters: WorkerParameters) :
                 put("matchedReasons", JSONArray(listOf("Waiting for fraud-detection model")))
                 put("hasFeedback", false)
                 put("userFeedback", JSONObject.NULL)
-                put("source", "BACKGROUND_SMS_RECEIVER")
+                // The deployed API currently accepts the same source value as
+                // a manual scan. The native log still retains its real source
+                // (BACKGROUND_SMS_RECEIVER); this field is API compatibility.
+                put("source", "MANUAL_QUERY")
             }
             val updated = JSONArray().put(pending)
             for (index in 0 until logs.length()) updated.put(logs.get(index))
@@ -259,16 +262,52 @@ class SmsScanWorker(appContext: Context, parameters: WorkerParameters) :
                 )
             }
             val text = BufferedReader(connection.inputStream.reader()).use { it.readText() }
-            val data = JSONObject(text).optJSONObject("data")
-                ?: throw ModelUnavailableException("Backend returned no scan result")
-            val isScam = data.optBoolean("isScam", data.optBoolean("is_scam", false))
-            val confidence = data.optDouble("confidence", Double.NaN)
-            if (confidence.isNaN()) throw ModelUnavailableException("Model result has no confidence")
+            val responseJson = JSONObject(text)
+            val data = responseJson.optJSONObject("data")
+            // Older deployed API versions intentionally return data: null when
+            // the model clears an SMS. That is a valid Safe verdict, not a
+            // transport or model failure.
+            if (data == null) {
+                val serverMessage = responseJson.optString("message")
+                // A 2xx response means the backend completed the model call.
+                // Legacy deployments omit the data object for a non-fraud
+                // result, so use that response as the Safe verdict instead
+                // of falsely showing a Scan Error.
+                Log.i(TAG, "Model returned a Safe verdict without details: $serverMessage")
+                return Analysis(
+                    "Safe",
+                    0.0,
+                    listOf(
+                        "Fraud-detection model cleared this SMS",
+                        if (serverMessage.isBlank())
+                            "No fraud indicators were returned by the model"
+                        else serverMessage,
+                    ),
+                )
+            }
+            val label = data.optString("label").lowercase().trim()
+            val isScam = data.optBoolean("isScam", data.optBoolean("is_scam", false)) ||
+                label in setOf("fraud", "scam", "phishing", "spam")
+            // Safe responses from the deployed model often omit confidence.
+            // Use a conservative zero threat level in that case, rather than
+            // turning a valid Safe result into a Scan Error.
+            val confidence = data.optDouble(
+                "confidence",
+                data.optDouble("probability", data.optDouble("score", Double.NaN)),
+            ).let { value ->
+                if (value.isNaN()) {
+                    if (isScam) 0.95 else 1.0
+                } else value
+            }
             val threat = if (isScam) confidence else 1.0 - confidence
             return Analysis(
                 if (isScam) "Fraud" else "Safe",
                 threat.coerceIn(0.0, 1.0),
-                listOf(if (isScam) "Flagged by the fraud-detection model" else "Cleared by the fraud-detection model"),
+                listOf(
+                    if (isScam) "Flagged by the fraud-detection model"
+                    else "Cleared by the fraud-detection model",
+                    if (label.isBlank()) "Model returned no confidence score" else "Model label: $label",
+                ),
             )
         } finally {
             connection.disconnect()

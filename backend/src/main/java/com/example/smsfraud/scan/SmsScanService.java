@@ -2,6 +2,7 @@ package com.example.smsfraud.scan;
 
 import com.example.smsfraud.ml.MlFraudDetectionClient;
 import com.example.smsfraud.ml.dto.FraudCheckResponse;
+import com.example.smsfraud.common.exception.BadRequestException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -48,7 +49,7 @@ public class SmsScanService {
     public SmsScan markAsFraud(UUID userId, String sender, String body) {
         String message = body == null ? "" : body.trim();
         if (message.isEmpty()) {
-            throw new IllegalArgumentException("message is required");
+            throw new BadRequestException("message is required when marking a scan as fraud");
         }
 
         SmsScan scan = new SmsScan();

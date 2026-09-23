@@ -113,26 +113,32 @@ class SmsIngestionService {
   
   static Stream<Map<String, dynamic>> get smsStream => _smsStreamController.stream;
 
-  /// Request SMS read and receive permissions (Android Only)
+  /// Request the SMS and Contacts permissions required to scan only unknown
+  /// senders. Contacts are never uploaded; Android checks them locally.
   static Future<bool> requestSmsPermission({bool forcePrompt = false}) async {
     if (!Platform.isAndroid) return false;
-    
-    final statusReceive = await Permission.sms.status;
-    if (forcePrompt || statusReceive.isDenied || statusReceive.isPermanentlyDenied) {
-      final result = await Permission.sms.request();
-      if (result.isPermanentlyDenied) {
+    final smsStatus = await Permission.sms.status;
+    final contactsStatus = await Permission.contacts.status;
+    if (forcePrompt ||
+        smsStatus.isDenied || smsStatus.isPermanentlyDenied ||
+        contactsStatus.isDenied || contactsStatus.isPermanentlyDenied) {
+      final result = await [Permission.sms, Permission.contacts].request();
+      final smsGranted = result[Permission.sms]?.isGranted == true;
+      final contactsGranted = result[Permission.contacts]?.isGranted == true;
+      if (result[Permission.sms]?.isPermanentlyDenied == true ||
+          result[Permission.contacts]?.isPermanentlyDenied == true) {
         await openAppSettings();
         return false;
       }
-      return result.isGranted;
+      return smsGranted && contactsGranted;
     }
-    return statusReceive.isGranted;
+    return smsStatus.isGranted && contactsStatus.isGranted;
   }
 
   /// Check if SMS permissions are granted
   static Future<bool> hasSmsPermission() async {
     if (!Platform.isAndroid) return false;
-    return await Permission.sms.isGranted;
+    return await Permission.sms.isGranted && await Permission.contacts.isGranted;
   }
 
   /// Initialize and start the Telephony SMS Listener

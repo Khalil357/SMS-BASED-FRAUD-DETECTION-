@@ -47,19 +47,17 @@ class _MessageClassificationChartState extends State<MessageClassificationChart>
     if (widget.logs.isEmpty) return [];
 
     int safeCount = 0;
-    int spamCount = 0;
     int fraudCount = 0;
+    int pendingCount = 0;
 
     for (final log in widget.logs) {
       final type = (log['type'] as String? ?? 'Safe').trim();
-      final msg = (log['message'] as String? ?? '').toLowerCase();
-
       if (type == 'Safe') {
         safeCount++;
-      } else if (type == 'Spam' || msg.contains('discount') || msg.contains('offer') || msg.contains('sale') || msg.contains('promo')) {
-        spamCount++;
-      } else {
+      } else if (type == 'Fraud') {
         fraudCount++;
+      } else if (type == 'Pending') {
+        pendingCount++;
       }
     }
 
@@ -88,14 +86,13 @@ class _MessageClassificationChartState extends State<MessageClassificationChart>
       ));
     }
 
-    // Spam & Promotional Messages Slice
-    if (spamCount > 0) {
+    if (pendingCount > 0) {
       slices.add(_ClassificationSlice(
-        label: 'Spam & Promos',
-        count: spamCount,
-        percentage: (spamCount / total) * 100,
-        color: AppTheme.cyberCyan,
-        icon: Icons.mark_email_unread_rounded,
+        label: 'Pending Scans',
+        count: pendingCount,
+        percentage: (pendingCount / total) * 100,
+        color: Colors.amber,
+        icon: Icons.hourglass_top_rounded,
       ));
     }
 

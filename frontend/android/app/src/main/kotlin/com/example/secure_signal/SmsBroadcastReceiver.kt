@@ -3,8 +3,13 @@ package com.example.secure_signal
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
+import android.provider.ContactsContract
 import android.provider.Telephony
 import android.util.Log
+import androidx.core.content.ContextCompat
+import android.net.Uri
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
@@ -20,6 +25,11 @@ import androidx.work.WorkManager
 class SmsBroadcastReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "ArgusSmsReceiver"
+        private val TRUSTED_SERVICE_SENDERS = listOf(
+            "mpesa", "m-pesa", "mixx", "mixx by yas", "yas", "tigopesa",
+            "tigo pesa", "airtel money", "airtelmoney", "halopesa", "halotel",
+            "vodacom", "zantel", "ttcl", "tanzania telecom",
+        )
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -39,6 +49,18 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         }
         if (!SmsScanWorker.isIngestionEnabled(context.applicationContext)) {
             Log.i(TAG, "SMS scan skipped because auto-ingestion is disabled")
+            return
+        }
+        if (isTrustedServiceSender(sender)) {
+            Log.i(TAG, "SMS scan skipped for trusted service sender: $sender")
+            return
+        }
+        if (!canReadContacts(context)) {
+            Log.w(TAG, "SMS scan skipped because Contacts permission is not granted")
+            return
+        }
+        if (isSavedContact(context, sender)) {
+            Log.i(TAG, "SMS scan skipped for saved contact: $sender")
             return
         }
 
@@ -66,6 +88,38 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         } finally {
             // Enqueuing is complete; the worker owns all further processing.
             pendingResult.finish()
+        }
+    }
+
+    private fun isTrustedServiceSender(sender: String): Boolean {
+        val normalized = sender.lowercase().replace(Regex("[^a-z0-9]"), "")
+        return TRUSTED_SERVICE_SENDERS.any { provider ->
+            normalized.contains(provider.replace(Regex("[^a-z0-9]"), ""))
+        }
+    }
+
+    private fun canReadContacts(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
+            PackageManager.PERMISSION_GRANTED
+
+    /** PhoneLookup handles number formatting and country-code differences. */
+    private fun isSavedContact(context: Context, sender: String): Boolean {
+        if (sender.isBlank()) return false
+        return try {
+            val lookupUri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                Uri.encode(sender),
+            )
+            context.contentResolver.query(
+                lookupUri,
+                arrayOf(ContactsContract.PhoneLookup._ID),
+                null,
+                null,
+                null,
+            )?.use { it.moveToFirst() } ?: false
+        } catch (error: SecurityException) {
+            Log.w(TAG, "Could not read contacts", error)
+            false
         }
     }
 }

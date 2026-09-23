@@ -330,7 +330,14 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Future<void> _loadStoredData() async {
-    final logs = await SmsStorageService.getLogs();
+    final loadedLogs = await SmsStorageService.getLogs();
+    // Scan Logs are device-local events created for this signed-in session.
+    // Never merge the admin/remote fraud feed here: a misconfigured server
+    // response must not expose another user's SMS on this device.
+    final logs = loadedLogs.where((log) => !_isRemoteImportedLog(log)).toList();
+    if (logs.length != loadedLogs.length) {
+      await SmsStorageService.saveLogs(logs);
+    }
     final ingestion = await SmsStorageService.getBoolSetting(
         SmsStorageService.keyIngestionEnabled, true);
     final notifications = await SmsStorageService.getBoolSetting(
@@ -345,64 +352,16 @@ class _DashboardPageState extends State<DashboardPage>
       _notificationThreshold = threshold;
     });
 
-    _fetchBackendFraudScans();
     AuthService.fetchUserProfile().then((_) {
       if (mounted) setState(() {});
     });
   }
 
-  Future<void> _fetchBackendFraudScans() async {
-    try {
-      final res = await AuthService.getFraudScans(page: 0, size: 20);
-      if (res['success'] == true && res['content'] is List) {
-        final List content = res['content'];
-        bool hasNew = false;
-        for (final item in content) {
-          if (item is Map<String, dynamic>) {
-            final msgText = item['message'] ?? item['messageBody'] ?? '';
-            if (msgText.toString().trim().isEmpty) continue;
-
-            final exists =
-                _smsLogs.any((l) => l['message'] == msgText.toString());
-            if (!exists) {
-              final isScam = item['is_scam'] ??
-                  item['isScam'] ??
-                  (item['label'] == 'scam' || item['label'] == 'fraud');
-              final conf = (item['confidence'] as num?)?.toDouble() ?? 0.95;
-              final type = isScam == true ? 'Fraud' : 'Safe';
-              final threatLevel = (type == 'Safe')
-                  ? (1.0 - conf).clamp(0.0, 1.0)
-                  : conf.clamp(0.0, 1.0);
-              final backendScanId = item['id']?.toString();
-              final logEntry = {
-                'id': backendScanId ??
-                    'backend_fraud_${DateTime.now().millisecondsSinceEpoch}_${item.hashCode}',
-                'backendId': backendScanId,
-                'sender': item['sender'] ?? 'Backend Shield Alert',
-                'message': msgText.toString(),
-                'type': type,
-                'time': item['createdAt'] ??
-                    item['time'] ??
-                    DateTime.now().toIso8601String(),
-                'threat': threatLevel,
-                'matchedReasons': [
-                  'Trained Model Label: ${item['label'] ?? (isScam ? 'scam' : 'safe')}',
-                  'Threat Index: ${(threatLevel * 100).toStringAsFixed(1)}%'
-                ],
-                'hasFeedback': false,
-                'userFeedback': null,
-              };
-              _smsLogs.insert(0, logEntry);
-              await SmsStorageService.addLog(logEntry);
-              hasNew = true;
-            }
-          }
-        }
-        if (hasNew && mounted) {
-          setState(() {});
-        }
-      }
-    } catch (_) {}
+  bool _isRemoteImportedLog(Map<String, dynamic> log) {
+    if (log['source']?.toString() == 'REMOTE_FRAUD_FEED') return true;
+    if (log['id']?.toString().startsWith('backend_fraud_') == true) return true;
+    final reasons = List<String>.from(log['matchedReasons'] ?? []);
+    return reasons.any((reason) => reason.startsWith('Trained Model Label:'));
   }
 
   Future<void> _checkPermissions() async {
@@ -424,7 +383,7 @@ class _DashboardPageState extends State<DashboardPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
-                const Text('SMS permissions granted! Auto-ingestion active.'),
+                const Text('SMS and Contacts permissions granted! Unknown-sender scanning is active.'),
             backgroundColor: Colors.green.shade600,
             behavior: SnackBarBehavior.floating,
           ),
@@ -435,7 +394,7 @@ class _DashboardPageState extends State<DashboardPage>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content:
-                Text('SMS permissions denied. Auto-ingestion unavailable.'),
+                Text('SMS and Contacts permissions are required to scan unknown senders.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -1241,8 +1200,9 @@ class _DashboardPageState extends State<DashboardPage>
             : rawThreat;
         final matchedReasons = List<String>.from(log['matchedReasons'] ?? []);
 
-        final Color classificationColor =
-            type == 'Safe' ? Colors.green : AppTheme.red;
+        final Color classificationColor = type == 'Safe'
+            ? Colors.green
+            : (type == 'Pending' ? Colors.amber : AppTheme.red);
 
         return Container(
           decoration: BoxDecoration(
@@ -1502,23 +1462,24 @@ class _DashboardPageState extends State<DashboardPage>
                                     style: TextStyle(fontSize: 12)),
                                 onPressed: () => _confirmMarkAsSafe(log),
                               ),
-                              const SizedBox(height: 10),
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppTheme.red,
-                                  side: const BorderSide(color: AppTheme.red),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                              if (!isManualScan) ...[
+                                const SizedBox(height: 10),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppTheme.red,
+                                    side: const BorderSide(color: AppTheme.red),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    alignment: Alignment.center,
                                   ),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  alignment: Alignment.center,
+                                  icon: const Icon(Icons.flag_outlined, size: 16),
+                                  label: const Text('Report',
+                                      style: TextStyle(fontSize: 12)),
+                                  onPressed: () => _reportToAuthorities(log),
                                 ),
-                                icon: const Icon(Icons.flag_outlined, size: 16),
-                                label: const Text('Report',
-                                    style: TextStyle(fontSize: 12)),
-                                onPressed: () => _reportToAuthorities(log),
-                              ),
+                              ],
                             ],
                             if (type == 'Safe')
                               OutlinedButton.icon(
@@ -1601,7 +1562,8 @@ class _DashboardPageState extends State<DashboardPage>
 
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: _currentIndex == 4 ? 0 : 16,
+        centerTitle: false,
+        titleSpacing: 16,
         leading: _currentIndex == 4
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -3081,7 +3043,7 @@ class _DashboardPageState extends State<DashboardPage>
                 const SizedBox(width: 8),
                 Wrap(
                   spacing: 6,
-                  children: ['All', 'Safe', 'Fraud'].map((type) {
+                  children: ['All', 'Safe', 'Fraud', 'Pending'].map((type) {
                     final isSelected = _filterThreat == type;
                     return ChoiceChip(
                       label: Text(type),
@@ -3189,11 +3151,12 @@ class _DashboardPageState extends State<DashboardPage>
                         final type = log['type'] ?? 'Safe';
                         final isSafe = type == 'Safe';
                         final isFraud = type == 'Fraud';
+                        final isPending = type == 'Pending';
                         final Color statusColor = isSafe
                             ? AppTheme.cyberGreen
                             : (isFraud
                                 ? AppTheme.cyberRed
-                                : AppTheme.cyberCyan);
+                                : (isPending ? Colors.amber : AppTheme.cyberCyan));
 
                         final cardBg =
                             isDark ? AppTheme.cyberCard : AppTheme.cardLight;
@@ -3257,8 +3220,9 @@ class _DashboardPageState extends State<DashboardPage>
                                                         .mark_email_read_rounded
                                                     : (isFraud
                                                         ? Icons.gpp_bad_rounded
-                                                        : Icons
-                                                            .campaign_rounded),
+                                                        : (isPending
+                                                            ? Icons.hourglass_top_rounded
+                                                            : Icons.error_outline_rounded)),
                                                 color: statusColor,
                                                 size: 16,
                                               ),
@@ -3297,7 +3261,7 @@ class _DashboardPageState extends State<DashboardPage>
                                               ? 'SAFE'
                                               : (isFraud
                                                   ? 'FRAUD THREAT'
-                                                  : 'SPAM PROMO'),
+                                                  : (isPending ? 'PENDING' : 'SCAN ERROR')),
                                           style: GoogleFonts.inter(
                                             color: statusColor,
                                             fontSize: 10,
