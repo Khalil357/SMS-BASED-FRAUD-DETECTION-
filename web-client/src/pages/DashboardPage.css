@@ -818,6 +818,22 @@
   color: #ffffff;
 }
 
+.icon-action-btn.safe {
+  color: var(--emerald);
+  border-color: var(--emerald);
+}
+
+.icon-action-btn.safe:hover:not(:disabled) {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: var(--emerald);
+  border-color: var(--emerald);
+}
+
+.icon-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ==========================================
    BUTTONS
    ========================================== */

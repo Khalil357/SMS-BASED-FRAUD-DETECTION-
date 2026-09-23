@@ -40,6 +40,7 @@ import {
   getAdminStats,
   getFraudTrend,
   getSmsScans,
+  deleteFraudScan,
 } from "../services/adminService";
 import type { AdminUser, FraudTrendPoint } from "../services/adminService";
 import { clearToken } from "../services/authService";
@@ -127,6 +128,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   // Main Data States
   const [statsCards, setStatsCards] = useState<StatCardData[]>(emptyStats);
   const [smsList, setSmsList] = useState<SmsRecord[]>([]);
+  const [markingSafeScanId, setMarkingSafeScanId] = useState<string | null>(null);
   const [fraudTrend, setFraudTrend] = useState<FraudTrendPoint[]>([]);
   const [usersList, setUsersList] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -255,6 +257,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           }
           return {
             id: item.id ? `SMS-${String(item.id).substring(0, 6).toUpperCase()}` : "Unknown",
+            scanId: item.id ? String(item.id) : "",
             sender: item.sender || "Unknown",
             message: item.message || "",
             fraudType: (item.fraud_type || item.fraudType || "Clean") as SmsRecord["fraudType"],
@@ -268,6 +271,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       });
       setSmsList(mapped);
     }
+  }
+
+  async function handleMarkSmsSafe(scanId: string) {
+    if (!scanId || markingSafeScanId) return;
+    setMarkingSafeScanId(scanId);
+    const res = await deleteFraudScan(scanId);
+    if (res.success) {
+      setSmsList((prev) => prev.filter((sms) => sms.scanId !== scanId));
+      showToast("success", "Fraud record marked as safe and removed");
+      void loadDashboardStats();
+      void loadFraudTrends();
+    } else {
+      showToast("error", res.message ?? "Failed to mark fraud record as safe");
+    }
+    setMarkingSafeScanId(null);
   }
 
   async function loadUsers() {
@@ -1058,16 +1076,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                       </th>
                       <th>Status</th>
                       <th>Inspect</th>
+                      <th>Mark as Safe</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredLogsList.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="subtle-text">No audit logs match your search.</td>
+                        <td colSpan={7} className="subtle-text">No audit logs match your search.</td>
                       </tr>
                     ) : (
                       filteredLogsList.map((sms) => (
-                        <tr key={sms.id}>
+                        <tr key={sms.scanId}>
                           <td><code className="code-tag">{sms.id}</code></td>
                           <td className="font-semibold">{sms.sender}</td>
                           <td className="message-cell">{sms.message}</td>
@@ -1085,6 +1104,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                               title="Inspect Log Payload"
                             >
                               <Eye size={16} />
+                            </button>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="icon-action-btn safe"
+                              onClick={() => void handleMarkSmsSafe(sms.scanId)}
+                              disabled={!sms.scanId || markingSafeScanId !== null}
+                              title="Mark as safe and remove this fraud record"
+                              aria-label={`Mark ${sms.id} as safe and remove it`}
+                            >
+                              <CheckCircle2 size={16} />
                             </button>
                           </td>
                         </tr>

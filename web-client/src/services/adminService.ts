@@ -143,6 +143,13 @@ export function getSmsScans(
   return authFetchJson<PageResponse<AdminSmsScanResponse> | AdminSmsScanResponse[]>(`/api/admin/scans${query}`);
 }
 
+/** Mark a fraud scan as safe by removing its audit record. */
+export function deleteFraudScan(scanId: string): Promise<ApiResult<void>> {
+  return authFetchJson<void>(`/api/admin/scans/${encodeURIComponent(scanId)}`, {
+    method: 'DELETE',
+  });
+}
+
 /** List all users (admin only). */
 export function getUsers(): Promise<ApiResult<AdminUser[]>> {
   return authFetchJson<AdminUser[]>('/api/admin/users');

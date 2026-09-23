@@ -22,6 +22,7 @@ export interface AlertData {
 
 export interface SmsRecord {
   id: string;
+  scanId: string;
   sender: string;
   message: string;
   fraudType: 'Phishing' | 'Impersonation' | 'Fake Promotion' | 'Loan Scam' | 'Clean';
