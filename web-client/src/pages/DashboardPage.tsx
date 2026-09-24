@@ -194,6 +194,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   // Modals
   const [selectedSms, setSelectedSms] = useState<SmsRecord | null>(null);
+  const [safeTarget, setSafeTarget] = useState<SmsRecord | null>(null);
 
   // Admin Profile state
   const [adminName, setAdminName] = useState("System Admin");
@@ -273,8 +274,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     }
   }
 
-  async function handleMarkSmsSafe(scanId: string) {
-    if (!scanId || markingSafeScanId) return;
+  function handleMarkSmsSafe(sms: SmsRecord) {
+    setSafeTarget(sms);
+  }
+
+  async function handleConfirmMarkSmsSafe() {
+    if (!safeTarget?.scanId || markingSafeScanId) return;
+    const scanId = safeTarget.scanId;
     setMarkingSafeScanId(scanId);
     const res = await deleteFraudScan(scanId);
     if (res.success) {
@@ -282,6 +288,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       showToast("success", "Fraud record marked as safe and removed");
       void loadDashboardStats();
       void loadFraudTrends();
+      setSafeTarget(null);
     } else {
       showToast("error", res.message ?? "Failed to mark fraud record as safe");
     }
@@ -1110,7 +1117,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                             <button
                               type="button"
                               className="icon-action-btn safe"
-                              onClick={() => void handleMarkSmsSafe(sms.scanId)}
+                              onClick={() => handleMarkSmsSafe(sms)}
                               disabled={!sms.scanId || markingSafeScanId !== null}
                               title="Mark as safe and remove this fraud record"
                               aria-label={`Mark ${sms.id} as safe and remove it`}
@@ -1851,6 +1858,39 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 disabled={deleteBusy}
               >
                 {deleteBusy ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {safeTarget && (
+        <div className="modal-backdrop" onClick={() => !markingSafeScanId && setSafeTarget(null)}>
+          <div className="modal-card fade-slide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex-align">
+                <CheckCircle2 size={20} style={{ color: "var(--primary)" }} />
+                <h3>Mark as Safe</h3>
+              </div>
+              <button type="button" className="close-btn" onClick={() => setSafeTarget(null)} disabled={markingSafeScanId !== null}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>Marking as safe will delete this record, are you sure you want to proceed?</p>
+              <p>Record ID: <strong>{safeTarget.id}</strong></p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={() => setSafeTarget(null)} disabled={markingSafeScanId !== null}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void handleConfirmMarkSmsSafe()}
+                disabled={markingSafeScanId !== null}
+              >
+                {markingSafeScanId !== null ? "Processing…" : "Yes, Proceed"}
               </button>
             </div>
           </div>
