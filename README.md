@@ -1,169 +1,85 @@
 # SMS Fraud Detection System
 
-A software system for detecting, analyzing, and reporting fraudulent SMS messages using automated fraud detection techniques.
+A monorepo for the SMS fraud detection API, a Flutter mobile app, and a React admin portal.
 
-The project is developed as a **monorepo**, with the backend and frontend maintained in separate directories.
+## Repository layout
 
-## Project Structure
+    .
+    ├── backend/                 Spring Boot API, PostgreSQL persistence, tests, and deployment files
+    │   ├── src/main/java/com/example/smsfraud/
+    │   ├── src/main/resources/db/migration/   Flyway migrations for production
+    │   ├── src/test/
+    │   ├── compose.yaml         Production-oriented Compose stack
+    │   └── pom.xml
+    ├── frontend/                Flutter mobile app (source in lib/, tests in test/)
+    ├── web-client/              React/TypeScript admin portal (Vite)
+    ├── .github/workflows/       CI and deployment workflows
+    └── README.md
 
-```text
-smsfraud/
-├── backend/        # Spring Boot backend and REST API
-├── frontend/       # Flutter mobile application
-├── docs/           # Project documentation (optional)
-├── .gitignore
-└── README.md
-```
+The backend uses Java 21, Spring Boot 4, Maven, PostgreSQL, Spring Security/JWT, and Redis-backed OTP storage in the production profile. The mobile app uses Flutter/Dart. The admin portal uses React, TypeScript, and Vite.
 
-## Technology Stack
+## Run locally
 
-### Backend
+### Backend API
 
-* Java
-* Spring Boot
-* Maven
-* REST API
-* MySQL/PostgreSQL *(depending on the finalized database)*
+Install JDK 21 and have PostgreSQL available at localhost:5432. The default development database is sms_fraud, with user sms_app and password sms_pass (local development only). You can use an existing PostgreSQL installation or start a new local Docker container:
 
-### Frontend
+    docker run --name smsfraud-dev-postgres -e POSTGRES_DB=sms_fraud -e POSTGRES_USER=sms_app -e POSTGRES_PASSWORD=sms_pass -p 5432:5432 -d postgres:17-alpine
 
-* Flutter
-* Dart
+If that container already exists but is stopped, run docker start smsfraud-dev-postgres instead. Do not start a second database if something is already using port 5432. Check availability with docker exec smsfraud-dev-postgres pg_isready -U sms_app -d sms_fraud (or your PostgreSQL installation's pg_isready).
 
-## Backend Structure
+From the repository root on Windows PowerShell:
 
-The Spring Boot application is located in `backend/`.
+    $env:SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5432/sms_fraud'
+    $env:SPRING_DATASOURCE_USERNAME = 'sms_app'
+    $env:SPRING_DATASOURCE_PASSWORD = 'sms_pass'
+    cd backend
+    .\mvnw.cmd spring-boot:run
 
-```text
-backend/
-├── src/
-│   ├── main/
-│   │   ├── java/
-│   │   │   └── com/example/smsfraud/
-│   │   │       ├── config/
-│   │   │       ├── controller/
-│   │   │       ├── entity/
-│   │   │       ├── repository/
-│   │   │       ├── service/
-│   │   │       └── SmsfraudApplication.java
-│   │   └── resources/
-│   └── test/
-├── pom.xml
-├── mvnw
-└── mvnw.cmd
-```
+On macOS/Linux, use ./mvnw spring-boot:run in backend/ and export the same SPRING_DATASOURCE_* variables if needed. The API listens on http://localhost:8080; local Swagger UI is at http://localhost:8080/swagger-ui.html.
 
-### Run the Backend
+The default profile uses Hibernate schema updates and an in-memory OTP store. The prod profile uses Flyway migrations and Redis. backend/.env is read by the application's DotEnv loader when present, but existing environment variables take precedence. In particular, check for a SPRING_DATASOURCE_URL override if startup cannot reach PostgreSQL. Do not commit real credentials or use the development password in production.
 
-From the repository root:
+### Admin web portal
 
-```bash
-cd backend
-./mvnw spring-boot:run
-```
+Install Node.js 22 and run from the repository root in a second PowerShell window:
 
-To run the tests:
+    cd web-client
+    npm ci
+    $env:VITE_API_BASE_URL = 'http://localhost:8080'
+    npm run dev
 
-```bash
-./mvnw test
-```
+Open the URL printed by Vite (normally http://localhost:5173). VITE_API_BASE_URL selects the backend; without it, the portal uses the deployed API address defined in web-client/src/services/. The portal includes the dashboard, SMS ingestion logs, team, and users sections.
 
-## Frontend
+### Flutter mobile app
 
-The Flutter application will be maintained inside:
+Install Flutter and an Android/iOS development environment, then run from the repository root:
 
-```text
-frontend/
-```
+    cd frontend
+    flutter pub get
+    flutter run
 
-The frontend team is responsible for the Flutter application and its integration with the backend REST API.
+The Flutter app's API base URL is defined in frontend/lib/services/auth_service.dart and currently defaults to the deployed backend. Configure that target for your development environment when testing against a local API; an Android emulator reaches the host machine at 10.0.2.2, not localhost.
 
-Once the Flutter project has been initialized:
+## Checks
 
-```bash
-cd frontend
-flutter pub get
-flutter run
-```
+Run checks from each project's directory:
 
-## Development Workflow
+    cd backend
+    .\mvnw.cmd test
+    cd ..
 
-The project uses a **Git-based collaborative workflow**.
+    cd web-client
+    npm run lint
+    npm run build
+    cd ..
 
-### Branches
+    cd frontend
+    flutter analyze
+    flutter test
 
-Use descriptive branches for development:
+Backend tests that use PostgreSQL need a reachable test database. The GitHub Actions CI workflow provisions one for its backend test job.
 
-```text
-feature/feature-name
-bugfix/bug-description
-docs/documentation-name
-```
+## Deployment files
 
-Examples:
-
-```text
-feature/user-authentication
-feature/sms-detection
-bugfix/login-validation
-docs/api-documentation
-```
-
-### Pull Requests
-
-1. Create a branch from `main`.
-2. Make your changes.
-3. Test your changes locally.
-4. Commit using a clear commit message.
-5. Push your branch to GitHub.
-6. Open a Pull Request.
-7. Have the changes reviewed before merging.
-
-Do not push unfinished feature work directly to `main`.
-
-## Team Responsibilities
-
-### Backend Team
-
-Responsible for:
-
-* REST APIs
-* Authentication and authorization
-* SMS fraud detection services
-* Database integration
-* Business logic
-* Security
-* Backend testing
-
-Location:
-
-```text
-backend/
-```
-
-### Frontend Team
-
-Responsible for:
-
-* Flutter mobile application
-* User interface
-* User experience
-* API integration
-* Client-side validation
-* Frontend testing
-
-Location:
-
-```text
-frontend/
-```
-
-## Project Status
-
-🚧 **In Development**
-
-Current development is organized into iterative sprints. Features and modules will be added incrementally as development progresses.
-
-## Repository
-
-This repository contains the complete SMS Fraud Detection System, including the backend, frontend, and project documentation.
+backend/compose.yaml defines the deployed Nginx, API, PostgreSQL, and Redis services; see backend/EC2_DEPLOYMENT.md for deployment-specific context. It does not publish its database port to the host and is not the local database setup described above. The repository-root docker-compose.yml is an older stack using Java 17 and should not be used as the current backend run path.
