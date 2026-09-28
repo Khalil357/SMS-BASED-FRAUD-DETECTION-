@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - front_end
+    paths:
+      - 'web-client/**'
 
 jobs:
   deploy:
