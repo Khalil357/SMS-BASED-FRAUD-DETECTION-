@@ -186,7 +186,7 @@ jobs:
           echo "::error::backend did not become ready"; tail -n 100 backend/backend.log; exit 1
 
       - name: ZAP API scan (OpenAPI)
-        uses: zaproxy/action-api-scan@v0.4.0
+        uses: zaproxy/action-api-scan@v0.10.0
         with:
           target: 'http://localhost:8080/v3/api-docs'
           format: openapi
