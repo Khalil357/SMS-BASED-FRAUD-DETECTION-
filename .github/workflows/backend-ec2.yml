@@ -85,7 +85,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          fingerprint: SHA256:TcOUj41t6D1HWIOTSivX1sTy72fE/qNQVfl3cZtcEZA
+          fingerprint: SHA256:M1ALkdf4652LYYmM27iNC6MEyCD47DjupHd+gCaQ5ZY
           envs: DEPLOY_SHA,EC2_HOST
           command_timeout: 15m
           script_path: .github/scripts/deploy-backend.sh
