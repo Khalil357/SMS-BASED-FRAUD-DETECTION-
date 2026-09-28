@@ -139,12 +139,12 @@
 			<scope>test</scope>
 		</dependency>
 
-        <!-- jsoup dependency for sanitizing string inputs -->
+        <!-- jsoup dependency for sanitizing string inputs
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
             <version>1.17.2</version>
-        </dependency>
+        </dependency>  -->
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
